@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
