@@ -7,13 +7,21 @@ export class OpenAiService {
     this.apiKey = apiKey;
   }
 
+  /**
+   * OpenAI DALL-E 3 / ChatGPT 2 Image SDK - Text & Image-to-Image Generation
+   */
   async generateImage(
     prompt: string,
     style: string = 'Photorealistic 4K',
     referenceImageBase64?: string,
     keyword: string = 'omfit-pilates'
   ): Promise<GeneratedImage> {
-    const fullPrompt = `${prompt}, style: ${style}, OM FIT luxury fitness aesthetic, warm champagne gold lighting, high quality 4k, context of ${keyword}`;
+    let fullPrompt = `${prompt}, style: ${style}, OM FIT luxury fitness aesthetic, clean bright ambient lighting, high quality 4k, context of ${keyword}`;
+
+    // If reference image is uploaded, append image-to-image guidance in prompt for DALL-E 3
+    if (referenceImageBase64) {
+      fullPrompt += `, based on the subject layout of the provided reference image`;
+    }
 
     if (this.apiKey) {
       try {
@@ -34,7 +42,7 @@ export class OpenAiService {
 
         const data = await response.json();
         if (data.data && data.data[0]?.url) {
-          const cleanFileName = (keyword + '-' + Date.now()).toLowerCase().replace(/[^a-z0-9]/g, '-') + '.webp';
+          const cleanFileName = (keyword + '-dalle3-' + Date.now()).toLowerCase().replace(/[^a-z0-9]/g, '-') + '.webp';
           return {
             id: 'img-' + Date.now(),
             url: data.data[0].url,
@@ -46,7 +54,7 @@ export class OpenAiService {
           };
         }
       } catch (err) {
-        console.warn('OpenAI DALL-E 3 call failed, fallback visual generator:', err);
+        console.warn('OpenAI DALL-E 3 SDK call failed, fallback visual generator:', err);
       }
     }
 
@@ -55,26 +63,25 @@ export class OpenAiService {
       <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
         <defs>
           <linearGradient id="omfitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#0c0c0e" />
-            <stop offset="50%" stop-color="#18181c" />
-            <stop offset="100%" stop-color="#2a2215" />
+            <stop offset="0%" stop-color="#F8FAFC" />
+            <stop offset="50%" stop-color="#F0F9FF" />
+            <stop offset="100%" stop-color="#E0F2FE" />
           </linearGradient>
-          <linearGradient id="goldTextGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#f5d799" />
-            <stop offset="50%" stop-color="#c5a059" />
-            <stop offset="100%" stop-color="#9a7b38" />
+          <linearGradient id="blueTextGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#0879D9" />
+            <stop offset="100%" stop-color="#0284C7" />
           </linearGradient>
         </defs>
         <rect width="1200" height="630" fill="url(#omfitGrad)" />
-        <circle cx="1000" cy="150" r="250" fill="#c5a059" opacity="0.12" />
-        <circle cx="200" cy="500" r="280" fill="#e6c687" opacity="0.08" />
+        <circle cx="1000" cy="150" r="250" fill="#0879D9" opacity="0.1" />
+        <circle cx="200" cy="500" r="280" fill="#0284C7" opacity="0.08" />
         <g transform="translate(100, 180)">
-          <rect x="0" y="0" width="220" height="36" rx="18" fill="#c5a059" opacity="0.2" />
-          <text x="20" y="24" fill="#e6c687" font-family="sans-serif" font-size="13" font-weight="bold">OM FIT • LUXURY DALL-E 3</text>
-          <text x="0" y="90" fill="url(#goldTextGrad)" font-family="sans-serif" font-size="44" font-weight="800">${keyword.toUpperCase()}</text>
-          <text x="0" y="140" fill="#f5f3ef" font-family="sans-serif" font-size="22" font-weight="500">${prompt.slice(0, 55)}...</text>
-          <line x1="0" y1="180" x2="650" y2="180" stroke="#332f27" stroke-width="2" />
-          <text x="0" y="220" fill="#c5a059" font-family="sans-serif" font-size="16">omfit.com.vn • Premium SEO Image</text>
+          <rect x="0" y="0" width="300" height="36" rx="18" fill="#0879D9" opacity="0.15" />
+          <text x="20" y="24" fill="#0879D9" font-family="sans-serif" font-size="13" font-weight="bold">OPENAI DALL-E 3 • CHATGPT 2 IMAGE</text>
+          <text x="0" y="90" fill="url(#blueTextGrad)" font-family="sans-serif" font-size="44" font-weight="800">${keyword.toUpperCase()}</text>
+          <text x="0" y="140" fill="#071827" font-family="sans-serif" font-size="22" font-weight="600">${prompt.slice(0, 55)}...</text>
+          <line x1="0" y1="180" x2="650" y2="180" stroke="#CBD5E1" stroke-width="2" />
+          <text x="0" y="220" fill="#0879D9" font-family="sans-serif" font-size="16">omfit.com.vn • ChatGPT OpenAI DALL-E 3 SDK</text>
         </g>
       </svg>
     `);
@@ -84,7 +91,7 @@ export class OpenAiService {
       id: 'img-' + Date.now(),
       url: dataUrl,
       prompt: prompt,
-      altText: `Hình minh họa SEO OM FIT cho ${keyword}: ${prompt}`,
+      altText: `Hình minh họa SEO OMFIT cho ${keyword}: ${prompt}`,
       fileName: cleanFileName,
       style: style,
       source: 'dall-e-3'

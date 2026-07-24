@@ -7,18 +7,46 @@ export class VertexAiService {
     this.apiKey = apiKey;
   }
 
-  // Generate Image via Google Vertex AI Imagen 3 model (imagen-3.0-generate-001)
+  /**
+   * Google Vertex AI Imagen 3 SDK - Image-to-Image & Text-to-Image Generation
+   * Supports passing reference image (Image-to-Image mode) + text prompt.
+   */
   async generateImage(
     prompt: string,
     style: string = 'Photorealistic 4K',
     referenceImageBase64?: string,
     keyword: string = 'omfit-pilates'
   ): Promise<GeneratedImage> {
-    const fullPrompt = `High quality professional photo for OM FIT brand: ${prompt}, style: ${style}, luxury warm champagne gold ambient lighting, 4k resolution, context of ${keyword}`;
+    const fullPrompt = `High quality professional photo for OM FIT brand: ${prompt}, style: ${style}, clean bright natural lighting, 4k resolution, context of ${keyword}`;
+
+    // Clean base64 string if reference image is provided
+    let rawBase64Image = '';
+    if (referenceImageBase64) {
+      rawBase64Image = referenceImageBase64.replace(/^data:image\/(png|jpeg|webp|jpg);base64,/, '');
+    }
 
     if (this.apiKey) {
       try {
         // Vertex AI / Google Developer API endpoint for Imagen 3
+        const requestPayload: Record<string, any> = {
+          prompt: fullPrompt,
+          config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: '16:9'
+          }
+        };
+
+        // If a reference image is uploaded (Image-to-Image / ChatGPT 2 Image mode)
+        if (rawBase64Image) {
+          requestPayload.referenceImages = [
+            {
+              imageBytes: rawBase64Image,
+              referenceType: 'REFERENCE_TYPE_SUBJECT'
+            }
+          ];
+        }
+
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateImages?key=${this.apiKey}`,
           {
@@ -26,14 +54,7 @@ export class VertexAiService {
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              prompt: fullPrompt,
-              config: {
-                numberOfImages: 1,
-                outputMimeType: 'image/jpeg',
-                aspectRatio: '16:9'
-              }
-            })
+            body: JSON.stringify(requestPayload)
           }
         );
 
@@ -53,36 +74,35 @@ export class VertexAiService {
           };
         }
       } catch (err) {
-        console.warn('Vertex AI Imagen 3 API call failed, generating visual fallback:', err);
+        console.warn('Vertex AI Imagen 3 SDK call failed, generating visual fallback:', err);
       }
     }
 
-    // High quality dynamic fallback SVG styled for Vertex AI Imagen 3
+    // High quality dynamic SVG fallback if API key is not present or API call fails
     const cleanFileName = (keyword + '-imagen3-' + Date.now()).toLowerCase().replace(/[^a-z0-9]/g, '-') + '.png';
     const svgData = encodeURIComponent(`
       <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
         <defs>
           <linearGradient id="vertexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#0c0c0e" />
-            <stop offset="50%" stop-color="#18181c" />
-            <stop offset="100%" stop-color="#3d2d14" />
+            <stop offset="0%" stop-color="#F8FAFC" />
+            <stop offset="50%" stop-color="#F0F9FF" />
+            <stop offset="100%" stop-color="#E0F2FE" />
           </linearGradient>
-          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#f5d799" />
-            <stop offset="50%" stop-color="#c5a059" />
-            <stop offset="100%" stop-color="#9a7b38" />
+          <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#0879D9" />
+            <stop offset="100%" stop-color="#0284C7" />
           </linearGradient>
         </defs>
         <rect width="1200" height="630" fill="url(#vertexGrad)" />
-        <circle cx="1000" cy="150" r="260" fill="#c5a059" opacity="0.15" />
-        <circle cx="200" cy="500" r="290" fill="#e6c687" opacity="0.1" />
+        <circle cx="1000" cy="150" r="260" fill="#0879D9" opacity="0.12" />
+        <circle cx="200" cy="500" r="290" fill="#0284C7" opacity="0.08" />
         <g transform="translate(100, 180)">
-          <rect x="0" y="0" width="280" height="36" rx="18" fill="#c5a059" opacity="0.2" />
-          <text x="20" y="24" fill="#e6c687" font-family="sans-serif" font-size="13" font-weight="bold">GOOGLE VERTEX AI • IMAGEN 3 MODEL</text>
-          <text x="0" y="90" fill="url(#goldGrad)" font-family="sans-serif" font-size="44" font-weight="800">${keyword.toUpperCase()}</text>
-          <text x="0" y="140" fill="#f5f3ef" font-family="sans-serif" font-size="22" font-weight="500">${prompt.slice(0, 55)}...</text>
-          <line x1="0" y1="180" x2="680" y2="180" stroke="#332f27" stroke-width="2" />
-          <text x="0" y="220" fill="#c5a059" font-family="sans-serif" font-size="16">omfit.com.vn • Vertex AI Imagen 3 Model</text>
+          <rect x="0" y="0" width="340" height="36" rx="18" fill="#0879D9" opacity="0.15" />
+          <text x="20" y="24" fill="#0879D9" font-family="sans-serif" font-size="13" font-weight="bold">GOOGLE VERTEX AI • IMAGEN 3 (IMAGE-TO-IMAGE)</text>
+          <text x="0" y="90" fill="url(#blueGrad)" font-family="sans-serif" font-size="44" font-weight="800">${keyword.toUpperCase()}</text>
+          <text x="0" y="140" fill="#071827" font-family="sans-serif" font-size="22" font-weight="600">${prompt.slice(0, 55)}...</text>
+          <line x1="0" y1="180" x2="680" y2="180" stroke="#CBD5E1" stroke-width="2" />
+          <text x="0" y="220" fill="#0879D9" font-family="sans-serif" font-size="16">omfit.com.vn • Vertex AI Imagen 3 SDK</text>
         </g>
       </svg>
     `);
