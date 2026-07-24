@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #0c0c0e;
+    --bg-card: #141418;
+    --bg-hover: #1f1f26;
+    --border-color: rgba(212, 175, 55, 0.15);
+    --omfit-gold: #c5a059;
+    --omfit-gold-light: #e6c687;
+    --omfit-gold-dark: #9a7b38;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: #f5f3ef;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Glassmorphism & OM FIT Gold Glow Utilities */
+.glass-panel {
+  background: rgba(20, 20, 24, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+}
+
+.glass-panel-glow {
+  background: linear-gradient(145deg, rgba(26, 25, 22, 0.9) 0%, rgba(18, 18, 22, 0.95) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  box-shadow: 0 0 30px rgba(197, 160, 89, 0.12);
+}
+
+.gradient-text-gold {
+  background: linear-gradient(135deg, #f3e7d3 0%, #c5a059 50%, #9a7b38 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-bg-gold-btn {
+  background: linear-gradient(135deg, #e6c687 0%, #c5a059 50%, #9a7b38 100%);
+  color: #0c0c0e;
+  font-weight: 800;
+  transition: all 0.25s ease-in-out;
+}
+
+.gradient-bg-gold-btn:hover {
+  background: linear-gradient(135deg, #f5d799 0%, #d8b26b 50%, #ad8c49 100%);
+  box-shadow: 0 0 25px rgba(197, 160, 89, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Custom Scrollbar OM FIT Theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0c0c0e;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2822;
+  border-radius: 4px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c5a059;
+}
+
+/* Rich Text Content Formatting inside Preview */
+.prose-custom p {
+  color: #e2dfd7;
+  line-height: 1.8;
+  margin-bottom: 1.25rem;
+}
+
+.prose-custom h2 {
+  color: #f5f3ef;
+  font-weight: 800;
+  font-size: 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(197, 160, 89, 0.3);
+  padding-bottom: 0.5rem;
+}
+
+.prose-custom h3 {
+  color: #e6c687;
+  font-weight: 700;
+  font-size: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose-custom ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+  color: #e2dfd7;
+}
+
+.prose-custom ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+  color: #e2dfd7;
+}
+
+.prose-custom li {
+  margin-bottom: 0.375rem;
+}
+
+.prose-custom blockquote {
+  border-left: 4px solid #c5a059;
+  padding-left: 1rem;
+  font-style: italic;
+  color: #c5a059;
+  background: rgba(197, 160, 89, 0.08);
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+  margin: 1.5rem 0;
+}
+
+/* Pulse Glow Animation */
+@keyframes pulseGoldGlow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.95; }
+}
+
+.animate-pulse-gold {
+  animation: pulseGoldGlow 3s infinite ease-in-out;
+}
