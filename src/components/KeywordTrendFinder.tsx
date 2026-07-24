@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, TrendingUp, Sparkles, Filter, ArrowRight, BarChart2, CheckCircle2, Zap, Crown } from 'lucide-react';
+import { Search, TrendingUp, Sparkles, ArrowRight, Zap, Activity } from 'lucide-react';
 import type { KeywordTrend, ActiveTab } from '../types';
 import { GeminiService } from '../services/geminiService';
 
@@ -15,7 +15,7 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
   setActiveTab
 }) => {
   const [query, setQuery] = useState('tập pilates giảm cân');
-  const [industry, setIndustry] = useState('Pilates & Fitness OM FIT');
+  const [industry, setIndustry] = useState('OMFIT PILATES');
   const [isLoading, setIsLoading] = useState(false);
   const [trends, setTrends] = useState<KeywordTrend[]>([
     {
@@ -69,25 +69,25 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="glass-panel p-6 rounded-2xl space-y-4 border border-[#2a2822]">
+      <div className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-extrabold text-slate-100 flex items-center gap-2">
-              <Search className="w-5 h-5 text-[#c5a059]" /> Crawl Keyword & Trend SEO Ngành Fitness & Wellness
+            <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
+              <Search className="w-5 h-5 text-[#0879D9]" /> Crawl Keyword & Trend SEO (OMFIT Architecture)
             </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Nhập từ khóa chủ đề (Pilates, Gym, Yoga, Sound Therapy, PT Course) để AI Gemini quét lượng tìm kiếm & từ khóa chuẩn thương hiệu OM FIT.
+            <p className="text-xs text-slate-500 mt-1 font-medium">
+              Nhập từ khóa chủ đề (Pilates, Gym, Yoga, Sound Therapy, PT Course) để AI Gemini quét lượng tìm kiếm & từ khóa chuẩn OMFIT.
             </p>
           </div>
-          <span className="px-3 py-1 rounded-full bg-[#c5a059]/15 border border-[#c5a059]/40 text-[#e6c687] text-xs font-semibold flex items-center gap-1">
-            <Crown className="w-3.5 h-3.5" /> OM FIT Keyword Finder
+          <span className="px-3 py-1 rounded-full bg-[#E0F2FE] border border-[#0879D9]/30 text-[#0879D9] text-xs font-bold flex items-center gap-1">
+            <Activity className="w-3.5 h-3.5" /> OMFIT Keyword Finder
           </span>
         </div>
 
         {/* Form Input */}
         <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
           <div className="md:col-span-6">
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               Từ Khóa Main Target
             </label>
             <input
@@ -95,23 +95,22 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="VD: tập pilates, khóa học pt pilates, sound therapy..."
-              className="w-full px-4 py-2.5 rounded-xl bg-[#101014] border border-[#332f27] text-slate-100 text-xs focus:outline-none focus:border-[#c5a059] transition"
+              className="w-full px-4 py-2.5 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-xs focus:outline-none focus:border-[#0879D9] transition font-medium"
               required
             />
           </div>
 
           <div className="md:col-span-4">
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Lĩnh Vực Thương Hiệu</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Kiến Trúc Thương Hiệu</label>
             <select
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-[#101014] border border-[#332f27] text-slate-100 text-xs focus:outline-none focus:border-[#c5a059] transition"
+              className="w-full px-4 py-2.5 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-xs focus:outline-none focus:border-[#0879D9] transition font-semibold"
             >
-              <option value="Pilates & Fitness OM FIT">Pilates & Fitness (OM FIT)</option>
+              <option value="OMFIT PILATES">OMFIT PILATES (Reformer, Cadillac, Coaching)</option>
+              <option value="OMFIT FITNESS">OMFIT FITNESS (Gym, Functional, GroupX, Spinning)</option>
+              <option value="OMFIT WELLNESS">OMFIT WELLNESS (Yoga, Sauna, Sound Therapy)</option>
               <option value="Khóa Học Nghề PT Pilates">Khóa Học Nghề PT Pilates Chuyên Nghiệp</option>
-              <option value="Sound Therapy & Chuông Xoay">Sound Therapy & Trị Liệu Âm Thanh</option>
-              <option value="GYM & Personal Trainer">GYM & Huấn Luyện Viên PT</option>
-              <option value="Yoga & GroupX">Yoga & Các Lớp Group X</option>
             </select>
           </div>
 
@@ -119,11 +118,11 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full gradient-bg-gold-btn px-4 py-2.5 rounded-xl text-xs font-bold text-[#0c0c0e] flex items-center justify-center gap-2 shadow-lg shadow-[#c5a059]/20 disabled:opacity-50"
+              className="w-full gradient-bg-omfit-btn px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20 disabled:opacity-50"
             >
               {isLoading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-[#0c0c0e] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Đang quét...
                 </>
               ) : (
@@ -139,8 +138,8 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
       {/* Keyword Trend Cards List */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-[#c5a059]" /> Kết Quả Từ Khóa Hot Trend Ngành OM FIT ({trends.length})
+          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-[#0879D9]" /> Kết Quả Từ Khóa Hot Trend OMFIT ({trends.length})
           </h3>
         </div>
 
@@ -148,35 +147,35 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
           {trends.map((item, index) => (
             <div
               key={index}
-              className="glass-panel p-5 rounded-2xl space-y-4 border border-[#2a2822] hover:border-[#c5a059]/60 transition group relative overflow-hidden"
+              className="glass-panel p-5 rounded-3xl space-y-4 border border-[#0879D9]/15 hover:border-[#0879D9] transition group relative overflow-hidden bg-white"
             >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-[#c5a059]/20 text-[#e6c687] border border-[#c5a059]/40">
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30">
                       {item.intent}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-mono">Volume: {item.searchVolume}</span>
+                    <span className="text-[10px] text-slate-500 font-mono font-semibold">Volume: {item.searchVolume}</span>
                   </div>
-                  <h4 className="font-extrabold text-base text-slate-100 group-hover:text-[#e6c687] transition">
+                  <h4 className="font-extrabold text-base text-[#071827] group-hover:text-[#0879D9] transition">
                     {item.keyword}
                   </h4>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs font-bold text-[#e6c687] font-mono">Score: {item.trendScore}/100</div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#c5a059]/10 text-[#e6c687]">
+                  <div className="text-xs font-bold text-[#0879D9] font-mono">Score: {item.trendScore}/100</div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                     Độ khó: {item.difficulty}
                   </span>
                 </div>
               </div>
 
               {/* LSI Keywords */}
-              <div className="space-y-1.5 pt-2 border-t border-[#2a2822]">
-                <p className="text-[11px] font-semibold text-slate-400">Từ khóa phụ (LSI Keywords):</p>
+              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <p className="text-[11px] font-semibold text-slate-500">Từ khóa phụ (LSI Keywords):</p>
                 <div className="flex flex-wrap gap-1.5">
                   {item.relatedLsiKeywords.map((lsi, lsiIdx) => (
-                    <span key={lsiIdx} className="px-2 py-0.5 rounded bg-[#18181e] text-slate-300 text-[10px] border border-[#2a2822]">
+                    <span key={lsiIdx} className="px-2 py-0.5 rounded bg-[#F0F9FF] text-[#0879D9] text-[10px] font-semibold border border-[#0879D9]/15">
                       + {lsi}
                     </span>
                   ))}
@@ -190,7 +189,7 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
                     onSelectKeywordForArticle(item.keyword);
                     setActiveTab('generator');
                   }}
-                  className="gradient-bg-gold-btn px-4 py-2 rounded-xl text-xs font-bold text-[#0c0c0e] flex items-center gap-1.5 shadow-md shadow-[#c5a059]/20"
+                  className="gradient-bg-omfit-btn px-4 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 shadow-md shadow-[#0879D9]/20"
                 >
                   <Sparkles className="w-3.5 h-3.5" /> Sinh bài viết SEO với Keyword này
                   <ArrowRight className="w-3.5 h-3.5" />

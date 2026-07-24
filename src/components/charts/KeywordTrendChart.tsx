@@ -6,10 +6,10 @@ export const KeywordTrendChart: React.FC = () => {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#071827',
+      backgroundColor: '#FFFFFF',
       borderColor: '#0879D9',
       borderWidth: 1,
-      textStyle: { color: '#F3F0E9', fontSize: 12 }
+      textStyle: { color: '#071827', fontSize: 12 }
     },
     grid: {
       left: '3%',
@@ -21,14 +21,14 @@ export const KeywordTrendChart: React.FC = () => {
     xAxis: {
       type: 'category',
       data: ['Pilates Reformer', 'PT Course', 'Sound Therapy', 'Gym & Functional', 'Yoga & GroupX'],
-      axisLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.3)' } },
-      axisLabel: { color: '#28A9F4', fontSize: 11, fontWeight: '600' }
+      axisLine: { lineStyle: { color: '#CBD5E1' } },
+      axisLabel: { color: '#0879D9', fontSize: 11, fontWeight: 'bold' }
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.15)', type: 'dashed' } },
-      axisLabel: { color: '#DCEAF0', fontSize: 11 }
+      splitLine: { lineStyle: { color: '#F1F5F9', type: 'dashed' } },
+      axisLabel: { color: '#475569', fontSize: 11 }
     },
     series: [
       {
@@ -43,7 +43,7 @@ export const KeywordTrendChart: React.FC = () => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: '#28A9F4' },
+              { offset: 0, color: '#0284C7' },
               { offset: 1, color: '#0879D9' }
             ]
           },

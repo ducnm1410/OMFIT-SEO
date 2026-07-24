@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Crown, Cpu } from 'lucide-react';
+import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Activity, Cpu } from 'lucide-react';
 import type { GeneratedImage } from '../types';
 import { OpenAiService } from '../services/openaiService';
 import { VertexAiService } from '../services/vertexAiService';
@@ -19,7 +19,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
 }) => {
   const [modelSource, setModelSource] = useState<'vertex-imagen-3' | 'dall-e-3'>('vertex-imagen-3');
   const [prompt, setPrompt] = useState(
-    `Hình ảnh phòng tập Pilates Reformer đẳng cấp OM FIT, không gian sang trọng, ánh sáng vàng champagne ấm áp`
+    `Hình ảnh phòng tập Pilates Reformer đẳng cấp OMFIT, không gian sáng mịn tự nhiên, máy Reformer nhập khẩu cao cấp`
   );
   const [style, setStyle] = useState('Photorealistic 4K');
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -73,30 +73,30 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="glass-panel p-6 rounded-2xl space-y-2 border border-[#2a2822]">
+      <div className="glass-panel p-6 rounded-3xl space-y-2 border border-[#0879D9]/15 bg-white">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-extrabold text-slate-100 flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-[#c5a059]" /> Generative AI Studio: Google Vertex AI (Imagen 3) & OpenAI DALL-E 3
+            <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-[#0879D9]" /> Generative AI Studio: Google Vertex AI (Imagen 3) & OpenAI DALL-E 3
             </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Upload ảnh mẫu (Reference Image) + điền Prompt để sinh ảnh độc quyền chuẩn thương hiệu OM FIT bài viết WordPress.
+            <p className="text-xs text-slate-500 mt-1 font-medium">
+              Upload ảnh mẫu + điền Prompt để sinh ảnh thương hiệu OMFIT chuẩn SEO cho bài viết WordPress.
             </p>
           </div>
-          <span className="px-3 py-1 rounded-full bg-[#c5a059]/15 border border-[#c5a059]/40 text-[#e6c687] text-xs font-semibold flex items-center gap-1">
-            <Crown className="w-3.5 h-3.5" /> Vertex AI & OpenAI Ready
+          <span className="px-3 py-1 rounded-full bg-[#E0F2FE] border border-[#0879D9]/30 text-[#0879D9] text-xs font-bold flex items-center gap-1">
+            <Activity className="w-3.5 h-3.5" /> OMFIT Studio
           </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Form Column */}
-        <div className="lg:col-span-6 glass-panel p-6 rounded-2xl space-y-5 border border-[#2a2822]">
+        <div className="lg:col-span-6 glass-panel p-6 rounded-3xl space-y-5 border border-[#0879D9]/15 bg-white">
           <form onSubmit={handleGenerate} className="space-y-4">
             {/* Model Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-200 mb-1 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-[#c5a059]" /> Chọn AI Model Sinh Ảnh Mới Nhất
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-[#0879D9]" /> Chọn AI Model Sinh Ảnh Mới Nhất
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -104,14 +104,14 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                   onClick={() => setModelSource('vertex-imagen-3')}
                   className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-start gap-1 ${
                     modelSource === 'vertex-imagen-3'
-                      ? 'bg-[#c5a059]/20 border-[#c5a059] text-[#e6c687] shadow-md shadow-[#c5a059]/10'
-                      : 'bg-[#101014] border-[#332f27] text-slate-400 hover:text-slate-200'
+                      ? 'bg-[#E0F2FE] border-[#0879D9] text-[#0879D9] shadow-sm font-extrabold'
+                      : 'bg-[#F8FAFC] border-slate-200 text-slate-600 hover:text-[#0879D9]'
                   }`}
                 >
                   <span className="flex items-center gap-1.5 font-black">
-                    <Sparkles className="w-3.5 h-3.5 text-[#c5a059]" /> Google Vertex AI
+                    <Sparkles className="w-3.5 h-3.5 text-[#0879D9]" /> Google Vertex AI
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">Imagen 3 (imagen-3.0-generate-001)</span>
+                  <span className="text-[10px] font-mono text-slate-500">Imagen 3 Model</span>
                 </button>
 
                 <button
@@ -119,24 +119,23 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                   onClick={() => setModelSource('dall-e-3')}
                   className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-start gap-1 ${
                     modelSource === 'dall-e-3'
-                      ? 'bg-[#c5a059]/20 border-[#c5a059] text-[#e6c687] shadow-md shadow-[#c5a059]/10'
-                      : 'bg-[#101014] border-[#332f27] text-slate-400 hover:text-slate-200'
+                      ? 'bg-[#E0F2FE] border-[#0879D9] text-[#0879D9] shadow-sm font-extrabold'
+                      : 'bg-[#F8FAFC] border-slate-200 text-slate-600 hover:text-[#0879D9]'
                   }`}
                 >
                   <span className="flex items-center gap-1.5 font-black">
-                    <Wand2 className="w-3.5 h-3.5 text-amber-300" /> OpenAI DALL-E 3
+                    <Wand2 className="w-3.5 h-3.5 text-[#0879D9]" /> OpenAI DALL-E 3
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">ChatGPT OpenAI Model</span>
+                  <span className="text-[10px] font-mono text-slate-500">ChatGPT OpenAI Model</span>
                 </button>
               </div>
             </div>
 
-            {/* Reference Upload */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Upload Ảnh Mẫu Thương Hiệu OM FIT (Reference Image)
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Upload Ảnh Mẫu Thương Hiệu OMFIT (Reference Image)
               </label>
-              <div className="relative border-2 border-dashed border-[#332f27] hover:border-[#c5a059]/60 rounded-xl p-4 text-center transition bg-[#101014]">
+              <div className="relative border-2 border-dashed border-slate-200 hover:border-[#0879D9] rounded-2xl p-4 text-center transition bg-[#F8FAFC]">
                 <input
                   type="file"
                   accept="image/*"
@@ -145,17 +144,17 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 />
                 {referenceImage ? (
                   <div className="flex items-center justify-center gap-3">
-                    <img src={referenceImage} alt="Sample reference" className="w-16 h-16 object-cover rounded-lg border border-[#c5a059]" />
+                    <img src={referenceImage} alt="Sample reference" className="w-16 h-16 object-cover rounded-lg border border-[#0879D9]" />
                     <div className="text-left text-xs">
-                      <p className="font-bold text-[#e6c687]">✓ Đã tải ảnh mẫu thành công</p>
-                      <p className="text-slate-400 text-[11px]">AI sẽ học bố cục & màu sắc từ ảnh này</p>
+                      <p className="font-bold text-[#0879D9]">✓ Đã tải ảnh mẫu thành công</p>
+                      <p className="text-slate-500 text-[11px]">AI sẽ học bố cục & màu sắc từ ảnh này</p>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setReferenceImage(null);
                         }}
-                        className="text-[10px] text-rose-400 hover:underline mt-1"
+                        className="text-[10px] text-rose-500 hover:underline mt-1 font-semibold"
                       >
                         Xóa ảnh mẫu
                       </button>
@@ -163,17 +162,16 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <Upload className="w-6 h-6 text-[#c5a059] mx-auto" />
-                    <p className="text-xs font-semibold text-slate-300">Kéo thả hoặc click để chọn ảnh mẫu OM FIT</p>
-                    <p className="text-[10px] text-slate-500">Hỗ trợ PNG, JPG, WEBP</p>
+                    <Upload className="w-6 h-6 text-[#0879D9] mx-auto" />
+                    <p className="text-xs font-semibold text-slate-700">Kéo thả hoặc click để chọn ảnh mẫu OMFIT</p>
+                    <p className="text-[10px] text-slate-400">Hỗ trợ PNG, JPG, WEBP</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Prompt Input */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-bold text-slate-700 mb-1">
                 Mô Tả Hình Ảnh (AI Prompt)
               </label>
               <textarea
@@ -181,20 +179,19 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Nhập prompt hình ảnh phòng tập, lớp pilates..."
-                className="w-full px-4 py-3 rounded-xl bg-[#101014] border border-[#332f27] text-slate-100 text-xs focus:outline-none focus:border-[#c5a059] transition font-medium"
+                className="w-full px-4 py-3 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-xs focus:outline-none focus:border-[#0879D9] transition font-medium"
                 required
               />
             </div>
 
-            {/* Style Selector */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Phong Cách Hình Ảnh (Visual Style)</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Phong Cách Hình Ảnh (Visual Style)</label>
               <select
                 value={style}
                 onChange={(e) => setStyle(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#101014] border border-[#332f27] text-slate-100 text-xs focus:outline-none focus:border-[#c5a059] transition"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-xs focus:outline-none focus:border-[#0879D9] transition font-semibold"
               >
-                <option value="Photorealistic 4K">Photorealistic 4K (Chân thực studio OM FIT)</option>
+                <option value="Photorealistic 4K">Photorealistic 4K (Chân thực studio OMFIT)</option>
                 <option value="Modern Tech 3D Render">Modern Tech 3D Render (Đồ họa 3D ấn tượng)</option>
                 <option value="Corporate Minimalist">Corporate Minimalist (Đơn giản sang trọng)</option>
               </select>
@@ -203,11 +200,11 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
             <button
               type="submit"
               disabled={isGenerating}
-              className="w-full gradient-bg-gold-btn px-6 py-3 rounded-xl text-xs font-bold text-[#0c0c0e] flex items-center justify-center gap-2 shadow-lg shadow-[#c5a059]/20 disabled:opacity-50"
+              className="w-full gradient-bg-omfit-btn px-6 py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20 disabled:opacity-50"
             >
               {isGenerating ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-[#0c0c0e] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   {modelSource === 'vertex-imagen-3' ? 'Google Vertex AI (Imagen 3)' : 'OpenAI DALL-E 3'} Đang Sinh Ảnh...
                 </>
               ) : (
@@ -220,26 +217,26 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
         </div>
 
         {/* Right Output Column */}
-        <div className="lg:col-span-6 glass-panel p-6 rounded-2xl space-y-4 border border-[#2a2822]">
-          <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-            <ImageIcon className="w-4 h-4 text-[#c5a059]" /> Xem Trước Kết Quả Ảnh Đã Sinh
+        <div className="lg:col-span-6 glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
+          <h3 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-[#0879D9]" /> Xem Trước Kết Quả Ảnh Đã Sinh
           </h3>
 
           {selectedImage ? (
             <div className="space-y-4">
-              <div className="relative rounded-2xl overflow-hidden border border-[#c5a059]/40 bg-[#101014] group">
+              <div className="relative rounded-2xl overflow-hidden border border-[#0879D9]/30 bg-[#F8FAFC] group">
                 <img src={selectedImage.url} alt={selectedImage.altText} className="w-full h-72 object-cover" />
-                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-[#101014]/90 text-[10px] font-bold text-[#e6c687] border border-[#c5a059]/40">
+                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/90 text-[10px] font-bold text-[#0879D9] border border-[#0879D9]/30 shadow-sm">
                   {selectedImage.source === 'vertex-imagen-3' ? 'GOOGLE VERTEX IMAGEN 3' : 'OPENAI DALL-E 3'}
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-[#101014] border border-[#2a2822] space-y-2 text-xs">
-                <div className="flex items-center gap-2 font-semibold text-slate-300">
-                  <Tag className="w-3.5 h-3.5 text-[#c5a059]" /> Filename SEO: <span className="font-mono text-[#e6c687]">{selectedImage.fileName}</span>
+              <div className="p-4 rounded-xl bg-[#F0F9FF] border border-[#0879D9]/15 space-y-2 text-xs">
+                <div className="flex items-center gap-2 font-semibold text-slate-700">
+                  <Tag className="w-3.5 h-3.5 text-[#0879D9]" /> Filename SEO: <span className="font-mono text-[#0879D9] font-bold">{selectedImage.fileName}</span>
                 </div>
-                <div className="flex items-center gap-2 font-semibold text-slate-300">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#c5a059]" /> Alt Text SEO: <span className="text-slate-200">{selectedImage.altText}</span>
+                <div className="flex items-center gap-2 font-semibold text-slate-700">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#0879D9]" /> Alt Text SEO: <span className="text-slate-900">{selectedImage.altText}</span>
                 </div>
               </div>
 
@@ -248,16 +245,16 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                   onImageGenerated(selectedImage);
                   alert('✓ Đã chọn ảnh này làm Featured Image cho bài viết!');
                 }}
-                className="w-full gradient-bg-gold-btn px-4 py-2.5 rounded-xl text-xs font-bold text-[#0c0c0e] flex items-center justify-center gap-2 shadow-md shadow-[#c5a059]/20"
+                className="w-full gradient-bg-omfit-btn px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20"
               >
-                <CheckCircle2 className="w-4 h-4" /> Đặt Làm Featured Image Cho Bài Viết OM FIT
+                <CheckCircle2 className="w-4 h-4" /> Đặt Làm Featured Image Cho Bài Viết OMFIT
               </button>
             </div>
           ) : (
-            <div className="text-center py-16 bg-[#101014] rounded-xl border border-dashed border-[#2a2822] space-y-2">
-              <ImageIcon className="w-12 h-12 text-[#c5a059]/40 mx-auto" />
-              <p className="text-xs font-medium text-slate-400">Chưa có hình ảnh nào được sinh.</p>
-              <p className="text-[11px] text-slate-500">Chọn Model, điền prompt và bấm nút sinh ảnh để bắt đầu.</p>
+            <div className="text-center py-16 bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200 space-y-2">
+              <ImageIcon className="w-12 h-12 text-[#0879D9]/30 mx-auto" />
+              <p className="text-xs font-semibold text-slate-500">Chưa có hình ảnh nào được sinh.</p>
+              <p className="text-[11px] text-slate-400">Chọn Model, điền prompt và bấm nút sinh ảnh để bắt đầu.</p>
             </div>
           )}
         </div>

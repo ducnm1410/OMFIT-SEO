@@ -42,28 +42,28 @@ export function App() {
       metaDescription: 'Khám phá khóa học nghề PT Pilates chuyên nghiệp 2026 tại OM FIT. Đào tạo 1:1, bằng chứng chỉ quốc tế, thực hành trên máy Reformer nhập khẩu.',
       focusKeyword: 'khóa học pt pilates',
       contentHtml: `
-<div class="seo-toc-container p-4 bg-[#18181e] rounded-xl border border-[#c5a059]/30 mb-6">
-  <h3 class="text-lg font-bold text-[#e6c687] mb-2">📌 Mục Lục Bài Viết</h3>
-  <ul class="space-y-1 text-sm text-slate-300">
-    <li><a href="#sec-1" class="hover:text-[#e6c687]">1. Tổng quan tiềm năng ngành HLV Pilates 2026</a></li>
-    <li><a href="#sec-2" class="hover:text-[#e6c687]">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OM FIT</a></li>
-    <li><a href="#sec-3" class="hover:text-[#e6c687]">3. Lộ trình học và cơ hội nghề nghiệp</a></li>
+<div class="seo-toc-container p-4 bg-[#F0F9FF] rounded-xl border border-[#0879D9]/20 mb-6">
+  <h3 class="text-lg font-bold text-[#0879D9] mb-2">📌 Mục Lục Bài Viết</h3>
+  <ul class="space-y-1 text-sm text-slate-700 font-medium">
+    <li><a href="#sec-1" class="hover:text-[#0879D9]">1. Tổng quan tiềm năng ngành HLV Pilates 2026</a></li>
+    <li><a href="#sec-2" class="hover:text-[#0879D9]">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OM FIT</a></li>
+    <li><a href="#sec-3" class="hover:text-[#0879D9]">3. Lộ trình học và cơ hội nghề nghiệp</a></li>
   </ul>
 </div>
 
-<p class="lead text-lg text-slate-200 mb-4">
+<p class="lead text-lg text-slate-800 mb-4 font-medium">
   Ngành tập luyện Pilates và cải thiện vóc dáng đang chứng kiến sự bùng nổ mạnh mẽ tại Việt Nam. <strong>OM FIT – Balance For Life</strong> tự hào mang đến <strong>Khóa học nghề PT Pilates chuyên nghiệp</strong> giúp bạn làm chủ kỹ thuật và tự tin xây dựng sự nghiệp bền vững.
 </p>
 
-<h2 id="sec-1" class="text-2xl font-bold text-slate-100 border-b border-[#c5a059]/30 pb-2 mt-8 mb-4">1. Tổng quan tiềm năng ngành HLV Pilates 2026</h2>
+<h2 id="sec-1" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">1. Tổng quan tiềm năng ngành HLV Pilates 2026</h2>
 <p>Nhu cầu phục hồi tư thế, trị liệu đau lưng cổ vai gáy qua Pilates tăng trưởng 300% trong 2 năm qua. Việc trở thành HLV Pilates cá nhân (PT) mang lại thu nhập hấp dẫn và môi trường làm việc văn minh.</p>
 
 <blockquote class="my-4">
   "OM FIT - Nơi kiến tạo đội ngũ Huấn luyện viên Pilates chuyên nghiệp hàng đầu với lộ trình chuẩn mực quốc tế."
 </blockquote>
 
-<h2 id="sec-2" class="text-2xl font-bold text-slate-100 border-b border-[#c5a059]/30 pb-2 mt-8 mb-4">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OM FIT</h2>
-<ul class="list-disc pl-6 space-y-2 text-slate-300 my-4">
+<h2 id="sec-2" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OM FIT</h2>
+<ul class="list-disc pl-6 space-y-2 text-slate-700 my-4">
   <li><strong>Thực hành 100% trên dàn máy nhập khẩu:</strong> Máy Reformer, Cadillac, Wunda Chair cao cấp.</li>
   <li><strong>Học trực tiếp cùng Master Trainer:</strong> Hướng dẫn giải phẫu học và sửa tư thế chuẩn xác.</li>
   <li><strong>Cam kết việc làm & chứng chỉ:</strong> Cấp chứng chỉ uy tín và cơ hội làm việc tại hệ thống OM FIT.</li>
@@ -79,7 +79,7 @@ export function App() {
       wpPostId: 8842,
       featuredImage: {
         id: 'img-omfit-1',
-        url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="%230c0c0e"/><text x="100" y="300" fill="%23c5a059" font-family="sans-serif" font-size="44" font-weight="bold">OM FIT • VERTEX AI IMAGEN 3 MODEL</text></svg>',
+        url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="%23F8FAFC"/><text x="100" y="300" fill="%230879D9" font-family="sans-serif" font-size="44" font-weight="bold">OMFIT • VERTEX AI IMAGEN 3 MODEL</text></svg>',
         prompt: 'Khóa học nghề PT Pilates chuyên nghiệp OM FIT',
         altText: 'Khóa học nghề PT Pilates chuyên nghiệp tại OM FIT',
         fileName: 'khoa-hoc-nghe-pt-pilates-omfit.png',
@@ -114,7 +114,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-slate-100 flex font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#071827] flex font-sans">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} wpConnected={settings.wpMcpConnected} />
 
       <div className="flex-1 flex flex-col min-w-0">

@@ -6,10 +6,10 @@ export const SeoPerformanceChart: React.FC = () => {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#071827',
+      backgroundColor: '#FFFFFF',
       borderColor: '#0879D9',
       borderWidth: 1,
-      textStyle: { color: '#F3F0E9', fontSize: 12 },
+      textStyle: { color: '#071827', fontSize: 12 },
       axisPointer: { type: 'cross', label: { backgroundColor: '#0879D9' } }
     },
     grid: {
@@ -23,14 +23,14 @@ export const SeoPerformanceChart: React.FC = () => {
       type: 'category',
       boundaryGap: false,
       data: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
-      axisLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.3)' } },
-      axisLabel: { color: '#DCEAF0', fontSize: 11 }
+      axisLine: { lineStyle: { color: '#CBD5E1' } },
+      axisLabel: { color: '#475569', fontSize: 11, fontWeight: '600' }
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.15)', type: 'dashed' } },
-      axisLabel: { color: '#DCEAF0', fontSize: 11 }
+      splitLine: { lineStyle: { color: '#F1F5F9', type: 'dashed' } },
+      axisLabel: { color: '#475569', fontSize: 11 }
     },
     series: [
       {
@@ -39,7 +39,7 @@ export const SeoPerformanceChart: React.FC = () => {
         smooth: true,
         symbol: 'circle',
         symbolSize: 6,
-        itemStyle: { color: '#28A9F4' },
+        itemStyle: { color: '#0879D9' },
         lineStyle: { width: 3, color: '#0879D9' },
         areaStyle: {
           color: {
@@ -49,8 +49,8 @@ export const SeoPerformanceChart: React.FC = () => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(8, 121, 217, 0.45)' },
-              { offset: 1, color: 'rgba(40, 169, 244, 0.02)' }
+              { offset: 0, color: 'rgba(8, 121, 217, 0.35)' },
+              { offset: 1, color: 'rgba(8, 121, 217, 0.02)' }
             ]
           }
         },
@@ -62,8 +62,8 @@ export const SeoPerformanceChart: React.FC = () => {
         smooth: true,
         symbol: 'diamond',
         symbolSize: 6,
-        itemStyle: { color: '#D7C8B7' },
-        lineStyle: { width: 2, color: '#D7C8B7', type: 'dashed' },
+        itemStyle: { color: '#0284C7' },
+        lineStyle: { width: 2, color: '#0284C7', type: 'dashed' },
         data: [93, 95, 96, 97, 98, 98, 99]
       }
     ]

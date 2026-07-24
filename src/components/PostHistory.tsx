@@ -1,5 +1,5 @@
 import React from 'react';
-import { History, FileText, Calendar, Edit3, Crown } from 'lucide-react';
+import { History, FileText, Calendar, Edit3, Activity } from 'lucide-react';
 import type { GeneratedArticle, ActiveTab } from '../types';
 
 interface PostHistoryProps {
@@ -15,25 +15,25 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <div className="glass-panel p-6 rounded-2xl space-y-2 border border-[#2a2822]">
-        <h2 className="text-xl font-extrabold text-slate-100 flex items-center gap-2">
-          <History className="w-5 h-5 text-[#c5a059]" /> Lịch Sử Bài Viết OM FIT Đã Tạo & Xuất Bản
+      <div className="glass-panel p-6 rounded-3xl space-y-2 border border-[#0879D9]/15 bg-white">
+        <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
+          <History className="w-5 h-5 text-[#0879D9]" /> Lịch Sử Bài Viết OMFIT Đã Tạo & Xuất Bản
         </h2>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500 font-medium">
           Danh sách bài viết được sinh bởi AI Gemini & đăng bài qua MCP WordPress Server (omfit.com.vn).
         </p>
       </div>
 
-      <div className="glass-panel p-6 rounded-2xl space-y-4 border border-[#2a2822]">
+      <div className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
         {articles.length === 0 ? (
-          <div className="text-center py-16 bg-[#101014] rounded-xl border border-dashed border-[#2a2822] space-y-3">
-            <FileText className="w-12 h-12 text-[#c5a059]/40 mx-auto" />
-            <p className="text-sm font-medium text-slate-400">Chưa có lịch sử bài viết.</p>
+          <div className="text-center py-16 bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200 space-y-3">
+            <FileText className="w-12 h-12 text-[#0879D9]/30 mx-auto" />
+            <p className="text-sm font-semibold text-slate-500">Chưa có lịch sử bài viết.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#18181e] text-slate-400 font-semibold border-b border-[#2a2822]">
+              <thead className="bg-[#F8FAFC] text-slate-700 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-3.5">Tiêu đề bài viết</th>
                   <th className="p-3.5">Từ khóa SEO</th>
@@ -44,29 +44,29 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
                   <th className="p-3.5 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#2a2822]">
+              <tbody className="divide-y divide-slate-100">
                 {articles.map((article) => (
-                  <tr key={article.id} className="hover:bg-[#18181e]/60 transition">
-                    <td className="p-3.5 font-semibold text-slate-100 max-w-sm truncate">
+                  <tr key={article.id} className="hover:bg-[#F0F9FF] transition">
+                    <td className="p-3.5 font-semibold text-[#071827] max-w-sm truncate">
                       {article.title}
                     </td>
                     <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded bg-[#c5a059]/15 text-[#e6c687] font-mono text-[11px] border border-[#c5a059]/30">
+                      <span className="px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9] font-mono text-[11px] border border-[#0879D9]/20 font-bold">
                         {article.focusKeyword}
                       </span>
                     </td>
-                    <td className="p-3.5 text-slate-300 font-medium">{article.wordCount} từ</td>
-                    <td className="p-3.5 font-bold text-[#e6c687]">{article.seoScore}/100</td>
-                    <td className="p-3.5 text-slate-400 flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-[#c5a059]" />
+                    <td className="p-3.5 text-slate-700 font-medium">{article.wordCount} từ</td>
+                    <td className="p-3.5 font-bold text-[#0879D9]">{article.seoScore}/100</td>
+                    <td className="p-3.5 text-slate-500 flex items-center gap-1 font-medium">
+                      <Calendar className="w-3.5 h-3.5 text-[#0879D9]" />
                       {new Date(article.createdAt).toLocaleDateString('vi-VN')}
                     </td>
                     <td className="p-3.5">
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           article.status === 'published'
-                            ? 'bg-[#c5a059]/20 text-[#e6c687] border border-[#c5a059]/40'
-                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            ? 'bg-[#0879D9]/15 text-[#0879D9] border border-[#0879D9]/30'
+                            : 'bg-amber-100 text-amber-700 border border-amber-300'
                         }`}
                       >
                         {article.status === 'published' ? '✓ Published (omfit.com.vn)' : 'Draft'}
@@ -78,7 +78,7 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
                           onSelectArticleForEdit(article);
                           setActiveTab('editor');
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-[#18181e] text-[#e6c687] border border-[#c5a059]/30 hover:bg-[#c5a059]/20 transition font-semibold text-[11px] inline-flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg bg-[#F0F9FF] text-[#0879D9] border border-[#0879D9]/30 hover:bg-[#0879D9] hover:text-white transition font-bold text-[11px] inline-flex items-center gap-1"
                       >
                         <Edit3 className="w-3.5 h-3.5" /> Xem lại
                       </button>

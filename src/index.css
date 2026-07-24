@@ -2,72 +2,69 @@
 
 @layer base {
   :root {
-    /* Official OMFIT Brand Colors (v1.0 Guideline) */
-    --omfit-midnight: #071827;      /* Master Dark Background (45%) */
-    --omfit-deep-navy: #0B263D;     /* Performance Base / Cards */
-    --omfit-active-blue: #0879D9;    /* Action / Primary CTA (10%) */
-    --omfit-electric-sky: #28A9F4;   /* Motion Highlight / Accent (5%) */
-    --omfit-soft-ivory: #F3F0E9;     /* Wellness Base (25%) */
-    --omfit-warm-sand: #D7C8B7;      /* Human Warmth Accent */
-    --omfit-mist-blue: #DCEAF0;      /* Calm Support / Badges (15%) */
-    --omfit-graphite: #222B31;       /* Dark text / Body */
-    --omfit-border-navy: rgba(40, 169, 244, 0.18);
+    /* Official OMFIT Light Theme - Blue & White (Xanh - Trắng) */
+    --omfit-bg-main: #F8FAFC;        /* Clean Crisp Light Background */
+    --omfit-card-bg: #FFFFFF;        /* Pure White Card Surfaces */
+    --omfit-card-hover: #F1F5F9;     /* Soft Light Hover */
+    --omfit-active-blue: #0879D9;    /* Action / Primary Blue CTA */
+    --omfit-electric-sky: #0284C7;   /* Electric Sky Accent */
+    --omfit-light-sky: #E0F2FE;      /* Soft Light Blue Backgrounds */
+    --omfit-midnight-text: #071827;  /* High Contrast Deep Navy Text */
+    --omfit-navy-subtext: #1E293B;   /* Subtitle Text */
+    --omfit-border: rgba(8, 121, 217, 0.15);
   }
 
   body {
-    background-color: var(--omfit-midnight);
-    color: #F3F0E9;
+    background-color: var(--omfit-bg-main);
+    color: #071827;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     overflow-x: hidden;
   }
 }
 
-/* Glassmorphism & OMFIT Brand Panels */
+/* Glassmorphism & Light Blue Panels */
 .glass-panel {
-  background: rgba(11, 38, 61, 0.75);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(40, 169, 244, 0.18);
+  background: #FFFFFF;
+  border: 1px solid rgba(8, 121, 217, 0.15);
+  box-shadow: 0 4px 20px -2px rgba(8, 121, 217, 0.06);
 }
 
 .glass-panel-glow {
-  background: linear-gradient(145deg, rgba(11, 38, 61, 0.9) 0%, rgba(7, 24, 39, 0.95) 100%);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(8, 121, 217, 0.4);
-  box-shadow: 0 0 30px rgba(8, 121, 217, 0.15);
+  background: linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 100%);
+  border: 1px solid rgba(8, 121, 217, 0.25);
+  box-shadow: 0 10px 30px -5px rgba(8, 121, 217, 0.12);
 }
 
 .gradient-text-omfit {
-  background: linear-gradient(135deg, #FFFFFF 0%, #28A9F4 50%, #0879D9 100%);
+  background: linear-gradient(135deg, #071827 0%, #0879D9 60%, #0284C7 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .gradient-bg-omfit-btn {
-  background: linear-gradient(135deg, #0879D9 0%, #28A9F4 100%);
+  background: linear-gradient(135deg, #0879D9 0%, #0284C7 100%);
   color: #FFFFFF;
   font-weight: 700;
   transition: all 0.25s ease-in-out;
 }
 
 .gradient-bg-omfit-btn:hover {
-  background: linear-gradient(135deg, #0667b9 0%, #1c98e2 100%);
-  box-shadow: 0 0 25px rgba(40, 169, 244, 0.45);
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  box-shadow: 0 4px 20px rgba(8, 121, 217, 0.35);
   transform: translateY(-1px);
 }
 
-/* Custom Scrollbar OMFIT Midnight Theme */
+/* Custom Light Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #071827;
+  background: #F8FAFC;
 }
 ::-webkit-scrollbar-thumb {
-  background: #0B263D;
+  background: #CBD5E1;
   border-radius: 4px;
-  border: 1px solid rgba(40, 169, 244, 0.25);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #0879D9;
@@ -75,23 +72,23 @@
 
 /* Rich Text Content Formatting inside Preview */
 .prose-custom p {
-  color: #F3F0E9;
+  color: #1E293B;
   line-height: 1.8;
   margin-bottom: 1.25rem;
 }
 
 .prose-custom h2 {
-  color: #FFFFFF;
+  color: #071827;
   font-weight: 800;
   font-size: 1.5rem;
   margin-top: 2rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid rgba(40, 169, 244, 0.3);
+  border-bottom: 2px solid rgba(8, 121, 217, 0.2);
   padding-bottom: 0.5rem;
 }
 
 .prose-custom h3 {
-  color: #28A9F4;
+  color: #0879D9;
   font-weight: 700;
   font-size: 1.25rem;
   margin-top: 1.5rem;
@@ -102,14 +99,14 @@
   list-style-type: disc;
   padding-left: 1.5rem;
   margin-bottom: 1.25rem;
-  color: #F3F0E9;
+  color: #1E293B;
 }
 
 .prose-custom ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
   margin-bottom: 1.25rem;
-  color: #F3F0E9;
+  color: #1E293B;
 }
 
 .prose-custom li {
@@ -120,8 +117,8 @@
   border-left: 4px solid #0879D9;
   padding-left: 1rem;
   font-style: italic;
-  color: #DCEAF0;
-  background: rgba(8, 121, 217, 0.1);
+  color: #071827;
+  background: #F0F9FF;
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
   border-radius: 0 0.5rem 0.5rem 0;

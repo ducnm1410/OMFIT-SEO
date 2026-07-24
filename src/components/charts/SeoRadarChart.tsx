@@ -5,10 +5,10 @@ export const SeoRadarChart: React.FC = () => {
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
-      backgroundColor: '#071827',
+      backgroundColor: '#FFFFFF',
       borderColor: '#0879D9',
       borderWidth: 1,
-      textStyle: { color: '#F3F0E9', fontSize: 12 }
+      textStyle: { color: '#071827', fontSize: 12 }
     },
     radar: {
       indicator: [
@@ -21,10 +21,10 @@ export const SeoRadarChart: React.FC = () => {
       ],
       shape: 'polygon',
       splitNumber: 4,
-      axisName: { color: '#28A9F4', fontSize: 11, fontWeight: 'bold' },
-      splitLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.25)' } },
-      splitArea: { areaStyle: { color: ['rgba(11, 38, 61, 0.6)', 'rgba(7, 24, 39, 0.8)'] } },
-      axisLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.3)' } }
+      axisName: { color: '#0879D9', fontSize: 11, fontWeight: 'bold' },
+      splitLine: { lineStyle: { color: 'rgba(8, 121, 217, 0.2)' } },
+      splitArea: { areaStyle: { color: ['rgba(240, 249, 255, 0.6)', 'rgba(255, 255, 255, 0.8)'] } },
+      axisLine: { lineStyle: { color: 'rgba(8, 121, 217, 0.3)' } }
     },
     series: [
       {
@@ -36,9 +36,9 @@ export const SeoRadarChart: React.FC = () => {
             name: 'Tiêu Chuẩn OMFIT SEO',
             symbol: 'circle',
             symbolSize: 6,
-            itemStyle: { color: '#28A9F4' },
+            itemStyle: { color: '#0879D9' },
             lineStyle: { color: '#0879D9', width: 2 },
-            areaStyle: { color: 'rgba(8, 121, 217, 0.35)' }
+            areaStyle: { color: 'rgba(8, 121, 217, 0.25)' }
           }
         ]
       }
