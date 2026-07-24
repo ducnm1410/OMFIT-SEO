@@ -51,12 +51,14 @@ export interface GeneratedImage {
   altText: string;
   fileName: string;
   style: string;
-  source: 'dall-e-3' | 'gemini' | 'upload';
+  source: 'vertex-imagen-3' | 'dall-e-3' | 'gemini' | 'upload';
 }
 
 export interface ApiSettings {
   geminiApiKey: string;
   openaiApiKey: string;
+  vertexApiKey?: string;
+  vertexProjectId?: string;
   wpSiteUrl: string;
   wpMcpConnected: boolean;
   defaultStatus: 'draft' | 'publish';

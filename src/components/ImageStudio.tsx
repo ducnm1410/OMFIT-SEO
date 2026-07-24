@@ -1,21 +1,25 @@
 import React, { useState } from 'react';
-import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Crown } from 'lucide-react';
+import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Crown, Cpu } from 'lucide-react';
 import type { GeneratedImage } from '../types';
 import { OpenAiService } from '../services/openaiService';
+import { VertexAiService } from '../services/vertexAiService';
 
 interface ImageStudioProps {
   openaiService: OpenAiService;
+  vertexAiService: VertexAiService;
   currentKeyword: string;
   onImageGenerated: (image: GeneratedImage) => void;
 }
 
 export const ImageStudio: React.FC<ImageStudioProps> = ({
   openaiService,
+  vertexAiService,
   currentKeyword,
   onImageGenerated
 }) => {
+  const [modelSource, setModelSource] = useState<'vertex-imagen-3' | 'dall-e-3'>('vertex-imagen-3');
   const [prompt, setPrompt] = useState(
-    `Hình ảnh studio sang trọng về ${currentKeyword || 'tập pilates omfit'}, phòng tập hiện đại với ánh sáng ấm vàng kim champagne, máy Reformer nhập khẩu cao cấp`
+    `Hình ảnh phòng tập Pilates Reformer đẳng cấp OM FIT, không gian sang trọng, ánh sáng vàng champagne ấm áp`
   );
   const [style, setStyle] = useState('Photorealistic 4K');
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -39,12 +43,23 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
     if (!prompt) return;
     setIsGenerating(true);
     try {
-      const newImg = await openaiService.generateImage(
-        prompt,
-        style,
-        referenceImage || undefined,
-        currentKeyword || 'omfit-seo'
-      );
+      let newImg: GeneratedImage;
+      if (modelSource === 'vertex-imagen-3') {
+        newImg = await vertexAiService.generateImage(
+          prompt,
+          style,
+          referenceImage || undefined,
+          currentKeyword || 'omfit-seo'
+        );
+      } else {
+        newImg = await openaiService.generateImage(
+          prompt,
+          style,
+          referenceImage || undefined,
+          currentKeyword || 'omfit-seo'
+        );
+      }
+
       setGeneratedImages([newImg, ...generatedImages]);
       setSelectedImage(newImg);
       onImageGenerated(newImg);
@@ -62,14 +77,14 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-extrabold text-slate-100 flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-[#c5a059]" /> Generative AI Image Studio (OpenAI DALL-E 3)
+              <ImageIcon className="w-5 h-5 text-[#c5a059]" /> Generative AI Studio: Google Vertex AI (Imagen 3) & OpenAI DALL-E 3
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Upload ảnh mẫu + điền Prompt để sinh ảnh thương hiệu OM FIT độc quyền chuẩn SEO cho bài viết WordPress.
+              Upload ảnh mẫu (Reference Image) + điền Prompt để sinh ảnh độc quyền chuẩn thương hiệu OM FIT bài viết WordPress.
             </p>
           </div>
           <span className="px-3 py-1 rounded-full bg-[#c5a059]/15 border border-[#c5a059]/40 text-[#e6c687] text-xs font-semibold flex items-center gap-1">
-            <Crown className="w-3.5 h-3.5" /> OM FIT Luxury Studio
+            <Crown className="w-3.5 h-3.5" /> Vertex AI & OpenAI Ready
           </span>
         </div>
       </div>
@@ -78,6 +93,45 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
         {/* Left Form Column */}
         <div className="lg:col-span-6 glass-panel p-6 rounded-2xl space-y-5 border border-[#2a2822]">
           <form onSubmit={handleGenerate} className="space-y-4">
+            {/* Model Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-200 mb-1 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-[#c5a059]" /> Chọn AI Model Sinh Ảnh Mới Nhất
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModelSource('vertex-imagen-3')}
+                  className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-start gap-1 ${
+                    modelSource === 'vertex-imagen-3'
+                      ? 'bg-[#c5a059]/20 border-[#c5a059] text-[#e6c687] shadow-md shadow-[#c5a059]/10'
+                      : 'bg-[#101014] border-[#332f27] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 font-black">
+                    <Sparkles className="w-3.5 h-3.5 text-[#c5a059]" /> Google Vertex AI
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">Imagen 3 (imagen-3.0-generate-001)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setModelSource('dall-e-3')}
+                  className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-start gap-1 ${
+                    modelSource === 'dall-e-3'
+                      ? 'bg-[#c5a059]/20 border-[#c5a059] text-[#e6c687] shadow-md shadow-[#c5a059]/10'
+                      : 'bg-[#101014] border-[#332f27] text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 font-black">
+                    <Wand2 className="w-3.5 h-3.5 text-amber-300" /> OpenAI DALL-E 3
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">ChatGPT OpenAI Model</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Reference Upload */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 Upload Ảnh Mẫu Thương Hiệu OM FIT (Reference Image)
@@ -117,6 +171,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               </div>
             </div>
 
+            {/* Prompt Input */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 Mô Tả Hình Ảnh (AI Prompt)
@@ -131,6 +186,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               />
             </div>
 
+            {/* Style Selector */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Phong Cách Hình Ảnh (Visual Style)</label>
               <select
@@ -152,11 +208,11 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               {isGenerating ? (
                 <>
                   <div className="w-4 h-4 border-2 border-[#0c0c0e] border-t-transparent rounded-full animate-spin" />
-                  OpenAI DALL-E 3 Đang Sinh Ảnh...
+                  {modelSource === 'vertex-imagen-3' ? 'Google Vertex AI (Imagen 3)' : 'OpenAI DALL-E 3'} Đang Sinh Ảnh...
                 </>
               ) : (
                 <>
-                  <Wand2 className="w-4 h-4" /> Sinh Ảnh Độc Quyền Với DALL-E 3
+                  <Wand2 className="w-4 h-4" /> Sinh Ảnh Mới Nhất Với {modelSource === 'vertex-imagen-3' ? 'Vertex AI Imagen 3' : 'OpenAI DALL-E 3'}
                 </>
               )}
             </button>
@@ -174,7 +230,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               <div className="relative rounded-2xl overflow-hidden border border-[#c5a059]/40 bg-[#101014] group">
                 <img src={selectedImage.url} alt={selectedImage.altText} className="w-full h-72 object-cover" />
                 <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-[#101014]/90 text-[10px] font-bold text-[#e6c687] border border-[#c5a059]/40">
-                  {selectedImage.source.toUpperCase()}
+                  {selectedImage.source === 'vertex-imagen-3' ? 'GOOGLE VERTEX IMAGEN 3' : 'OPENAI DALL-E 3'}
                 </div>
               </div>
 
@@ -201,7 +257,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
             <div className="text-center py-16 bg-[#101014] rounded-xl border border-dashed border-[#2a2822] space-y-2">
               <ImageIcon className="w-12 h-12 text-[#c5a059]/40 mx-auto" />
               <p className="text-xs font-medium text-slate-400">Chưa có hình ảnh nào được sinh.</p>
-              <p className="text-[11px] text-slate-500">Điền prompt và bấm nút sinh ảnh để bắt đầu.</p>
+              <p className="text-[11px] text-slate-500">Chọn Model, điền prompt và bấm nút sinh ảnh để bắt đầu.</p>
             </div>
           )}
         </div>

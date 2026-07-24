@@ -12,6 +12,7 @@ import { SettingsModal } from './components/SettingsModal';
 import type { ActiveTab, ApiSettings, GeneratedArticle, GeneratedImage } from './types';
 import { GeminiService } from './services/geminiService';
 import { OpenAiService } from './services/openaiService';
+import { VertexAiService } from './services/vertexAiService';
 import { WordpressMcpService } from './services/wordpressMcpService';
 
 export function App() {
@@ -20,6 +21,7 @@ export function App() {
   const [settings, setSettings] = useState<ApiSettings>({
     geminiApiKey: '',
     openaiApiKey: '',
+    vertexApiKey: '',
     wpSiteUrl: 'https://omfit.com.vn',
     wpMcpConnected: true,
     defaultStatus: 'publish',
@@ -28,6 +30,7 @@ export function App() {
 
   const geminiService = useMemo(() => new GeminiService(settings.geminiApiKey), [settings.geminiApiKey]);
   const openaiService = useMemo(() => new OpenAiService(settings.openaiApiKey), [settings.openaiApiKey]);
+  const vertexAiService = useMemo(() => new VertexAiService(settings.vertexApiKey || settings.geminiApiKey), [settings.vertexApiKey, settings.geminiApiKey]);
   const wpService = useMemo(() => new WordpressMcpService(settings.wpSiteUrl), [settings.wpSiteUrl]);
 
   const [articles, setArticles] = useState<GeneratedArticle[]>([
@@ -76,12 +79,12 @@ export function App() {
       wpPostId: 8842,
       featuredImage: {
         id: 'img-omfit-1',
-        url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="%230c0c0e"/><text x="100" y="300" fill="%23c5a059" font-family="sans-serif" font-size="44" font-weight="bold">OM FIT • PT PILATES COURSE 2026</text></svg>',
+        url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="%230c0c0e"/><text x="100" y="300" fill="%23c5a059" font-family="sans-serif" font-size="44" font-weight="bold">OM FIT • VERTEX AI IMAGEN 3 MODEL</text></svg>',
         prompt: 'Khóa học nghề PT Pilates chuyên nghiệp OM FIT',
         altText: 'Khóa học nghề PT Pilates chuyên nghiệp tại OM FIT',
         fileName: 'khoa-hoc-nghe-pt-pilates-omfit.png',
         style: 'Photorealistic 4K',
-        source: 'dall-e-3'
+        source: 'vertex-imagen-3'
       },
       articleImages: []
     }
@@ -153,6 +156,7 @@ export function App() {
           {activeTab === 'imagestudio' && (
             <ImageStudio
               openaiService={openaiService}
+              vertexAiService={vertexAiService}
               currentKeyword={selectedArticle?.focusKeyword || selectedKeyword}
               onImageGenerated={handleImageGenerated}
             />
