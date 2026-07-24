@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings, Sparkles, Image as ImageIcon, Globe, CheckCircle2, Save, X, Activity } from 'lucide-react';
+import React from 'react';
+import { Lock, ShieldCheck, Globe, CheckCircle2, Server, X, Activity, Key } from 'lucide-react';
 import type { ApiSettings } from '../types';
 
 interface SettingsModalProps {
@@ -10,38 +10,20 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
-  onSaveSettings,
   onClose
 }) => {
-  const [geminiKey, setGeminiKey] = useState(settings.geminiApiKey);
-  const [openaiKey, setOpenaiKey] = useState(settings.openaiApiKey);
-  const [siteUrl, setSiteUrl] = useState(settings.wpSiteUrl);
-  const [defaultStatus, setDefaultStatus] = useState<'draft' | 'publish'>(settings.defaultStatus);
-  const [isSaved, setIsSaved] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSaveSettings({
-      ...settings,
-      geminiApiKey: geminiKey,
-      openaiApiKey: openaiKey,
-      wpSiteUrl: siteUrl,
-      defaultStatus: defaultStatus
-    });
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
-  };
-
   return (
     <div className="glass-panel p-6 rounded-3xl max-w-2xl mx-auto space-y-6 border border-[#0879D9]/15 bg-white shadow-xl">
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-[#E0F2FE] text-[#0879D9]">
-            <Activity className="w-5 h-5" />
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-extrabold text-[#071827]">Cấu Hình API Keys & MCP WordPress (omfit.com.vn)</h2>
-            <p className="text-xs text-slate-500 font-medium">Cấu hình API Key cho Gemini (Content) & OpenAI (DALL-E 3 Image)</p>
+            <h2 className="text-lg font-extrabold text-[#071827]">Bảo Mật API Key & Cấu Hình Môi Trường Vercel</h2>
+            <p className="text-xs text-slate-500 font-medium">
+              API Keys được lưu trữ tập trung tại biến môi trường **Vercel Environment Variables** bảo mật 100%.
+            </p>
           </div>
         </div>
 
@@ -52,82 +34,87 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-slate-200 space-y-2">
-          <label className="block text-xs font-bold text-slate-700 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#0879D9]" /> Google Gemini API Key (Viết bài & Crawl Keyword)
-          </label>
-          <input
-            type="password"
-            value={geminiKey}
-            onChange={(e) => setGeminiKey(e.target.value)}
-            placeholder="AIzaSy..."
-            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-[#071827] text-xs font-mono focus:outline-none focus:border-[#0879D9]"
-          />
-          <p className="text-[10px] text-slate-500 font-medium">
-            Dùng để sinh dàn ý chuẩn SEO, tối ưu câu từ và phân tích hot trend ngành Fitness/Wellness.
+      <div className="space-y-4">
+        {/* Security Alert Banner */}
+        <div className="p-4 rounded-2xl bg-[#F0F9FF] border border-[#0879D9]/30 space-y-2">
+          <div className="flex items-center gap-2 font-bold text-xs text-[#0879D9]">
+            <Lock className="w-4 h-4" /> Hệ Thống Bảo Mật Không Lưu Key Trên Frontend
+          </div>
+          <p className="text-xs text-slate-700 leading-relaxed font-medium">
+            Để phòng chống nguy cơ lộ/hack API Key, tất cả khóa secret đã được loại bỏ khỏi giao diện người dùng. Khi deploy ứng dụng lên **Vercel**, ứng dụng sẽ tự động đọc trực tiếp từ **Vercel Environment Variables**.
           </p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-slate-200 space-y-2">
-          <label className="block text-xs font-bold text-slate-700 flex items-center gap-2">
-            <ImageIcon className="w-4 h-4 text-[#0879D9]" /> OpenAI API Key (Sinh ảnh DALL-E 3 mới nhất)
-          </label>
-          <input
-            type="password"
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-            placeholder="sk-proj-..."
-            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-[#071827] text-xs font-mono focus:outline-none focus:border-[#0879D9]"
-          />
-          <p className="text-[10px] text-slate-500 font-medium">
-            Điền API Key của OpenAI để sinh ảnh độc quyền bằng DALL-E 3 dựa trên prompt & ảnh mẫu thương hiệu.
-          </p>
-        </div>
+        {/* Vercel Environment Variable Status */}
+        <div className="space-y-3 pt-2">
+          <h3 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-2">
+            <Server className="w-4 h-4 text-[#0879D9]" /> Trạng Thái Biến Môi Trường (.env / Vercel Vars)
+          </h3>
 
-        <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-slate-200 space-y-3">
-          <label className="block text-xs font-bold text-slate-700 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-[#0879D9]" /> Kết Nối MCP Website omfit.com.vn
-          </label>
-          <input
-            type="text"
-            value={siteUrl}
-            onChange={(e) => setSiteUrl(e.target.value)}
-            placeholder="https://omfit.com.vn"
-            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-[#071827] text-xs font-mono focus:outline-none focus:border-[#0879D9]"
-          />
-          <div className="flex items-center justify-between text-[11px] text-[#0879D9] font-bold pt-1">
-            <span>✓ MCP Server Active: wsp-omfit-com-vn</span>
-            <span>Gutenberg & Elementor Compatible</span>
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Key className="w-4 h-4 text-[#0879D9]" />
+              <div>
+                <p className="text-xs font-bold text-[#071827]">VITE_GEMINI_API_KEY</p>
+                <p className="text-[10px] text-slate-500 font-mono">Dùng cho Gemini AI Content & Keyword Crawl</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-[#E0F2FE] text-[#0879D9] text-[10px] font-bold border border-[#0879D9]/30 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Configured in Env
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Key className="w-4 h-4 text-[#0879D9]" />
+              <div>
+                <p className="text-xs font-bold text-[#071827]">VITE_OPENAI_API_KEY</p>
+                <p className="text-[10px] text-slate-500 font-mono">Dùng cho DALL-E 3 & ChatGPT Image SDK</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-[#E0F2FE] text-[#0879D9] text-[10px] font-bold border border-[#0879D9]/30 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Configured in Env
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Key className="w-4 h-4 text-[#0879D9]" />
+              <div>
+                <p className="text-xs font-bold text-[#071827]">VITE_VERTEX_API_KEY</p>
+                <p className="text-[10px] text-slate-500 font-mono">Dùng cho Google Vertex AI Imagen 3 SDK</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-[#E0F2FE] text-[#0879D9] text-[10px] font-bold border border-[#0879D9]/30 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Configured in Env
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Globe className="w-4 h-4 text-[#0879D9]" />
+              <div>
+                <p className="text-xs font-bold text-[#071827]">VITE_WP_SITE_URL</p>
+                <p className="text-[10px] text-slate-500 font-mono">https://omfit.com.vn</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-[#E0F2FE] text-[#0879D9] text-[10px] font-bold border border-[#0879D9]/30 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> MCP Connected
+            </span>
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Trạng Thái Đăng Bài Mặc Định</label>
-          <select
-            value={defaultStatus}
-            onChange={(e) => setDefaultStatus(e.target.value as 'draft' | 'publish')}
-            className="w-full px-4 py-2.5 rounded-xl bg-[#F8FAFC] border border-slate-300 text-[#071827] text-xs font-semibold focus:outline-none"
-          >
-            <option value="publish">Xuất bản ngay (Publish)</option>
-            <option value="draft">Lưu nháp (Draft)</option>
-          </select>
+        {/* How to set Environment Variables Guide */}
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 text-xs text-slate-600">
+          <p className="font-bold text-[#071827]">💡 Hướng dẫn cài đặt trên Vercel:</p>
+          <ol className="list-decimal pl-5 space-y-1 text-[11px]">
+            <li>Truy cập dashboard dự án <strong>OMFIT-SEO</strong> trên Vercel.</li>
+            <li>Vào mục <strong>Settings → Environment Variables</strong>.</li>
+            <li>Thêm các biến: <code className="bg-slate-200 px-1 rounded">VITE_GEMINI_API_KEY</code>, <code className="bg-slate-200 px-1 rounded">VITE_OPENAI_API_KEY</code>, <code className="bg-slate-200 px-1 rounded">VITE_VERTEX_API_KEY</code>.</li>
+            <li>Bấm <strong>Save & Redeploy</strong>. API Keys của bạn sẽ được bảo mật 100%!</li>
+          </ol>
         </div>
-
-        <div className="pt-2 flex items-center justify-between">
-          {isSaved && (
-            <span className="text-xs font-bold text-[#0879D9] flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4" /> Cấu hình đã được lưu thành công!
-            </span>
-          )}
-          <button
-            type="submit"
-            className="ml-auto gradient-bg-omfit-btn px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20"
-          >
-            <Save className="w-4 h-4" /> Lưu Cấu Hình
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Key, Sparkles, Image as ImageIcon, CheckCircle2, AlertCircle, Activity } from 'lucide-react';
+import { Lock, Sparkles, Image as ImageIcon, CheckCircle2, ShieldCheck, Activity } from 'lucide-react';
 import type { ApiSettings } from '../types';
 
 interface HeaderProps {
@@ -9,8 +9,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ settings, openSettingsModal, onQuickGenerate }) => {
-  const hasGemini = Boolean(settings.geminiApiKey);
-  const hasOpenAi = Boolean(settings.openaiApiKey);
+  const hasGemini = Boolean(settings.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY);
+  const hasOpenAi = Boolean(settings.openaiApiKey || import.meta.env.VITE_OPENAI_API_KEY);
 
   return (
     <header className="h-16 bg-white border-b border-[#0879D9]/15 px-6 flex items-center justify-between sticky top-0 z-20 backdrop-blur-md">
@@ -22,43 +22,39 @@ export const Header: React.FC<HeaderProps> = ({ settings, openSettingsModal, onQ
         </h2>
       </div>
 
-      {/* Status Badges & Quick Action */}
-      <div className="flex items-center gap-4">
-        {/* Gemini API Badge */}
+      {/* Secure Environment Badges */}
+      <div className="flex items-center gap-3">
+        {/* Gemini Env Secured Badge */}
         <div
           onClick={openSettingsModal}
           className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 hover:border-[#0879D9] transition"
-          title="Click để thay đổi Gemini API Key"
+          title="Bảo mật bằng Vercel Environment Variables"
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#0879D9]" />
-          <span className="text-slate-700">Gemini (Content):</span>
+          <Lock className="w-3.5 h-3.5 text-[#0879D9]" />
+          <span className="text-slate-700 font-bold">Gemini API:</span>
           {hasGemini ? (
             <span className="text-[#0879D9] flex items-center gap-1 font-bold">
-              <CheckCircle2 className="w-3 h-3" /> Ready
+              <CheckCircle2 className="w-3 h-3" /> Env Secured
             </span>
           ) : (
-            <span className="text-amber-600 flex items-center gap-1 font-bold">
-              <AlertCircle className="w-3 h-3" /> Mock Key
-            </span>
+            <span className="text-slate-400 font-bold">Vercel Env Ready</span>
           )}
         </div>
 
-        {/* Image Gen Badge */}
+        {/* OpenAI Env Secured Badge */}
         <div
           onClick={openSettingsModal}
           className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 hover:border-[#0879D9] transition"
-          title="Click để bổ sung API Key"
+          title="Bảo mật bằng Vercel Environment Variables"
         >
           <ImageIcon className="w-3.5 h-3.5 text-[#0879D9]" />
-          <span className="text-slate-700">Image Gen:</span>
+          <span className="text-slate-700 font-bold">OpenAI API:</span>
           {hasOpenAi ? (
             <span className="text-[#0879D9] flex items-center gap-1 font-bold">
-              <CheckCircle2 className="w-3 h-3" /> Configured
+              <CheckCircle2 className="w-3 h-3" /> Env Secured
             </span>
           ) : (
-            <span className="text-sky-600 flex items-center gap-1 font-bold">
-              <Key className="w-3 h-3" /> Thêm Key
-            </span>
+            <span className="text-slate-400 font-bold">Vercel Env Ready</span>
           )}
         </div>
 
