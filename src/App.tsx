@@ -18,11 +18,12 @@ import { WordpressMcpService } from './services/wordpressMcpService';
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
 
+  // Load API keys securely from .env environment variables
   const [settings, setSettings] = useState<ApiSettings>({
-    geminiApiKey: '',
-    openaiApiKey: '',
-    vertexApiKey: '',
-    wpSiteUrl: 'https://omfit.com.vn',
+    geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
+    openaiApiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
+    vertexApiKey: import.meta.env.VITE_VERTEX_API_KEY || '',
+    wpSiteUrl: import.meta.env.VITE_WP_SITE_URL || 'https://omfit.com.vn',
     wpMcpConnected: true,
     defaultStatus: 'publish',
     defaultAuthor: 'OM FIT Admin'
