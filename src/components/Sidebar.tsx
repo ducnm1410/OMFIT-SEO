@@ -9,7 +9,7 @@ import {
   Settings,
   Globe,
   CheckCircle2,
-  Crown
+  Activity
 } from 'lucide-react';
 import type { ActiveTab } from '../types';
 
@@ -24,36 +24,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
     { id: 'overview', label: 'Tổng Quan', icon: LayoutDashboard, badge: '' },
     { id: 'keywords', label: 'Crawl Keyword & Trend', icon: Search, badge: 'HOT' },
     { id: 'generator', label: 'Sinh Bài Viết SEO (AI)', icon: Sparkles, badge: 'Gemini' },
-    { id: 'imagestudio', label: 'Generative AI Studio', icon: ImageIcon, badge: 'DALL-E 3' },
+    { id: 'imagestudio', label: 'Generative AI Studio', icon: ImageIcon, badge: 'Imagen 3' },
     { id: 'editor', label: 'Xem & Đăng Bài MCP', icon: Edit3, badge: 'Live' },
     { id: 'history', label: 'Lịch Sử Đăng Bài', icon: History, badge: '' }
   ];
 
   return (
-    <aside className="w-64 bg-[#101014] border-r border-[#26241e] flex flex-col justify-between h-screen sticky top-0 z-30 shadow-2xl">
+    <aside className="w-64 bg-[#0B263D] border-r border-[#28A9F4]/20 flex flex-col justify-between h-screen sticky top-0 z-30 shadow-2xl">
       <div>
-        {/* Brand Header OM FIT Luxury */}
-        <div className="p-5 border-b border-[#26241e] flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#e6c687] via-[#c5a059] to-[#9a7b38] flex items-center justify-center text-[#0c0c0e] font-black shadow-lg shadow-[#c5a059]/20">
-            <Crown className="w-5 h-5" />
+        {/* Brand Header OMFIT Official */}
+        <div className="p-5 border-b border-[#28A9F4]/20 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#0879D9] to-[#28A9F4] flex items-center justify-center text-white font-black shadow-lg shadow-[#0879D9]/30">
+            <Activity className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-extrabold text-base tracking-tight leading-none gradient-text-gold">
-              OM FIT SEO
+            <h1 className="font-black text-base tracking-tight leading-none gradient-text-omfit">
+              OMFIT
             </h1>
-            <p className="text-[10px] text-[#c5a059] font-medium tracking-wide mt-1 uppercase">
-              Balance For Life • MCP Suite
+            <p className="text-[9px] text-[#28A9F4] font-bold tracking-wider mt-1 uppercase">
+              FITNESS & WELLNESS • BALANCE FOR LIFE
             </p>
           </div>
         </div>
 
         {/* Connection Badge */}
-        <div className="mx-4 my-4 p-3 rounded-xl bg-[#18181e] border border-[#c5a059]/30 flex items-center justify-between shadow-inner">
+        <div className="mx-4 my-4 p-3 rounded-xl bg-[#071827] border border-[#0879D9]/30 flex items-center justify-between shadow-inner">
           <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-[#c5a059] animate-pulse" />
+            <Globe className="w-4 h-4 text-[#28A9F4] animate-pulse" />
             <div>
-              <p className="text-xs font-bold text-slate-100">omfit.com.vn</p>
-              <p className="text-[10px] text-[#c5a059] flex items-center gap-1 font-medium">
+              <p className="text-xs font-bold text-[#F3F0E9]">omfit.com.vn</p>
+              <p className="text-[10px] text-[#28A9F4] flex items-center gap-1 font-medium">
                 <CheckCircle2 className="w-3 h-3 inline" /> Ready MCP Server
               </p>
             </div>
@@ -71,22 +71,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
                 onClick={() => setActiveTab(item.id as ActiveTab)}
                 className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
                   isActive
-                    ? 'bg-gradient-to-r from-[#c5a059]/25 to-[#c5a059]/10 text-[#e6c687] border border-[#c5a059]/40 shadow-md shadow-[#c5a059]/10'
-                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#1c1b22]'
+                    ? 'bg-[#0879D9]/25 text-[#28A9F4] border border-[#0879D9]/50 shadow-md shadow-[#0879D9]/20'
+                    : 'text-[#DCEAF0]/70 hover:text-white hover:bg-[#071827]/60'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-[#e6c687]' : 'text-slate-400'}`} />
+                  <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-[#28A9F4]' : 'text-[#DCEAF0]/60'}`} />
                   <span>{item.label}</span>
                 </div>
                 {item.badge && (
                   <span
                     className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
                       item.badge === 'HOT'
-                        ? 'bg-[#c5a059]/20 text-[#e6c687] border border-[#c5a059]/40'
+                        ? 'bg-[#28A9F4]/20 text-[#28A9F4] border border-[#28A9F4]/30'
                         : item.badge === 'Gemini'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                        ? 'bg-[#0879D9]/20 text-[#28A9F4] border border-[#0879D9]/30'
+                        : 'bg-[#D7C8B7]/20 text-[#D7C8B7] border border-[#D7C8B7]/30'
                     }`}
                   >
                     {item.badge}
@@ -99,21 +99,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
       </div>
 
       {/* Footer Settings & User Info */}
-      <div className="p-4 border-t border-[#26241e]">
+      <div className="p-4 border-t border-[#28A9F4]/20">
         <button
           onClick={() => setActiveTab('settings')}
           className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
             activeTab === 'settings'
-              ? 'bg-[#1e1c24] text-[#e6c687] border border-[#c5a059]/40'
-              : 'text-slate-400 hover:text-slate-100 hover:bg-[#18181e]'
+              ? 'bg-[#071827] text-[#28A9F4] border border-[#0879D9]/40'
+              : 'text-[#DCEAF0]/70 hover:text-white hover:bg-[#071827]/40'
           }`}
         >
           <Settings className="w-4.5 h-4.5" />
           <span>Cấu Hình API & MCP</span>
         </button>
 
-        <div className="mt-3 pt-3 border-t border-[#26241e]/60 text-center">
-          <p className="text-[10px] text-[#c5a059]/70 font-medium">OM FIT WordPress AutoPoster v2.5</p>
+        <div className="mt-3 pt-3 border-t border-[#28A9F4]/15 text-center">
+          <p className="text-[10px] text-[#28A9F4]/70 font-medium">OMFIT Brand Guideline v1.0 • AutoPoster</p>
         </div>
       </div>
     </aside>

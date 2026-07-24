@@ -5,10 +5,10 @@ export const SeoRadarChart: React.FC = () => {
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
-      backgroundColor: '#18181e',
-      borderColor: '#c5a059',
+      backgroundColor: '#071827',
+      borderColor: '#0879D9',
       borderWidth: 1,
-      textStyle: { color: '#f5f3ef', fontSize: 12 }
+      textStyle: { color: '#F3F0E9', fontSize: 12 }
     },
     radar: {
       indicator: [
@@ -21,24 +21,24 @@ export const SeoRadarChart: React.FC = () => {
       ],
       shape: 'polygon',
       splitNumber: 4,
-      axisName: { color: '#e6c687', fontSize: 11, fontWeight: 'bold' },
-      splitLine: { lineStyle: { color: 'rgba(197, 160, 89, 0.25)' } },
-      splitArea: { areaStyle: { color: ['rgba(24, 24, 30, 0.6)', 'rgba(16, 16, 20, 0.8)'] } },
-      axisLine: { lineStyle: { color: 'rgba(197, 160, 89, 0.3)' } }
+      axisName: { color: '#28A9F4', fontSize: 11, fontWeight: 'bold' },
+      splitLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.25)' } },
+      splitArea: { areaStyle: { color: ['rgba(11, 38, 61, 0.6)', 'rgba(7, 24, 39, 0.8)'] } },
+      axisLine: { lineStyle: { color: 'rgba(40, 169, 244, 0.3)' } }
     },
     series: [
       {
-        name: 'Đánh Giá SEO Bài Viết OM FIT',
+        name: 'Đánh Giá SEO Bài Viết OMFIT',
         type: 'radar',
         data: [
           {
-            value: [96, 94, 98, 95, 99, 97],
-            name: 'Tiêu Chuẩn OM FIT SEO',
+            value: [96, 95, 98, 96, 99, 97],
+            name: 'Tiêu Chuẩn OMFIT SEO',
             symbol: 'circle',
             symbolSize: 6,
-            itemStyle: { color: '#e6c687' },
-            lineStyle: { color: '#c5a059', width: 2 },
-            areaStyle: { color: 'rgba(197, 160, 89, 0.35)' }
+            itemStyle: { color: '#28A9F4' },
+            lineStyle: { color: '#0879D9', width: 2 },
+            areaStyle: { color: 'rgba(8, 121, 217, 0.35)' }
           }
         ]
       }

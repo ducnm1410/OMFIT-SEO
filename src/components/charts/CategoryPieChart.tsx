@@ -6,26 +6,26 @@ export const CategoryPieChart: React.FC = () => {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
-      backgroundColor: '#18181e',
-      borderColor: '#c5a059',
+      backgroundColor: '#071827',
+      borderColor: '#0879D9',
       borderWidth: 1,
-      textStyle: { color: '#f5f3ef', fontSize: 12 }
+      textStyle: { color: '#F3F0E9', fontSize: 12 }
     },
     legend: {
       bottom: '0%',
       left: 'center',
-      textStyle: { color: '#9a9a9a', fontSize: 11 }
+      textStyle: { color: '#DCEAF0', fontSize: 11 }
     },
     series: [
       {
-        name: 'Tỷ Lệ Chuyên Mục Bài Viết',
+        name: 'Tỷ Lệ Chuyên Mục OMFIT',
         type: 'pie',
         radius: ['45%', '72%'],
         center: ['50%', '42%'],
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 8,
-          borderColor: '#101014',
+          borderColor: '#0B263D',
           borderWidth: 3
         },
         label: { show: false },
@@ -34,14 +34,14 @@ export const CategoryPieChart: React.FC = () => {
             show: true,
             fontSize: 13,
             fontWeight: 'bold',
-            color: '#e6c687'
+            color: '#28A9F4'
           }
         },
         data: [
-          { value: 40, name: 'Pilates Reformer', itemStyle: { color: '#e6c687' } },
-          { value: 30, name: 'Khóa Học PT Pilates', itemStyle: { color: '#c5a059' } },
-          { value: 18, name: 'Sound Therapy', itemStyle: { color: '#9a7b38' } },
-          { value: 12, name: 'Gym & Group X', itemStyle: { color: '#d8b26b' } }
+          { value: 35, name: 'OMFIT PILATES', itemStyle: { color: '#0879D9' } },
+          { value: 30, name: 'OMFIT FITNESS', itemStyle: { color: '#28A9F4' } },
+          { value: 20, name: 'OMFIT WELLNESS', itemStyle: { color: '#D7C8B7' } },
+          { value: 15, name: 'Cộng Đồng / News', itemStyle: { color: '#DCEAF0' } }
         ]
       }
     ]

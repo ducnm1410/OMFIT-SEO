@@ -2,93 +2,96 @@
 
 @layer base {
   :root {
-    --bg-main: #0c0c0e;
-    --bg-card: #141418;
-    --bg-hover: #1f1f26;
-    --border-color: rgba(212, 175, 55, 0.15);
-    --omfit-gold: #c5a059;
-    --omfit-gold-light: #e6c687;
-    --omfit-gold-dark: #9a7b38;
+    /* Official OMFIT Brand Colors (v1.0 Guideline) */
+    --omfit-midnight: #071827;      /* Master Dark Background (45%) */
+    --omfit-deep-navy: #0B263D;     /* Performance Base / Cards */
+    --omfit-active-blue: #0879D9;    /* Action / Primary CTA (10%) */
+    --omfit-electric-sky: #28A9F4;   /* Motion Highlight / Accent (5%) */
+    --omfit-soft-ivory: #F3F0E9;     /* Wellness Base (25%) */
+    --omfit-warm-sand: #D7C8B7;      /* Human Warmth Accent */
+    --omfit-mist-blue: #DCEAF0;      /* Calm Support / Badges (15%) */
+    --omfit-graphite: #222B31;       /* Dark text / Body */
+    --omfit-border-navy: rgba(40, 169, 244, 0.18);
   }
 
   body {
-    background-color: var(--bg-main);
-    color: #f5f3ef;
-    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--omfit-midnight);
+    color: #F3F0E9;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     overflow-x: hidden;
   }
 }
 
-/* Glassmorphism & OM FIT Gold Glow Utilities */
+/* Glassmorphism & OMFIT Brand Panels */
 .glass-panel {
-  background: rgba(20, 20, 24, 0.85);
+  background: rgba(11, 38, 61, 0.75);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(212, 175, 55, 0.15);
+  border: 1px solid rgba(40, 169, 244, 0.18);
 }
 
 .glass-panel-glow {
-  background: linear-gradient(145deg, rgba(26, 25, 22, 0.9) 0%, rgba(18, 18, 22, 0.95) 100%);
+  background: linear-gradient(145deg, rgba(11, 38, 61, 0.9) 0%, rgba(7, 24, 39, 0.95) 100%);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  box-shadow: 0 0 30px rgba(197, 160, 89, 0.12);
+  border: 1px solid rgba(8, 121, 217, 0.4);
+  box-shadow: 0 0 30px rgba(8, 121, 217, 0.15);
 }
 
-.gradient-text-gold {
-  background: linear-gradient(135deg, #f3e7d3 0%, #c5a059 50%, #9a7b38 100%);
+.gradient-text-omfit {
+  background: linear-gradient(135deg, #FFFFFF 0%, #28A9F4 50%, #0879D9 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.gradient-bg-gold-btn {
-  background: linear-gradient(135deg, #e6c687 0%, #c5a059 50%, #9a7b38 100%);
-  color: #0c0c0e;
-  font-weight: 800;
+.gradient-bg-omfit-btn {
+  background: linear-gradient(135deg, #0879D9 0%, #28A9F4 100%);
+  color: #FFFFFF;
+  font-weight: 700;
   transition: all 0.25s ease-in-out;
 }
 
-.gradient-bg-gold-btn:hover {
-  background: linear-gradient(135deg, #f5d799 0%, #d8b26b 50%, #ad8c49 100%);
-  box-shadow: 0 0 25px rgba(197, 160, 89, 0.45);
+.gradient-bg-omfit-btn:hover {
+  background: linear-gradient(135deg, #0667b9 0%, #1c98e2 100%);
+  box-shadow: 0 0 25px rgba(40, 169, 244, 0.45);
   transform: translateY(-1px);
 }
 
-/* Custom Scrollbar OM FIT Theme */
+/* Custom Scrollbar OMFIT Midnight Theme */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0c0c0e;
+  background: #071827;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2822;
+  background: #0B263D;
   border-radius: 4px;
-  border: 1px solid rgba(212, 175, 55, 0.2);
+  border: 1px solid rgba(40, 169, 244, 0.25);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #c5a059;
+  background: #0879D9;
 }
 
 /* Rich Text Content Formatting inside Preview */
 .prose-custom p {
-  color: #e2dfd7;
+  color: #F3F0E9;
   line-height: 1.8;
   margin-bottom: 1.25rem;
 }
 
 .prose-custom h2 {
-  color: #f5f3ef;
+  color: #FFFFFF;
   font-weight: 800;
   font-size: 1.5rem;
   margin-top: 2rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid rgba(197, 160, 89, 0.3);
+  border-bottom: 1px solid rgba(40, 169, 244, 0.3);
   padding-bottom: 0.5rem;
 }
 
 .prose-custom h3 {
-  color: #e6c687;
+  color: #28A9F4;
   font-weight: 700;
   font-size: 1.25rem;
   margin-top: 1.5rem;
@@ -99,14 +102,14 @@
   list-style-type: disc;
   padding-left: 1.5rem;
   margin-bottom: 1.25rem;
-  color: #e2dfd7;
+  color: #F3F0E9;
 }
 
 .prose-custom ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
   margin-bottom: 1.25rem;
-  color: #e2dfd7;
+  color: #F3F0E9;
 }
 
 .prose-custom li {
@@ -114,23 +117,13 @@
 }
 
 .prose-custom blockquote {
-  border-left: 4px solid #c5a059;
+  border-left: 4px solid #0879D9;
   padding-left: 1rem;
   font-style: italic;
-  color: #c5a059;
-  background: rgba(197, 160, 89, 0.08);
+  color: #DCEAF0;
+  background: rgba(8, 121, 217, 0.1);
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
   border-radius: 0 0.5rem 0.5rem 0;
   margin: 1.5rem 0;
-}
-
-/* Pulse Glow Animation */
-@keyframes pulseGoldGlow {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.95; }
-}
-
-.animate-pulse-gold {
-  animation: pulseGoldGlow 3s infinite ease-in-out;
 }
