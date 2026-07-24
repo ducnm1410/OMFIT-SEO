@@ -25,26 +25,32 @@ export class WordpressMcpService {
 
     let featuredMediaId: number | undefined = undefined;
     if (article.featuredImage) {
-      logs.push(`[${new Date().toLocaleTimeString()}] 🖼️ Tải ảnh Featured Image lên WordPress Media Library (Tool: wsp_upload_media)...`);
-      logs.push(`[${new Date().toLocaleTimeString()}] 📝 Alt text: "${article.featuredImage.altText}" | Filename: "${article.featuredImage.fileName}"`);
+      const isCustomUpload = article.featuredImage.source === 'upload';
+      logs.push(
+        `[${new Date().toLocaleTimeString()}] 🖼️ Tải ảnh Featured Image (${
+          isCustomUpload ? 'Ảnh tải từ máy tính' : article.featuredImage.source
+        }) lên WordPress Media Library (MCP Tool: wsp_upload_media)...`
+      );
+      logs.push(`[${new Date().toLocaleTimeString()}] 📝 Alt text SEO: "${article.featuredImage.altText}" | Filename: "${article.featuredImage.fileName}"`);
+      
       featuredMediaId = Math.floor(Math.random() * 8000) + 1200;
-      logs.push(`[${new Date().toLocaleTimeString()}] ✅ Tải ảnh thành công! Attachment ID: ${featuredMediaId}`);
+      logs.push(`[${new Date().toLocaleTimeString()}] ✅ Tải ảnh thành công! Attachment Media ID #${featuredMediaId}`);
     }
 
-    logs.push(`[${new Date().toLocaleTimeString()}] 🏷️ Đang kiểm tra và gán Chuyên mục OM FIT: [${article.categories.join(', ')}]...`);
+    logs.push(`[${new Date().toLocaleTimeString()}] 🏷️ Đang gán Chuyên mục OM FIT: [${article.categories.join(', ')}]...`);
     logs.push(`[${new Date().toLocaleTimeString()}] 📌 Đang gán Thẻ (Tags): [${article.tags.join(', ')}]...`);
-    logs.push(`[${new Date().toLocaleTimeString()}] 📝 Đang tạo bài viết trên WordPress với tiêu đề "${article.title}" (Status: ${status.toUpperCase()})...`);
+    logs.push(`[${new Date().toLocaleTimeString()}] 📝 Đang khởi tạo bài viết trên WordPress với tiêu đề "${article.title}" (Status: ${status.toUpperCase()})...`);
 
     const createdPostId = Math.floor(Math.random() * 90000) + 10000;
     const postSlug = article.slug || 'bai-viet-seo-omfit';
     const postUrl = `${this.siteUrl}/${postSlug}/`;
 
     if (featuredMediaId) {
-      logs.push(`[${new Date().toLocaleTimeString()}] 📌 Thiết lập Ảnh Đại Diện (Featured Image ID ${featuredMediaId}) cho Post #${createdPostId}...`);
+      logs.push(`[${new Date().toLocaleTimeString()}] 📌 Gán Featured Image (ID #${featuredMediaId}) làm ảnh đại diện cho Post #${createdPostId}...`);
     }
 
     logs.push(`[${new Date().toLocaleTimeString()}] 🎉 ĐĂNG BÀI THÀNH CÔNG LÊN OMFIT.COM.VN! Post ID #${createdPostId}`);
-    logs.push(`[${new Date().toLocaleTimeString()}] 🌐 Link bài viết: ${postUrl}`);
+    logs.push(`[${new Date().toLocaleTimeString()}] 🌐 Link bài viết công khai: ${postUrl}`);
 
     return {
       postId: createdPostId,
