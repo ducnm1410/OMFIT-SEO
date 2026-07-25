@@ -32,6 +32,70 @@ export class WordpressMcpService {
     return await res.blob();
   }
 
+  // Find or create a WordPress category by name, returns category ID
+  private async findOrCreateCategory(name: string): Promise<number> {
+    try {
+      // Search existing categories
+      const searchRes = await fetch(
+        `${this.siteUrl}/wp-json/wp/v2/categories?search=${encodeURIComponent(name)}&per_page=5`,
+        { headers: { 'Authorization': this.getAuthHeader() } }
+      );
+      if (searchRes.ok) {
+        const categories = await searchRes.json();
+        const exact = categories.find((cat: any) => cat.name.toLowerCase() === name.toLowerCase());
+        if (exact) return exact.id;
+      }
+
+      // Create new category if not found
+      const createRes = await fetch(`${this.siteUrl}/wp-json/wp/v2/categories`, {
+        method: 'POST',
+        headers: {
+          'Authorization': this.getAuthHeader(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name })
+      });
+      if (createRes.ok) {
+        const newCat = await createRes.json();
+        return newCat.id;
+      }
+    } catch (err) {
+      console.warn(`Không thể tìm/tạo category "${name}":`, err);
+    }
+    return 1; // Fallback to default category (ID 1 = Uncategorized)
+  }
+
+  // Find or create a WordPress tag by name, returns tag ID
+  private async findOrCreateTag(name: string): Promise<number> {
+    try {
+      const searchRes = await fetch(
+        `${this.siteUrl}/wp-json/wp/v2/tags?search=${encodeURIComponent(name)}&per_page=5`,
+        { headers: { 'Authorization': this.getAuthHeader() } }
+      );
+      if (searchRes.ok) {
+        const tags = await searchRes.json();
+        const exact = tags.find((tag: any) => tag.name.toLowerCase() === name.toLowerCase());
+        if (exact) return exact.id;
+      }
+
+      const createRes = await fetch(`${this.siteUrl}/wp-json/wp/v2/tags`, {
+        method: 'POST',
+        headers: {
+          'Authorization': this.getAuthHeader(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name })
+      });
+      if (createRes.ok) {
+        const newTag = await createRes.json();
+        return newTag.id;
+      }
+    } catch (err) {
+      console.warn(`Không thể tìm/tạo tag "${name}":`, err);
+    }
+    return 0; // Skip this tag
+  }
+
   async publishArticleWithMcp(
     article: GeneratedArticle,
     status: 'draft' | 'publish' = 'publish'
@@ -71,7 +135,27 @@ export class WordpressMcpService {
         logs.push(`[${new Date().toLocaleTimeString()}] ✅ Tải ảnh thành công! Attachment Media ID #${featuredMediaId}`);
       }
 
-      // 2. Create the Post
+      // 2. Resolve Categories
+      let categoryIds: number[] = [];
+      if (article.categories && article.categories.length > 0) {
+        logs.push(`[${new Date().toLocaleTimeString()}] 🏷️ Đang gán Chuyên mục: [${article.categories.join(', ')}]...`);
+        const catPromises = article.categories.map(name => this.findOrCreateCategory(name));
+        categoryIds = await Promise.all(catPromises);
+        categoryIds = categoryIds.filter(id => id > 0);
+        logs.push(`[${new Date().toLocaleTimeString()}] ✅ Đã gán ${categoryIds.length} chuyên mục (IDs: ${categoryIds.join(', ')})`);
+      }
+
+      // 3. Resolve Tags
+      let tagIds: number[] = [];
+      if (article.tags && article.tags.length > 0) {
+        logs.push(`[${new Date().toLocaleTimeString()}] 📌 Đang gán Thẻ (Tags): [${article.tags.join(', ')}]...`);
+        const tagPromises = article.tags.map(name => this.findOrCreateTag(name));
+        tagIds = await Promise.all(tagPromises);
+        tagIds = tagIds.filter(id => id > 0);
+        logs.push(`[${new Date().toLocaleTimeString()}] ✅ Đã gán ${tagIds.length} thẻ (IDs: ${tagIds.join(', ')})`);
+      }
+
+      // 4. Create the Post
       logs.push(`[${new Date().toLocaleTimeString()}] 📝 Đang khởi tạo bài viết trên WordPress với tiêu đề "${article.title}" (Status: ${status.toUpperCase()})...`);
       
       const postPayload: any = {
@@ -79,10 +163,15 @@ export class WordpressMcpService {
         content: article.contentHtml,
         status: status,
         slug: article.slug,
-        // Categories and tags require IDs in WP REST API. 
-        // In a full implementation, we would query the API to find IDs matching article.categories / article.tags.
-        // For now, we rely on standard tags/categories handling if needed, or leave them empty to use default category.
       };
+
+      if (categoryIds.length > 0) {
+        postPayload.categories = categoryIds;
+      }
+
+      if (tagIds.length > 0) {
+        postPayload.tags = tagIds;
+      }
 
       if (featuredMediaId) {
         postPayload.featured_media = featuredMediaId;
