@@ -168,8 +168,11 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
         status: 'published',
         wpPostId: result.postId
       });
-    } catch (err) {
+      
+      window.alert('🎉 Đăng bài thành công lên website omfit.com.vn!');
+    } catch (err: any) {
       console.error('WordPress Publishing Failed:', err);
+      window.alert('❌ Đăng bài thất bại:\n' + err.message);
     } finally {
       setIsPublishing(false);
     }
@@ -211,7 +214,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               </>
             ) : (
               <>
-                <Globe className="w-4 h-4" /> Đăng Bài Lên omfit.com.vn Ngay
+                <Globe className="w-4 h-4" /> Đăng Bài
               </>
             )}
           </button>

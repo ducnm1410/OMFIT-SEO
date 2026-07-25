@@ -55,11 +55,20 @@ export function App() {
 <h2 id="sec-1" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">1. Tổng quan tiềm năng ngành HLV Pilates 2026</h2>
 <p>Nhu cầu phục hồi tư thế, trị liệu đau lưng cổ vai gáy qua Pilates tăng trưởng 300% trong 2 năm qua. Việc trở thành HLV Pilates cá nhân (PT) mang lại thu nhập hấp dẫn và môi trường làm việc văn minh.</p>
 
+<figure class="my-6 text-center">
+  <img src="https://images.unsplash.com/photo-1599058917212-d750089bc07e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1024&q=80" alt="Không gian tập luyện Pilates OMFIT" class="w-full rounded-2xl border border-slate-200 shadow-sm mx-auto my-4 object-cover" />
+  <figcaption class="text-xs text-slate-500 italic mt-2">Đào tạo HLV Pilates chuyên nghiệp đáp ứng nhu cầu tăng cao</figcaption>
+</figure>
+
 <blockquote class="my-4 p-4 bg-[#F0F9FF] border-l-4 border-[#0879D9] rounded-r-xl text-slate-700 italic">
   "OMFIT - Nơi kiến tạo đội ngũ Huấn luyện viên Pilates chuyên nghiệp hàng đầu với lộ trình chuẩn mực quốc tế."
 </blockquote>
 
 <h2 id="sec-2" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OMFIT</h2>
+<figure class="my-6 text-center">
+  <img src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1024&q=80" alt="Máy tập Pilates Reformer cao cấp" class="w-full rounded-2xl border border-slate-200 shadow-sm mx-auto my-4 object-cover" />
+  <figcaption class="text-xs text-slate-500 italic mt-2">Học viên được thực hành 100% trên máy nhập khẩu cao cấp</figcaption>
+</figure>
 <ul class="list-disc pl-6 space-y-2 text-slate-700 my-4">
   <li><strong>Thực hành 100% trên dàn máy nhập khẩu:</strong> Máy Reformer, Cadillac, Wunda Chair cao cấp.</li>
   <li><strong>Học trực tiếp cùng Master Trainer:</strong> Hướng dẫn giải phẫu học và sửa tư thế chuẩn xác.</li>

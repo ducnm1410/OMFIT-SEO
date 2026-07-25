@@ -206,12 +206,23 @@ Trả về định dạng JSON object:
 <p>
   Các bài tập <strong>${kw}</strong> giúp cải thiện độ linh hoạt của cột sống, kích thích các nhóm cơ sâu và tăng cường quá trình trao đổi chất tự nhiên của cơ thể.
 </p>
+
+<figure class="my-6 text-center">
+  <img src="https://images.unsplash.com/photo-1599058917212-d750089bc07e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1024&q=80" alt="Không gian tập luyện Pilates OMFIT" class="w-full rounded-2xl border border-slate-200 shadow-sm mx-auto my-4 object-cover" />
+  <figcaption class="text-xs text-slate-500 italic mt-2">Cải thiện độ linh hoạt và sức mạnh cốt lõi cùng ${kw}</figcaption>
+</figure>
+
 <blockquote class="my-4 p-4 bg-[#F0F9FF] border-l-4 border-[#0879D9] rounded-r-xl text-slate-700 italic">
   "OMFIT - Vì một sức khỏe toàn diện. Đặt trọn niềm tin vào lộ trình tập luyện bài bản cùng đội ngũ HLV hàng đầu."
 </blockquote>
 
 <h2 id="sec-2" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">2. Trải nghiệm không gian và thiết bị tại OMFIT</h2>
 <p>Nằm tại vị trí trung tâm TP.HCM (02 Nguyễn Đổng Chi, P. Tân Mỹ, Q.7), OMFIT mang đến hệ thống phòng tập đẳng cấp với dàn máy Pilates Reformer nhập khẩu 100%, kết hợp liệu pháp Sound Therapy lắng đọng tâm trí.</p>
+
+<figure class="my-6 text-center">
+  <img src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1024&q=80" alt="Máy tập Pilates Reformer cao cấp" class="w-full rounded-2xl border border-slate-200 shadow-sm mx-auto my-4 object-cover" />
+  <figcaption class="text-xs text-slate-500 italic mt-2">Trang thiết bị nhập khẩu 100% tại hệ thống phòng tập OMFIT</figcaption>
+</figure>
 
 <h2 id="sec-3" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">3. Quy trình tập luyện ${kw} hiệu quả</h2>
 <ol class="list-decimal pl-6 space-y-2 text-slate-700 my-4">
