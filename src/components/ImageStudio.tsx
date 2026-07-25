@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Activity, Cpu, Trash2, ArrowRight } from 'lucide-react';
+import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Activity, Trash2, ArrowRight } from 'lucide-react';
 import type { GeneratedImage } from '../types';
 import { LeonardoService } from '../services/leonardoService';
 
@@ -14,7 +14,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
   currentKeyword,
   onImageGenerated
 }) => {
-  const [modelSource, setModelSource] = useState<'leonardo-nano-banana-2' | 'leonardo-chatgpt-2'>('leonardo-nano-banana-2');
+  // Only using Leonardo Banana 2
   const [prompt, setPrompt] = useState(
     `Hình ảnh phòng tập Pilates Reformer đẳng cấp OMFIT, không gian sáng mịn tự nhiên, máy Reformer nhập khẩu cao cấp`
   );
@@ -54,7 +54,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
           id: 'img-upload-' + Date.now(),
           url: fileBase64,
           prompt: `Ảnh tự tải lên từ máy tính (${file.name})`,
-          altText: `OM FIT - ${currentKeyword || 'Hình ảnh thương hiệu'}: ${file.name.replace(/\.[^/.]+$/, '')}`,
+          altText: `OMFIT - ${currentKeyword || 'Hình ảnh thương hiệu'}: ${file.name.replace(/\.[^/.]+$/, '')}`,
           fileName: cleanFileName,
           style: 'Direct Device Upload',
           source: 'upload'
@@ -73,14 +73,12 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
     if (!prompt) return;
     setIsGenerating(true);
     try {
-      let newImg: GeneratedImage;
-      const modelId = modelSource === 'leonardo-nano-banana-2' ? 'nano-banana-2' : 'chatgpt-2';
-      newImg = await leonardoService.generateImage(
+      const newImg = await leonardoService.generateImage(
         prompt,
         style,
         referenceImage || undefined,
         currentKeyword || 'omfit-seo',
-        modelId
+        'nano-banana-2'
       );
 
       setGeneratedImages([newImg, ...generatedImages]);
@@ -100,10 +98,10 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-[#0879D9]" /> Generative AI Studio & Tải Ảnh Trực Tiếp Tới WordPress
+              <ImageIcon className="w-5 h-5 text-[#0879D9]" /> Image Studio & Tải Ảnh Trực Tiếp Tới WordPress
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-medium">
-              Upload ảnh từ máy tính hoặc sinh ảnh bằng Leonardo AI (Nano Banana 2 / ChatGPT 2) chuẩn SEO cho omfit.com.vn.
+              Upload ảnh từ máy tính hoặc sinh ảnh bằng Leonardo AI (Banana 2) chuẩn SEO cho omfit.com.vn.
             </p>
           </div>
           <span className="px-3 py-1 rounded-full bg-[#E0F2FE] border border-[#0879D9]/30 text-[#0879D9] text-xs font-bold flex items-center gap-1">
@@ -154,47 +152,10 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
           {/* AI Image Generation Box */}
           <div className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
             <h3 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
-              <Sparkles className="w-4 h-4 text-[#0879D9]" /> 2. Sinh Ảnh Độc Quyền Bằng AI (Leonardo.AI)
+              <Sparkles className="w-4 h-4 text-[#0879D9]" /> 2. Sinh Ảnh Bằng AI (Leonardo Banana 2)
             </h3>
 
             <form onSubmit={handleGenerate} className="space-y-4">
-              {/* Model Selector */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-[#0879D9]" /> Chọn AI Model Sinh Ảnh
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setModelSource('leonardo-nano-banana-2')}
-                    className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-start gap-1 ${
-                      modelSource === 'leonardo-nano-banana-2'
-                        ? 'bg-[#E0F2FE] border-[#0879D9] text-[#0879D9] shadow-sm font-extrabold'
-                        : 'bg-[#F8FAFC] border-slate-200 text-slate-600 hover:text-[#0879D9]'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 font-black">
-                      <Sparkles className="w-3.5 h-3.5 text-[#0879D9]" /> Banana 2
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-500">Leonardo AI Model</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setModelSource('leonardo-chatgpt-2')}
-                    className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-start gap-1 ${
-                      modelSource === 'leonardo-chatgpt-2'
-                        ? 'bg-[#E0F2FE] border-[#0879D9] text-[#0879D9] shadow-sm font-extrabold'
-                        : 'bg-[#F8FAFC] border-slate-200 text-slate-600 hover:text-[#0879D9]'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 font-black">
-                      <Wand2 className="w-3.5 h-3.5 text-[#0879D9]" /> ChatGPT 2
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-500">Leonardo AI Model</span>
-                  </button>
-                </div>
-              </div>
 
               {/* Reference Image Upload for AI Prompting */}
               <div>
@@ -268,11 +229,11 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 {isGenerating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Đang Sinh Ảnh Bằng {modelSource === 'leonardo-nano-banana-2' ? 'Banana 2' : 'ChatGPT 2'}...
+                    Đang Sinh Ảnh Bằng Leonardo Banana 2...
                   </>
                 ) : (
                   <>
-                    <Wand2 className="w-4 h-4" /> Sinh Ảnh Bằng {modelSource === 'leonardo-nano-banana-2' ? 'Leonardo Banana 2' : 'Leonardo ChatGPT 2'}
+                    <Wand2 className="w-4 h-4" /> Sinh Ảnh Bằng Leonardo Banana 2
                   </>
                 )}
               </button>
@@ -293,9 +254,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/90 text-[10px] font-extrabold text-[#0879D9] border border-[#0879D9]/30 shadow-sm">
                   {selectedImage.source === 'upload'
                     ? 'ẢNH TẢI LÊN TỪ MÁY TÍNH'
-                    : selectedImage.source === 'leonardo-nano-banana-2'
-                    ? 'LEONARDO BANANA 2'
-                    : 'LEONARDO CHATGPT 2'}
+                    : 'LEONARDO BANANA 2'}
                 </div>
               </div>
 

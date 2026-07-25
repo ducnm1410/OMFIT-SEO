@@ -289,9 +289,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                 <span className="text-[9px] font-extrabold px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9]">
                   {article.featuredImage.source === 'upload'
                     ? 'ẢNH TẢI LÊN'
-                    : article.featuredImage.source === 'vertex-imagen-3'
-                    ? 'VERTEX AI'
-                    : 'DALL-E 3'}
+                    : 'LEONARDO BANANA 2'}
                 </span>
               )}
             </div>
@@ -384,7 +382,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   onClick={() => setActiveTab('imagestudio')}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#F0F9FF] text-[#0879D9] border border-[#0879D9]/30 hover:bg-[#0879D9] hover:text-white transition font-bold text-xs flex items-center justify-center gap-2"
                 >
-                  <Sparkles className="w-4 h-4" /> Sinh Ảnh Mới Nhất Bằng AI Studio (Vertex AI / DALL-E 3)
+                  <Sparkles className="w-4 h-4" /> Sinh Ảnh Mới Bằng Leonardo Banana 2
                 </button>
               </div>
             )}

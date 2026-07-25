@@ -124,7 +124,7 @@ export class LeonardoService {
         id: `img-leo-${Date.now()}`,
         url: base64Url,
         prompt: finalPrompt,
-        altText: `OM FIT - ${keyword}: Hình ảnh minh họa cho ${keyword}`,
+        altText: `OMFIT - ${keyword}: Hình ảnh minh họa cho ${keyword}`,
         fileName: `${keyword.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.jpg`,
         style: style,
         source: modelId === 'nano-banana-2' ? 'leonardo-nano-banana-2' : 'leonardo-chatgpt-2',
