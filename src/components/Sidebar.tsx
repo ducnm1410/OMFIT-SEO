@@ -98,21 +98,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
         </nav>
       </div>
 
-      {/* Footer Settings */}
+      {/* Footer */}
       <div className="p-4 border-t border-[#0879D9]/15">
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-            activeTab === 'settings'
-              ? 'bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30'
-              : 'text-slate-600 hover:text-[#0879D9] hover:bg-slate-50'
-          }`}
-        >
-          <Settings className="w-4.5 h-4.5" />
-          <span>Cấu Hình API & MCP</span>
-        </button>
-
-        <div className="mt-3 pt-3 border-t border-slate-100 text-center">
+        <div className="text-center">
           <p className="text-[10px] text-slate-400 font-medium">OMFIT Brand Light Theme • AutoPoster</p>
         </div>
       </div>

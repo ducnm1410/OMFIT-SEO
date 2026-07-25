@@ -7,12 +7,12 @@ import { SeoContentGenerator } from './components/SeoContentGenerator';
 import { ImageStudio } from './components/ImageStudio';
 import { LiveEditorPublisher } from './components/LiveEditorPublisher';
 import { PostHistory } from './components/PostHistory';
-import { SettingsModal } from './components/SettingsModal';
 
 import type { ActiveTab, ApiSettings, GeneratedArticle, GeneratedImage } from './types';
 import { GeminiService } from './services/geminiService';
 import { OpenAiService } from './services/openaiService';
 import { VertexAiService } from './services/vertexAiService';
+import { LeonardoService } from './services/leonardoService';
 import { WordpressMcpService } from './services/wordpressMcpService';
 
 export function App() {
@@ -23,6 +23,7 @@ export function App() {
     geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
     openaiApiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
     vertexApiKey: import.meta.env.VITE_VERTEX_API_KEY || '',
+    leonardoApiKey: import.meta.env.VITE_LEONARDO_API_KEY || '',
     wpSiteUrl: import.meta.env.VITE_WP_SITE_URL || 'https://omfit.com.vn',
     wpMcpConnected: true,
     defaultStatus: 'publish',
@@ -32,6 +33,7 @@ export function App() {
   const geminiService = useMemo(() => new GeminiService(settings.geminiApiKey), [settings.geminiApiKey]);
   const openaiService = useMemo(() => new OpenAiService(settings.openaiApiKey), [settings.openaiApiKey]);
   const vertexAiService = useMemo(() => new VertexAiService(settings.vertexApiKey || settings.geminiApiKey), [settings.vertexApiKey, settings.geminiApiKey]);
+  const leonardoService = useMemo(() => new LeonardoService(settings.leonardoApiKey || ''), [settings.leonardoApiKey]);
   const wpService = useMemo(() => new WordpressMcpService(settings.wpSiteUrl), [settings.wpSiteUrl]);
 
   const [articles, setArticles] = useState<GeneratedArticle[]>([
@@ -121,7 +123,6 @@ export function App() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           settings={settings}
-          openSettingsModal={() => setActiveTab('settings')}
           onQuickGenerate={() => setActiveTab('generator')}
         />
 
@@ -158,6 +159,7 @@ export function App() {
             <ImageStudio
               openaiService={openaiService}
               vertexAiService={vertexAiService}
+              leonardoService={leonardoService}
               currentKeyword={selectedArticle?.focusKeyword || selectedKeyword}
               onImageGenerated={handleImageGenerated}
             />
@@ -181,10 +183,6 @@ export function App() {
               }}
               setActiveTab={setActiveTab}
             />
-          )}
-
-          {activeTab === 'settings' && (
-            <SettingsModal settings={settings} onSaveSettings={(newSet) => setSettings(newSet)} />
           )}
         </main>
       </div>

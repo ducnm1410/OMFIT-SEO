@@ -3,10 +3,12 @@ import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Activit
 import type { GeneratedImage } from '../types';
 import { OpenAiService } from '../services/openaiService';
 import { VertexAiService } from '../services/vertexAiService';
+import { LeonardoService } from '../services/leonardoService';
 
 interface ImageStudioProps {
   openaiService: OpenAiService;
   vertexAiService: VertexAiService;
+  leonardoService: LeonardoService;
   currentKeyword: string;
   onImageGenerated: (image: GeneratedImage) => void;
 }
@@ -14,10 +16,11 @@ interface ImageStudioProps {
 export const ImageStudio: React.FC<ImageStudioProps> = ({
   openaiService,
   vertexAiService,
+  leonardoService,
   currentKeyword,
   onImageGenerated
 }) => {
-  const [modelSource, setModelSource] = useState<'vertex-imagen-3' | 'dall-e-3'>('vertex-imagen-3');
+  const [modelSource, setModelSource] = useState<'vertex-imagen-3' | 'dall-e-3' | 'leonardo-nano-banana-2'>('leonardo-nano-banana-2');
   const [prompt, setPrompt] = useState(
     `Hình ảnh phòng tập Pilates Reformer đẳng cấp OMFIT, không gian sáng mịn tự nhiên, máy Reformer nhập khẩu cao cấp`
   );
@@ -79,6 +82,13 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
       let newImg: GeneratedImage;
       if (modelSource === 'vertex-imagen-3') {
         newImg = await vertexAiService.generateImage(
+          prompt,
+          style,
+          referenceImage || undefined,
+          currentKeyword || 'omfit-seo'
+        );
+      } else if (modelSource === 'leonardo-nano-banana-2') {
+        newImg = await leonardoService.generateImage(
           prompt,
           style,
           referenceImage || undefined,
@@ -173,7 +183,22 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-[#0879D9]" /> Chọn AI Model Sinh Ảnh
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setModelSource('leonardo-nano-banana-2')}
+                    className={`p-3 rounded-xl border text-xs font-bold transition flex flex-col items-start gap-1 ${
+                      modelSource === 'leonardo-nano-banana-2'
+                        ? 'bg-[#E0F2FE] border-[#0879D9] text-[#0879D9] shadow-sm font-extrabold'
+                        : 'bg-[#F8FAFC] border-slate-200 text-slate-600 hover:text-[#0879D9]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 font-black">
+                      <Sparkles className="w-3.5 h-3.5 text-[#0879D9]" /> Leonardo AI
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">Nano Banana 2</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setModelSource('vertex-imagen-3')}
@@ -278,11 +303,11 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 {isGenerating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    {modelSource === 'vertex-imagen-3' ? 'Google Vertex AI (Imagen 3)' : 'OpenAI DALL-E 3'} Đang Sinh Ảnh...
+                    {modelSource === 'vertex-imagen-3' ? 'Google Vertex AI (Imagen 3)' : modelSource === 'leonardo-nano-banana-2' ? 'Leonardo AI (Nano Banana 2)' : 'OpenAI DALL-E 3'} Đang Sinh Ảnh...
                   </>
                 ) : (
                   <>
-                    <Wand2 className="w-4 h-4" /> Sinh Ảnh Bằng {modelSource === 'vertex-imagen-3' ? 'Vertex AI Imagen 3' : 'OpenAI DALL-E 3'}
+                    <Wand2 className="w-4 h-4" /> Sinh Ảnh Bằng {modelSource === 'vertex-imagen-3' ? 'Vertex AI Imagen 3' : modelSource === 'leonardo-nano-banana-2' ? 'Leonardo Nano Banana 2' : 'OpenAI DALL-E 3'}
                   </>
                 )}
               </button>
@@ -305,6 +330,8 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                     ? 'ẢNH TẢI LÊN TỪ MÁY TÍNH'
                     : selectedImage.source === 'vertex-imagen-3'
                     ? 'GOOGLE VERTEX IMAGEN 3'
+                    : selectedImage.source === 'leonardo-nano-banana-2'
+                    ? 'LEONARDO NANO BANANA 2'
                     : 'OPENAI DALL-E 3'}
                 </div>
               </div>

@@ -4,11 +4,10 @@ import type { ApiSettings } from '../types';
 
 interface HeaderProps {
   settings: ApiSettings;
-  openSettingsModal: () => void;
   onQuickGenerate: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ settings, openSettingsModal, onQuickGenerate }) => {
+export const Header: React.FC<HeaderProps> = ({ settings, onQuickGenerate }) => {
   const hasGemini = Boolean(settings.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY);
   const hasOpenAi = Boolean(settings.openaiApiKey || import.meta.env.VITE_OPENAI_API_KEY);
 
@@ -26,8 +25,7 @@ export const Header: React.FC<HeaderProps> = ({ settings, openSettingsModal, onQ
       <div className="flex items-center gap-3">
         {/* Gemini Env Secured Badge */}
         <div
-          onClick={openSettingsModal}
-          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 hover:border-[#0879D9] transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 transition"
           title="Bảo mật bằng Vercel Environment Variables"
         >
           <Lock className="w-3.5 h-3.5 text-[#0879D9]" />
@@ -43,8 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ settings, openSettingsModal, onQ
 
         {/* OpenAI Env Secured Badge */}
         <div
-          onClick={openSettingsModal}
-          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 hover:border-[#0879D9] transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 transition"
           title="Bảo mật bằng Vercel Environment Variables"
         >
           <ImageIcon className="w-3.5 h-3.5 text-[#0879D9]" />

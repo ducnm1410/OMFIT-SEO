@@ -51,7 +51,7 @@ export interface GeneratedImage {
   altText: string;
   fileName: string;
   style: string;
-  source: 'vertex-imagen-3' | 'dall-e-3' | 'gemini' | 'upload';
+  source: 'vertex-imagen-3' | 'dall-e-3' | 'gemini' | 'upload' | 'leonardo-nano-banana-2';
 }
 
 export interface ApiSettings {
@@ -59,10 +59,11 @@ export interface ApiSettings {
   openaiApiKey: string;
   vertexApiKey?: string;
   vertexProjectId?: string;
+  leonardoApiKey?: string;
   wpSiteUrl: string;
   wpMcpConnected: boolean;
   defaultStatus: 'draft' | 'publish';
   defaultAuthor: string;
 }
 
-export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'editor' | 'history' | 'settings';
+export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'editor' | 'history';
