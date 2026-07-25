@@ -12,7 +12,8 @@ export class LeonardoService {
     prompt: string,
     style: string,
     referenceImage?: string,
-    keyword: string = 'omfit-seo'
+    keyword: string = 'omfit-seo',
+    modelId: string = 'nano-banana-2'
   ): Promise<GeneratedImage> {
     try {
       if (!this.apiKey) {
@@ -30,7 +31,7 @@ export class LeonardoService {
       const finalPrompt = `${prompt}, ${styleSuffix}`;
 
       const initParams: any = {
-        model: 'nano-banana-2',
+        model: modelId,
         parameters: {
           width: 1024,
           height: 1024,
@@ -126,7 +127,7 @@ export class LeonardoService {
         altText: `OM FIT - ${keyword}: Hình ảnh minh họa cho ${keyword}`,
         fileName: `${keyword.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.jpg`,
         style: style,
-        source: 'leonardo-nano-banana-2',
+        source: modelId === 'nano-banana-2' ? 'leonardo-nano-banana-2' : 'leonardo-chatgpt-2',
       };
     } catch (error) {
       console.error('Leonardo generation error:', error);

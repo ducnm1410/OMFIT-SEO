@@ -51,14 +51,11 @@ export interface GeneratedImage {
   altText: string;
   fileName: string;
   style: string;
-  source: 'vertex-imagen-3' | 'dall-e-3' | 'gemini' | 'upload' | 'leonardo-nano-banana-2';
+  source: 'upload' | 'leonardo-nano-banana-2' | 'leonardo-chatgpt-2';
 }
 
 export interface ApiSettings {
   geminiApiKey: string;
-  openaiApiKey: string;
-  vertexApiKey?: string;
-  vertexProjectId?: string;
   leonardoApiKey?: string;
   wpSiteUrl: string;
   wpMcpConnected: boolean;
