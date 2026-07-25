@@ -100,14 +100,6 @@
   margin-inline: auto;
 }
 
-.text-xs,
-.text-\[9px\],
-.text-\[10px\],
-.text-\[11px\] {
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-
 @media (max-width: 767px) {
   .glass-panel,
   .glass-panel-glow {

@@ -122,7 +122,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
       {/* ECharts Bento Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 glass-panel p-6 rounded-3xl border border-[#0879D9]/15 space-y-4 bg-white">
+        <div className="lg:col-span-7 glass-panel p-4 sm:p-6 rounded-3xl border border-[#0879D9]/15 space-y-4 bg-white">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-extrabold text-[#0879D9] uppercase tracking-wider flex items-center gap-2">
               <Activity className="w-4 h-4 text-[#0879D9]" /> Tăng Trưởng Đăng Bài & Điểm SEO Theo Tuần (ECharts)
@@ -132,10 +132,10 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           <SeoPerformanceChart />
         </div>
 
-        <div className="lg:col-span-4 glass-panel p-6 rounded-3xl border border-[#0879D9]/15 space-y-4 bg-white">
+        <div className="lg:col-span-5 glass-panel p-4 sm:p-6 rounded-3xl border border-[#0879D9]/15 space-y-4 bg-white">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-extrabold text-[#0879D9] uppercase tracking-wider flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[#0879D9]" /> Đánh Giá 6 Chỉ Số SEO On-Page
+            <h3 className="min-w-0 text-[12px] leading-5 font-extrabold text-[#0879D9] uppercase tracking-wide flex items-start gap-2">
+              <BarChart3 className="w-4 h-4 mt-0.5 shrink-0 text-[#0879D9]" /> <span>Đánh Giá 6 Chỉ Số SEO On-Page</span>
             </h3>
           </div>
           <SeoRadarChart />
