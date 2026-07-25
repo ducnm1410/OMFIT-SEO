@@ -2,14 +2,14 @@ import React from 'react';
 import {
   LayoutDashboard,
   Search,
-  Sparkles,
+  FilePenLine,
   Image as ImageIcon,
   Edit3,
   History,
-  Settings,
   Globe,
   CheckCircle2,
-  Activity
+  Activity,
+  X
 } from 'lucide-react';
 import type { ActiveTab } from '../types';
 
@@ -17,20 +17,39 @@ interface SidebarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   wpConnected: boolean;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpConnected }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  activeTab,
+  setActiveTab,
+  wpConnected,
+  isOpen,
+  onClose
+}) => {
   const menuItems = [
     { id: 'overview', label: 'Tổng Quan', icon: LayoutDashboard, badge: '' },
-    { id: 'keywords', label: 'Crawl Keyword & Trend', icon: Search, badge: 'HOT' },
-    { id: 'generator', label: 'Sinh Bài Viết SEO (AI)', icon: Sparkles, badge: 'Gemini' },
-    { id: 'imagestudio', label: 'Generative AI Studio', icon: ImageIcon, badge: 'Imagen 3' },
+    { id: 'keywords', label: 'Phân Tích Keyword', icon: Search, badge: 'HOT' },
+    { id: 'generator', label: 'Soạn Bài Viết SEO', icon: FilePenLine, badge: '' },
+    { id: 'imagestudio', label: 'Thư Viện Hình Ảnh', icon: ImageIcon, badge: '' },
     { id: 'editor', label: 'Xem & Đăng Bài MCP', icon: Edit3, badge: 'Live' },
     { id: 'history', label: 'Lịch Sử Đăng Bài', icon: History, badge: '' }
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-[#0879D9]/15 flex flex-col justify-between h-screen sticky top-0 z-30 shadow-sm">
+    <>
+      {isOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-950/45 md:hidden"
+          onClick={onClose}
+          aria-label="Đóng trình đơn"
+        />
+      )}
+      <aside className={`w-[280px] md:w-64 bg-white border-r border-[#0879D9]/15 flex flex-col justify-between h-dvh fixed md:sticky top-0 z-50 md:z-30 shadow-xl md:shadow-sm transition-transform duration-200 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
       <div>
         {/* Brand Header OMFIT Light */}
         <div className="p-5 border-b border-[#0879D9]/15 flex items-center gap-3">
@@ -45,6 +64,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
               FITNESS & WELLNESS • BALANCE FOR LIFE
             </p>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="md:hidden ml-auto w-11 h-11 rounded-xl grid place-items-center text-slate-500 hover:bg-slate-100"
+            aria-label="Đóng trình đơn"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Connection Badge */}
@@ -53,8 +80,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
             <Globe className="w-4 h-4 text-[#0879D9] animate-pulse" />
             <div>
               <p className="text-xs font-bold text-[#071827]">omfit.com.vn</p>
-              <p className="text-[10px] text-[#0879D9] flex items-center gap-1 font-semibold">
-                <CheckCircle2 className="w-3 h-3 inline" /> Ready MCP Server
+              <p className="text-xs text-[#0879D9] flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5 inline" />
+                {wpConnected ? 'Đã kết nối' : 'Chưa kết nối'}
               </p>
             </div>
           </div>
@@ -68,8 +96,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id as ActiveTab)}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all duration-200 ${
+                onClick={() => {
+                  setActiveTab(item.id as ActiveTab);
+                  onClose();
+                }}
+                className={`w-full min-h-12 flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   isActive
                     ? 'bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30 shadow-sm font-bold'
                     : 'text-slate-600 hover:text-[#0879D9] hover:bg-slate-50'
@@ -84,8 +115,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
                     className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
                       item.badge === 'HOT'
                         ? 'bg-[#0879D9] text-white'
-                        : item.badge === 'Gemini'
-                        ? 'bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30'
                         : 'bg-slate-100 text-slate-700'
                     }`}
                   >
@@ -104,6 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, wpCon
           <p className="text-[10px] text-slate-400 font-medium">OMFIT Brand Light Theme • AutoPoster</p>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

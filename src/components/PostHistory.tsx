@@ -20,7 +20,7 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
           <History className="w-5 h-5 text-[#0879D9]" /> Lịch Sử Bài Viết OMFIT Đã Tạo & Xuất Bản
         </h2>
         <p className="text-xs text-slate-500 font-medium">
-          Danh sách bài viết được sinh bởi AI Gemini & đăng bài qua MCP WordPress Server (omfit.com.vn).
+          Danh sách bài viết đã tạo và đăng qua WordPress trên omfit.com.vn.
         </p>
       </div>
 
@@ -69,7 +69,7 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
                             : 'bg-amber-100 text-amber-700 border border-amber-300'
                         }`}
                       >
-                        {article.status === 'published' ? '✓ Published (omfit.com.vn)' : 'Draft'}
+                        {article.status === 'published' ? 'Đã đăng trên omfit.com.vn' : 'Bản nháp'}
                       </span>
                     </td>
                     <td className="p-3.5 text-right">

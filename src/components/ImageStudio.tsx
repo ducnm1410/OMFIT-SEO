@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Image as ImageIcon, Upload, Sparkles, Wand2, CheckCircle2, Tag, Activity, Trash2, ArrowRight } from 'lucide-react';
+import { Image as ImageIcon, Upload, ImagePlus, CheckCircle2, Tag, Activity, Trash2, ArrowRight } from 'lucide-react';
 import type { GeneratedImage } from '../types';
 import { LeonardoService } from '../services/leonardoService';
 
@@ -95,13 +95,13 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
     <div className="space-y-6">
       {/* Header Banner */}
       <div className="glass-panel p-6 rounded-3xl space-y-2 border border-[#0879D9]/15 bg-white">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
               <ImageIcon className="w-5 h-5 text-[#0879D9]" /> Image Studio & Tải Ảnh Trực Tiếp Tới WordPress
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-medium">
-              Upload ảnh từ máy tính hoặc sinh ảnh bằng Leonardo AI (Banana 2) chuẩn SEO cho omfit.com.vn.
+              Tải ảnh từ máy tính hoặc tạo hình ảnh chuẩn SEO cho omfit.com.vn.
             </p>
           </div>
           <span className="px-3 py-1 rounded-full bg-[#E0F2FE] border border-[#0879D9]/30 text-[#0879D9] text-xs font-bold flex items-center gap-1">
@@ -152,7 +152,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
           {/* AI Image Generation Box */}
           <div className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
             <h3 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
-              <Sparkles className="w-4 h-4 text-[#0879D9]" /> 2. Sinh Ảnh Bằng AI (Leonardo Banana 2)
+              <ImagePlus className="w-4 h-4 text-[#0879D9]" /> 2. Tạo hình ảnh
             </h3>
 
             <form onSubmit={handleGenerate} className="space-y-4">
@@ -160,7 +160,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               {/* Reference Image Upload for AI Prompting */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Upload Ảnh Mẫu Định Hướng Cho AI (Reference Image)
+                  Tải ảnh mẫu định hướng
                 </label>
                 <div
                   onClick={() => referenceUploadRef.current?.click()}
@@ -170,8 +170,8 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                     <div className="flex items-center justify-center gap-3">
                       <img src={referenceImage} alt="Sample reference" className="w-16 h-16 object-cover rounded-lg border border-[#0879D9]" />
                       <div className="text-left text-xs">
-                        <p className="font-bold text-[#0879D9]">✓ Đã nạp ảnh mẫu định hướng</p>
-                        <p className="text-slate-500 text-[11px]">AI sẽ tạo bố cục tương tự ảnh này</p>
+                        <p className="font-bold text-[#0879D9]">Đã nạp ảnh mẫu định hướng</p>
+                        <p className="text-slate-500 text-[11px]">Bố cục ảnh này sẽ được dùng làm tham chiếu</p>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -187,8 +187,8 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                   ) : (
                     <div className="space-y-1">
                       <Upload className="w-5 h-5 text-[#0879D9] mx-auto" />
-                      <p className="text-xs font-semibold text-slate-700">Click để chọn ảnh mẫu định hướng cho AI</p>
-                      <p className="text-[10px] text-slate-400">Leonardo AI sẽ phân tích góc máy ảnh mẫu</p>
+                      <p className="text-xs font-semibold text-slate-700">Chọn ảnh mẫu định hướng</p>
+                      <p className="text-[10px] text-slate-400">Ảnh mẫu giúp định hướng bố cục và góc máy</p>
                     </div>
                   )}
                 </div>
@@ -196,7 +196,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mô Tả Hình Ảnh (AI Prompt)
+                  Mô tả hình ảnh
                 </label>
                 <textarea
                   rows={3}
@@ -229,11 +229,11 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 {isGenerating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Đang Sinh Ảnh Bằng Leonardo Banana 2...
+                    Đang tạo hình ảnh...
                   </>
                 ) : (
                   <>
-                    <Wand2 className="w-4 h-4" /> Sinh Ảnh Bằng Leonardo Banana 2
+                    <ImagePlus className="w-4 h-4" /> Tạo hình ảnh
                   </>
                 )}
               </button>
@@ -270,7 +270,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               <button
                 onClick={() => {
                   onImageGenerated(selectedImage);
-                  alert('✓ Đã áp dụng ảnh này làm Featured Image cho bài viết!');
+                  alert('Đã áp dụng ảnh này làm ảnh đại diện cho bài viết.');
                 }}
                 className="w-full gradient-bg-omfit-btn px-4 py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20"
               >
@@ -281,7 +281,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
             <div className="text-center py-20 bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200 space-y-3">
               <ImageIcon className="w-12 h-12 text-[#0879D9]/30 mx-auto" />
               <p className="text-xs font-bold text-slate-600">Chưa có hình ảnh nào được tải lên hoặc sinh ra.</p>
-              <p className="text-[11px] text-slate-400">Bấm **"Chọn File Ảnh Từ Máy Tính"** ở cột trái hoặc sinh ảnh bằng AI.</p>
+              <p className="text-[11px] text-slate-400">Chọn tệp ảnh từ máy tính ở cột trái hoặc tạo ảnh mới.</p>
             </div>
           )}
         </div>

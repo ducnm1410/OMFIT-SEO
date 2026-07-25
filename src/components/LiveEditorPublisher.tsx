@@ -3,7 +3,7 @@ import {
   Edit3,
   Globe,
   Upload,
-  Sparkles,
+  FilePenLine,
   CheckCircle2,
   Eye,
   Code,
@@ -41,13 +41,13 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
         <Edit3 className="w-12 h-12 text-[#0879D9]/40 mx-auto" />
         <h3 className="text-lg font-bold text-[#071827]">Chưa Chọn Bài Viết Nào Để Xem</h3>
         <p className="text-xs text-slate-500 max-w-sm mx-auto font-medium">
-          Vui lòng tạo bài viết mới từ Gemini hoặc chọn bài viết từ bảng điều khiển để xem và đăng bài lên omfit.com.vn.
+          Vui lòng tạo bài viết mới hoặc chọn bài viết từ bảng điều khiển để xem và đăng lên omfit.com.vn.
         </p>
         <button
           onClick={() => setActiveTab('generator')}
           className="gradient-bg-omfit-btn px-5 py-2.5 rounded-xl text-xs font-bold text-white inline-flex items-center gap-2"
         >
-          <Sparkles className="w-4 h-4" /> Bắt đầu tạo bài viết ngay
+          <FilePenLine className="w-4 h-4" /> Bắt đầu tạo bài viết
         </button>
       </div>
     );
@@ -259,7 +259,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">Từ Khóa SEO</label>
                 <input
@@ -284,7 +284,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
 
           {/* Featured Image Management Panel */}
           <div className="glass-panel p-5 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
               <h3 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-1.5">
                 <ImageIcon className="w-4 h-4 text-[#0879D9]" /> Ảnh Đại Diện (Featured Image)
               </h3>
@@ -360,7 +360,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                     onClick={() => setActiveTab('imagestudio')}
                     className="px-3 py-2 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition font-bold text-[11px] flex items-center gap-1"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-[#0879D9]" /> Generative AI
+                    <ImageIcon className="w-3.5 h-3.5 text-[#0879D9]" /> Ảnh được tạo
                   </button>
                 </div>
               </div>
@@ -385,7 +385,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   onClick={() => setActiveTab('imagestudio')}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#F0F9FF] text-[#0879D9] border border-[#0879D9]/30 hover:bg-[#0879D9] hover:text-white transition font-bold text-xs flex items-center justify-center gap-2"
                 >
-                  <Sparkles className="w-4 h-4" /> Sinh Ảnh Mới Bằng Leonardo Banana 2
+                  <ImageIcon className="w-4 h-4" /> Tạo ảnh mới
                 </button>
               </div>
             )}
@@ -394,7 +394,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
 
         {/* Body Content & Preview Column */}
         <div className="lg:col-span-8 glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveView('visual')}
@@ -475,7 +475,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           </div>
 
           {publishedUrl && (
-            <div className="pt-2 flex items-center justify-between">
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="text-xs text-[#0879D9] font-bold flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" /> Bài viết đã xuất bản thành công lên website omfit.com.vn!
               </div>

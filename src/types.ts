@@ -1,10 +1,36 @@
 export interface KeywordTrend {
   keyword: string;
   searchVolume: string;
+  searchVolumeValue: number;
   difficulty: 'Easy' | 'Medium' | 'Hard';
+  competition: string;
+  competitionIndex: number;
+  lowTopOfPageBidMicros: number;
+  highTopOfPageBidMicros: number;
+  monthlySearchVolumes: {
+    year: string;
+    month: string;
+    monthlySearches: string;
+  }[];
   trendScore: number;
   intent: 'Informational' | 'Transactional' | 'Navigational' | 'Commercial';
+  cluster: string;
   relatedLsiKeywords: string[];
+  contentAngle: string;
+  source: 'google_ads';
+}
+
+export interface KeywordResearchResponse {
+  items: KeywordTrend[];
+  meta: {
+    source: string;
+    modelApplied: boolean;
+    languageId: string;
+    geoTargetId: string;
+    generatedAt: string;
+    warnings: string[];
+    cacheHit: boolean;
+  };
 }
 
 export interface SeoOutline {

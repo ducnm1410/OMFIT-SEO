@@ -148,7 +148,7 @@ export class WordpressMcpService {
       // 3. Resolve Tags
       let tagIds: number[] = [];
       if (article.tags && article.tags.length > 0) {
-        logs.push(`[${new Date().toLocaleTimeString()}] 📌 Đang gán Thẻ (Tags): [${article.tags.join(', ')}]...`);
+        logs.push(`[${new Date().toLocaleTimeString()}] Đang gán thẻ: [${article.tags.join(', ')}]...`);
         const tagPromises = article.tags.map(name => this.findOrCreateTag(name));
         tagIds = await Promise.all(tagPromises);
         tagIds = tagIds.filter(id => id > 0);
@@ -175,7 +175,7 @@ export class WordpressMcpService {
 
       if (featuredMediaId) {
         postPayload.featured_media = featuredMediaId;
-        logs.push(`[${new Date().toLocaleTimeString()}] 📌 Gán Featured Image (ID #${featuredMediaId}) làm ảnh đại diện cho bài viết...`);
+        logs.push(`[${new Date().toLocaleTimeString()}] Gán ảnh #${featuredMediaId} làm ảnh đại diện cho bài viết...`);
       }
 
       const postRes = await fetch(`${this.siteUrl}/wp-json/wp/v2/posts`, {

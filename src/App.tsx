@@ -15,6 +15,7 @@ import { WordpressMcpService } from './services/wordpressMcpService';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Load API keys securely from .env environment variables
   const [settings, setSettings] = useState<ApiSettings>({
@@ -40,7 +41,7 @@ export function App() {
       focusKeyword: 'khóa học pt pilates',
       contentHtml: `
 <div class="seo-toc-container p-4 bg-[#F0F9FF] rounded-xl border border-[#0879D9]/20 mb-6">
-  <h3 class="text-lg font-bold text-[#0879D9] mb-2">📌 Mục Lục Bài Viết</h3>
+  <h3 class="text-lg font-bold text-[#0879D9] mb-2">Mục lục bài viết</h3>
   <ul class="space-y-1 text-sm text-slate-700 font-medium">
     <li><a href="#sec-1" class="hover:text-[#0879D9]">1. Tổng quan tiềm năng ngành HLV Pilates 2026</a></li>
     <li><a href="#sec-2" class="hover:text-[#0879D9]">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OMFIT</a></li>
@@ -85,7 +86,7 @@ export function App() {
       wpPostId: 8842,
       featuredImage: {
         id: 'img-omfit-1',
-        url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="%23F8FAFC"/><text x="100" y="300" fill="%230879D9" font-family="sans-serif" font-size="44" font-weight="bold">OMFIT • LEONARDO BANANA 2</text></svg>',
+        url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="%23F8FAFC"/><text x="100" y="300" fill="%230879D9" font-family="sans-serif" font-size="44" font-weight="bold">OMFIT • PILATES &amp; WELLNESS</text></svg>',
         prompt: 'Khóa học nghề PT Pilates chuyên nghiệp OMFIT',
         altText: 'Khóa học nghề PT Pilates chuyên nghiệp tại OMFIT',
         fileName: 'khoa-hoc-nghe-pt-pilates-omfit.png',
@@ -120,16 +121,23 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#071827] flex font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} wpConnected={settings.wpMcpConnected} />
+    <div className="min-h-dvh bg-[#F8FAFC] text-[#071827] flex">
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        wpConnected={settings.wpMcpConnected}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           settings={settings}
           onQuickGenerate={() => setActiveTab('generator')}
+          onMenuToggle={() => setIsSidebarOpen((open) => !open)}
         />
 
-        <main className="p-8 flex-1 overflow-y-auto">
+        <main className="app-main p-4 sm:p-6 xl:p-8 flex-1">
           {activeTab === 'overview' && (
             <OverviewDashboard
               articles={articles}
@@ -143,7 +151,6 @@ export function App() {
 
           {activeTab === 'keywords' && (
             <KeywordTrendFinder
-              geminiService={geminiService}
               onSelectKeywordForArticle={(kw) => setSelectedKeyword(kw)}
               setActiveTab={setActiveTab}
             />

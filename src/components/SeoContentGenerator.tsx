@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, FileText, CheckCircle2, ArrowRight, Settings, List, Layers, ShieldCheck, Activity } from 'lucide-react';
+import { FilePenLine, FileText, CheckCircle2, ArrowRight, Settings, List, Layers, ShieldCheck, Activity } from 'lucide-react';
 import type { SeoOutline, GeneratedArticle, ActiveTab } from '../types';
 import { GeminiService } from '../services/geminiService';
 
@@ -59,10 +59,10 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
     <div className="space-y-6">
       {/* Header Banner */}
       <div className="glass-panel p-6 rounded-3xl space-y-3 border border-[#0879D9]/15 bg-white">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#0879D9]" /> Sinh Bài Viết SEO Thương Hiệu OMFIT Với Gemini AI
+              <FilePenLine className="w-5 h-5 text-[#0879D9]" /> Soạn bài viết SEO thương hiệu OMFIT
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-medium">
               Tự động hóa 100% quy trình viết bài: Dàn ý chuẩn On-Page, văn phong OMFIT (Elevated, Human, Energetic, Restorative), chèn Table of Contents, Callout & FAQ.
@@ -74,7 +74,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
         </div>
 
         {/* Step Indicator */}
-        <div className="flex items-center gap-4 pt-3 border-t border-slate-100">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 pt-3 border-t border-slate-100">
           <div className={`flex items-center gap-2 text-xs font-bold ${step === 'input' ? 'text-[#0879D9]' : 'text-slate-400'}`}>
             <span className="w-5 h-5 rounded-full bg-[#0879D9] text-white text-[11px] flex items-center justify-center">1</span>
             Từ Khóa & Giọng Văn OMFIT
@@ -153,7 +153,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" /> Bắt Đầu Sinh Dàn Ý chuẩn SEO
+                    <FilePenLine className="w-4 h-4" /> Tạo dàn ý chuẩn SEO
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -213,7 +213,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
             </div>
           </div>
 
-          <div className="pt-4 flex items-center justify-between border-t border-slate-100">
+          <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100">
             <div className="text-xs text-slate-500 font-medium">
               Độ dài dự kiến: <span className="font-bold text-[#071827]">{wordCount} từ</span> | Định dạng OMFIT Brand
             </div>
@@ -222,7 +222,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
               disabled={isGeneratingArticle}
               className="gradient-bg-omfit-btn px-6 py-3 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20"
             >
-              <Sparkles className="w-4 h-4" /> Tiến Hành Sinh Toàn Bộ Bài Viết HTML
+              <FilePenLine className="w-4 h-4" /> Tạo toàn bộ bài viết HTML
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -232,7 +232,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
       {step === 'generating' && (
         <div className="glass-panel p-12 rounded-3xl text-center space-y-4 border border-[#0879D9]/15 bg-white">
           <div className="w-12 h-12 border-4 border-[#0879D9] border-t-transparent rounded-full animate-spin mx-auto" />
-          <h3 className="text-lg font-bold text-[#071827]">AI Gemini Đang Soạn Bài Viết Theo Chuẩn OMFIT...</h3>
+          <h3 className="text-lg font-bold text-[#071827]">Đang soạn bài viết theo chuẩn OMFIT...</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
             Hệ thống đang sinh nội dung HTML, tối ưu SEO On-Page, tạo mục lục tự động và chuẩn bị chuyển sang màn hình **Xem & Chỉnh Sửa Bài Viết (Live Editor)**.
           </p>

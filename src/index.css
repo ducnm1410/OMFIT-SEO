@@ -17,8 +17,44 @@
   body {
     background-color: var(--omfit-bg-main);
     color: #071827;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, -apple-system, sans-serif;
     overflow-x: hidden;
+    font-size: 16px;
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button,
+  select,
+  input:not([type='checkbox']):not([type='radio']):not([type='file']) {
+    min-height: 44px;
+  }
+
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 3px solid rgba(8, 121, 217, 0.35);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: #bae6fd;
+    color: #071827;
   }
 }
 
@@ -52,6 +88,54 @@
   background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
   box-shadow: 0 4px 20px rgba(8, 121, 217, 0.35);
   transform: translateY(-1px);
+}
+
+.gradient-bg-omfit-btn:active {
+  transform: translateY(0);
+}
+
+.app-main {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+}
+
+.text-xs,
+.text-\[9px\],
+.text-\[10px\],
+.text-\[11px\] {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 767px) {
+  .glass-panel,
+  .glass-panel-glow {
+    border-radius: 1rem;
+  }
+
+  .prose-custom {
+    font-size: 0.9375rem;
+  }
+
+  .prose-custom h2 {
+    font-size: 1.25rem;
+  }
+
+  .prose-custom h3 {
+    font-size: 1.125rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Custom Light Scrollbar */

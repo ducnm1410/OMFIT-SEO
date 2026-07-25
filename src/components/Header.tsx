@@ -1,67 +1,46 @@
 import React from 'react';
-import { Lock, Sparkles, Image as ImageIcon, CheckCircle2, ShieldCheck, Activity } from 'lucide-react';
+import { Activity, FilePlus2, Menu, ShieldCheck } from 'lucide-react';
 import type { ApiSettings } from '../types';
 
 interface HeaderProps {
   settings: ApiSettings;
   onQuickGenerate: () => void;
+  onMenuToggle: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ settings, onQuickGenerate }) => {
-  const hasGemini = Boolean(settings.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY);
-  const hasOpenAi = Boolean(settings.openaiApiKey || import.meta.env.VITE_OPENAI_API_KEY);
-
+export const Header: React.FC<HeaderProps> = ({ settings, onQuickGenerate, onMenuToggle }) => {
   return (
-    <header className="h-16 bg-white border-b border-[#0879D9]/15 px-6 flex items-center justify-between sticky top-0 z-20 backdrop-blur-md">
-      {/* Title Area */}
-      <div className="flex items-center gap-3">
-        <h2 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-2">
+    <header className="min-h-16 bg-white/95 border-b border-[#0879D9]/15 px-4 sm:px-6 py-3 flex items-center justify-between gap-3 sticky top-0 z-20 backdrop-blur-md">
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={onMenuToggle}
+          className="md:hidden w-11 h-11 shrink-0 rounded-xl border border-slate-200 text-slate-700 grid place-items-center hover:bg-slate-50"
+          aria-label="Mở trình đơn"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <h2 className="text-sm font-bold text-[#071827] flex items-center gap-2 min-w-0">
           <Activity className="w-4 h-4 text-[#0879D9]" />
-          OMFIT FITNESS & WELLNESS • BALANCE IN MOTION
+          <span className="truncate">OMFIT SEO</span>
         </h2>
       </div>
 
-      {/* Secure Environment Badges */}
-      <div className="flex items-center gap-3">
-        {/* Gemini Env Secured Badge */}
-        <div
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 transition"
-          title="Bảo mật bằng Vercel Environment Variables"
-        >
-          <Lock className="w-3.5 h-3.5 text-[#0879D9]" />
-          <span className="text-slate-700 font-bold">Gemini API:</span>
-          {hasGemini ? (
-            <span className="text-[#0879D9] flex items-center gap-1 font-bold">
-              <CheckCircle2 className="w-3 h-3" /> Env Secured
-            </span>
-          ) : (
-            <span className="text-slate-400 font-bold">Vercel Env Ready</span>
-          )}
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20">
+          <ShieldCheck className="w-4 h-4 text-[#0879D9]" />
+          <span className="text-slate-700">
+            {settings.wpMcpConnected ? 'WordPress đã kết nối' : 'Chưa kết nối WordPress'}
+          </span>
         </div>
 
-        {/* OpenAI Env Secured Badge */}
-        <div
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F0F9FF] border border-[#0879D9]/20 transition"
-          title="Bảo mật bằng Vercel Environment Variables"
-        >
-          <ImageIcon className="w-3.5 h-3.5 text-[#0879D9]" />
-          <span className="text-slate-700 font-bold">OpenAI API:</span>
-          {hasOpenAi ? (
-            <span className="text-[#0879D9] flex items-center gap-1 font-bold">
-              <CheckCircle2 className="w-3 h-3" /> Env Secured
-            </span>
-          ) : (
-            <span className="text-slate-400 font-bold">Vercel Env Ready</span>
-          )}
-        </div>
-
-        {/* Action Button */}
         <button
           onClick={onQuickGenerate}
-          className="gradient-bg-omfit-btn px-4 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20"
+          className="gradient-bg-omfit-btn px-3 sm:px-4 rounded-xl text-sm font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20 whitespace-nowrap"
         >
-          <Sparkles className="w-4 h-4" />
-          Tạo Bài SEO Mới
+          <FilePlus2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Tạo bài SEO mới</span>
+          <span className="sm:hidden">Tạo bài</span>
         </button>
       </div>
     </header>

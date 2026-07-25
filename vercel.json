@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "functions": {
+    "api/health.mjs": {
+      "maxDuration": 15
+    },
+    "api/keywords/analyze.mjs": {
+      "maxDuration": 60
+    }
+  }
+}

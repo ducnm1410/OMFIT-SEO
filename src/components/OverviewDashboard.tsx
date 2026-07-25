@@ -4,7 +4,8 @@ import {
   TrendingUp,
   Award,
   Globe,
-  Sparkles,
+  FilePenLine,
+  Image as ImageIcon,
   Search,
   Edit3,
   ArrowRight,
@@ -39,29 +40,29 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Welcome Banner - Hero Light Blue Card */}
-      <div className="glass-panel-glow p-8 rounded-3xl relative overflow-hidden">
+      <div className="glass-panel-glow p-5 sm:p-8 rounded-3xl relative overflow-hidden">
         <div className="relative z-10 max-w-3xl space-y-3">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#E0F2FE] border border-[#0879D9]/30 text-[#0879D9] text-xs font-extrabold shadow-sm">
             <Activity className="w-3.5 h-3.5" /> OMFIT LIGHT THEME • BALANCE IN MOTION
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-[#071827]">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#071827] leading-tight">
             Hệ Thống Đăng Bài SEO Tự Động <span className="gradient-text-omfit">omfit.com.vn</span>
           </h1>
-          <p className="text-slate-600 text-xs leading-relaxed max-w-2xl font-medium">
-            Tự động hóa 100% quy trình SEO chuẩn thương hiệu OMFIT: Crawl keyword theo 3 trụ cột (OMFIT PILATES, OMFIT FITNESS, OMFIT WELLNESS), sinh bài viết Gemini, tạo hình ảnh Vertex AI Imagen 3 & OpenAI DALL-E 3, đăng bài qua MCP WordPress Server.
+          <p className="text-slate-600 text-sm leading-relaxed max-w-2xl font-medium">
+            Quản lý quy trình SEO theo ba trụ cột OMFIT Pilates, OMFIT Fitness và OMFIT Wellness: nghiên cứu keyword, soạn nội dung, quản lý hình ảnh và đăng bài WordPress.
           </p>
-          <div className="pt-2 flex items-center gap-3">
+          <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-3">
             <button
               onClick={() => setActiveTab('keywords')}
-              className="gradient-bg-omfit-btn px-5 py-2.5 rounded-2xl text-xs font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20"
+              className="gradient-bg-omfit-btn px-5 py-2.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20"
             >
-              <Search className="w-4 h-4" /> Crawl Keyword & Trend Ngay
+              <Search className="w-4 h-4" /> Phân tích keyword
             </button>
             <button
               onClick={() => setActiveTab('generator')}
-              className="px-4 py-2.5 rounded-2xl text-xs font-bold text-[#071827] bg-white border border-[#0879D9]/30 hover:border-[#0879D9] hover:bg-[#F0F9FF] transition flex items-center gap-2"
+              className="px-4 py-2.5 rounded-2xl text-sm font-bold text-[#071827] bg-white border border-[#0879D9]/30 hover:border-[#0879D9] hover:bg-[#F0F9FF] transition flex items-center justify-center gap-2"
             >
-              <Sparkles className="w-4 h-4 text-[#0879D9]" /> Sinh Bài Viết SEO
+              <FilePenLine className="w-4 h-4 text-[#0879D9]" /> Soạn bài viết SEO
             </button>
           </div>
         </div>
@@ -87,7 +88,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
         <div className="glass-panel p-5 rounded-2xl space-y-2 border border-[#0879D9]/15 hover:border-[#0879D9]/40 transition bg-white">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold">Tổng Số Từ AI Viết</span>
+            <span className="text-xs font-semibold">Tổng số từ đã soạn</span>
             <div className="p-2.5 rounded-xl bg-[#E0F2FE] text-[#0879D9]">
               <TrendingUp className="w-5 h-5" />
             </div>
@@ -165,7 +166,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       {/* Workflow Stepper */}
       <div className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
         <h3 className="text-xs font-extrabold text-[#0879D9] uppercase tracking-wider flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#0879D9]" /> Quy Trình 4 Bước Đăng Bài SEO Tự Động OMFIT
+          <FilePenLine className="w-4 h-4 text-[#0879D9]" /> Quy trình 4 bước đăng bài SEO OMFIT
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -193,10 +194,10 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <span className="w-6 h-6 rounded-full bg-[#0879D9] text-white font-black text-xs flex items-center justify-center">
                 2
               </span>
-              <Sparkles className="w-4 h-4 text-slate-400 group-hover:text-[#0879D9] transition" />
+              <FilePenLine className="w-4 h-4 text-slate-400 group-hover:text-[#0879D9] transition" />
             </div>
             <h4 className="font-bold text-xs text-[#071827] group-hover:text-[#0879D9] transition">
-              Sinh Bài Viết Gemini
+              Soạn bài viết SEO
             </h4>
             <p className="text-[11px] text-slate-500 mt-1">Tạo dàn ý H2/H3, viết bài chuẩn On-Page.</p>
           </div>
@@ -209,12 +210,12 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <span className="w-6 h-6 rounded-full bg-[#0879D9] text-white font-black text-xs flex items-center justify-center">
                 3
               </span>
-              <Sparkles className="w-4 h-4 text-slate-400 group-hover:text-[#0879D9] transition" />
+              <ImageIcon className="w-4 h-4 text-slate-400 group-hover:text-[#0879D9] transition" />
             </div>
             <h4 className="font-bold text-xs text-[#071827] group-hover:text-[#0879D9] transition">
-              Sinh Ảnh Vertex & OpenAI
+              Chuẩn bị hình ảnh
             </h4>
-            <p className="text-[11px] text-slate-500 mt-1">Sinh ảnh Vertex AI Imagen 3 & DALL-E 3.</p>
+            <p className="text-[11px] text-slate-500 mt-1">Tải lên hoặc tạo hình ảnh chuẩn SEO.</p>
           </div>
 
           <div
