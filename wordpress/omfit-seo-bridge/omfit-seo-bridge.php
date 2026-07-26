@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OMFIT SEO Bridge
  * Description: Chuẩn hóa canonical, metadata, schema, H1 và sitemap cho nội dung OMFIT.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: OMFIT
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -137,7 +137,7 @@ add_action('wp_head', function () {
 }, 5);
 
 add_filter('wp_sitemaps_post_types', function ($post_types) {
-    foreach (array('pxl-template', 'mp-column', 'portfolio', 'case', 'elementor_library', 'mp-event') as $post_type) {
+    foreach (array('pxl-template', 'mp-column', 'portfolio', 'case', 'elementor_library', 'mp-event', 'product') as $post_type) {
         unset($post_types[$post_type]);
     }
     return $post_types;
@@ -150,6 +150,73 @@ add_filter('wp_sitemaps_taxonomies', function ($taxonomies) {
 add_filter('wp_sitemaps_add_provider', function ($provider, $name) {
     return $name === 'users' ? false : $provider;
 }, 10, 2);
+
+function omfit_seo_excluded_page_slugs() {
+    return array(
+        'sample-page',
+        'cart',
+        'checkout',
+        'my-account',
+        'wishlist',
+        'shop',
+        'coming-soon',
+        'blog',
+        'blog-1',
+        'service-1',
+        'service-2',
+        'classes-1',
+        'classes-2',
+        'classes-3',
+        'classes-4',
+        'schedule-v1',
+        'schedule-v2',
+        'contact-us-2',
+        'landing',
+        'home-1-one-page',
+        'home-2',
+        'home-2-one-page',
+        'home-3',
+        'home-3-one-page',
+        'home-4',
+        'home-4-one-page',
+    );
+}
+
+add_filter('wp_sitemaps_posts_query_args', function ($args, $post_type) {
+    if ($post_type !== 'page') {
+        return $args;
+    }
+
+    $excluded_ids = array();
+    foreach (omfit_seo_excluded_page_slugs() as $slug) {
+        $page = get_page_by_path($slug, OBJECT, 'page');
+        if ($page) {
+            $excluded_ids[] = (int) $page->ID;
+        }
+    }
+    if ($excluded_ids) {
+        $args['post__not_in'] = array_values(array_unique(array_merge(
+            isset($args['post__not_in']) ? (array) $args['post__not_in'] : array(),
+            $excluded_ids
+        )));
+    }
+    return $args;
+}, 10, 2);
+
+add_filter('wp_robots', function ($robots) {
+    if (is_singular(array('product', 'mp-event'))) {
+        $robots['noindex'] = true;
+        $robots['follow'] = true;
+        unset($robots['index']);
+    }
+
+    if (is_page(omfit_seo_excluded_page_slugs())) {
+        $robots['noindex'] = true;
+        $robots['follow'] = true;
+        unset($robots['index']);
+    }
+    return $robots;
+});
 
 register_activation_hook(__FILE__, 'flush_rewrite_rules');
 register_deactivation_hook(__FILE__, 'flush_rewrite_rules');
