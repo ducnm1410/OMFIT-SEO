@@ -1,28 +1,43 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { LoginScreen } from './components/LoginScreen';
 import { OverviewDashboard } from './components/OverviewDashboard';
 import { KeywordTrendFinder } from './components/KeywordTrendFinder';
 import { SeoContentGenerator } from './components/SeoContentGenerator';
 import { ImageStudio } from './components/ImageStudio';
 import { LiveEditorPublisher } from './components/LiveEditorPublisher';
 import { PostHistory } from './components/PostHistory';
-
 import type { ActiveTab, ApiSettings, GeneratedArticle, GeneratedImage } from './types';
 import { GeminiService } from './services/geminiService';
 import { LeonardoService } from './services/leonardoService';
 import { WordpressMcpService } from './services/wordpressMcpService';
+import { disconnectGoogleAds } from './services/keywordResearchService';
+import { supabase } from './lib/supabase';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+  const [session, setSession] = useState<Session | null>();
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'editor', 'history'];
+    return allowedTabs.includes(requestedTab as ActiveTab) ? requestedTab as ActiveTab : 'overview';
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Load API keys securely from .env environment variables
-  const [settings, setSettings] = useState<ApiSettings>({
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+    return () => authListener.subscription.unsubscribe();
+  }, []);
+
+  const [settings] = useState<ApiSettings>({
     geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
     leonardoApiKey: import.meta.env.VITE_LEONARDO_API_KEY || '',
     wpSiteUrl: import.meta.env.VITE_WP_SITE_URL || 'https://omfit.com.vn',
-    wpMcpConnected: true,
+    wpMcpConnected: Boolean(import.meta.env.VITE_WP_USERNAME && import.meta.env.VITE_WP_APP_PASSWORD),
     defaultStatus: 'publish',
     defaultAuthor: 'OMFIT Admin'
   });
@@ -31,94 +46,58 @@ export function App() {
   const leonardoService = useMemo(() => new LeonardoService(settings.leonardoApiKey || ''), [settings.leonardoApiKey]);
   const wpService = useMemo(() => new WordpressMcpService(settings.wpSiteUrl), [settings.wpSiteUrl]);
 
-  const [articles, setArticles] = useState<GeneratedArticle[]>([
-    {
-      id: 'art-omfit-demo-1',
-      title: 'Khóa Học Nghề PT Pilates Chuyên Nghiệp 2026: Cơ Hội Nâng Tầm Sự Nghiệp Tại OMFIT',
-      slug: 'khoa-hoc-nghe-pt-pilates-chuyen-nghiep-2026',
-      metaTitle: 'Khóa Học Nghề PT Pilates Chuyên Nghiệp 2026 - OMFIT',
-      metaDescription: 'Khám phá khóa học nghề PT Pilates chuyên nghiệp 2026 tại OMFIT. Đào tạo 1:1, bằng chứng chỉ quốc tế, thực hành trên máy Reformer nhập khẩu.',
-      focusKeyword: 'khóa học pt pilates',
-      contentHtml: `
-<div class="seo-toc-container p-4 bg-[#F0F9FF] rounded-xl border border-[#0879D9]/20 mb-6">
-  <h3 class="text-lg font-bold text-[#0879D9] mb-2">Mục lục bài viết</h3>
-  <ul class="space-y-1 text-sm text-slate-700 font-medium">
-    <li><a href="#sec-1" class="hover:text-[#0879D9]">1. Tổng quan tiềm năng ngành HLV Pilates 2026</a></li>
-    <li><a href="#sec-2" class="hover:text-[#0879D9]">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OMFIT</a></li>
-    <li><a href="#sec-3" class="hover:text-[#0879D9]">3. Lộ trình học và cơ hội nghề nghiệp</a></li>
-  </ul>
-</div>
-
-<p class="lead text-lg text-slate-800 mb-4 font-medium">
-  Ngành tập luyện Pilates và cải thiện vóc dáng đang chứng kiến sự bùng nổ mạnh mẽ tại Việt Nam. <strong>OMFIT – Balance For Life</strong> tự hào mang đến <strong>Khóa học nghề PT Pilates chuyên nghiệp</strong> giúp bạn làm chủ kỹ thuật và tự tin xây dựng sự nghiệp bền vững.
-</p>
-
-<h2 id="sec-1" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">1. Tổng quan tiềm năng ngành HLV Pilates 2026</h2>
-<p>Nhu cầu phục hồi tư thế, trị liệu đau lưng cổ vai gáy qua Pilates tăng trưởng 300% trong 2 năm qua. Việc trở thành HLV Pilates cá nhân (PT) mang lại thu nhập hấp dẫn và môi trường làm việc văn minh.</p>
-
-<figure class="my-6 text-center">
-  <img src="https://images.unsplash.com/photo-1599058917212-d750089bc07e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1024&q=80" alt="Không gian tập luyện Pilates OMFIT" class="w-full rounded-2xl border border-slate-200 shadow-sm mx-auto my-4 object-cover" />
-  <figcaption class="text-xs text-slate-500 italic mt-2">Đào tạo HLV Pilates chuyên nghiệp đáp ứng nhu cầu tăng cao</figcaption>
-</figure>
-
-<blockquote class="my-4 p-4 bg-[#F0F9FF] border-l-4 border-[#0879D9] rounded-r-xl text-slate-700 italic">
-  "OMFIT - Nơi kiến tạo đội ngũ Huấn luyện viên Pilates chuyên nghiệp hàng đầu với lộ trình chuẩn mực quốc tế."
-</blockquote>
-
-<h2 id="sec-2" class="text-2xl font-bold text-[#071827] border-b border-[#0879D9]/20 pb-2 mt-8 mb-4">2. Điểm đặc quyền của khóa đào tạo PT Pilates tại OMFIT</h2>
-<figure class="my-6 text-center">
-  <img src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1024&q=80" alt="Máy tập Pilates Reformer cao cấp" class="w-full rounded-2xl border border-slate-200 shadow-sm mx-auto my-4 object-cover" />
-  <figcaption class="text-xs text-slate-500 italic mt-2">Học viên được thực hành 100% trên máy nhập khẩu cao cấp</figcaption>
-</figure>
-<ul class="list-disc pl-6 space-y-2 text-slate-700 my-4">
-  <li><strong>Thực hành 100% trên dàn máy nhập khẩu:</strong> Máy Reformer, Cadillac, Wunda Chair cao cấp.</li>
-  <li><strong>Học trực tiếp cùng Master Trainer:</strong> Hướng dẫn giải phẫu học và sửa tư thế chuẩn xác.</li>
-  <li><strong>Cam kết việc làm & chứng chỉ:</strong> Cấp chứng chỉ uy tín và cơ hội làm việc tại hệ thống OMFIT.</li>
-</ul>
-`,
-      wordCount: 1680,
-      readabilityScore: 97,
-      seoScore: 99,
-      categories: ['Khóa Học Nghề PT Pilates', 'Tin Tức OMFIT'],
-      tags: ['khóa học pt pilates', 'OMFIT', 'Pilates Reformer', 'Đào Tạo HLV'],
-      createdAt: new Date().toISOString(),
-      status: 'published',
-      wpPostId: 8842,
-      featuredImage: {
-        id: 'img-omfit-1',
-        url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="%23F8FAFC"/><text x="100" y="300" fill="%230879D9" font-family="sans-serif" font-size="44" font-weight="bold">OMFIT • PILATES &amp; WELLNESS</text></svg>',
-        prompt: 'Khóa học nghề PT Pilates chuyên nghiệp OMFIT',
-        altText: 'Khóa học nghề PT Pilates chuyên nghiệp tại OMFIT',
-        fileName: 'khoa-hoc-nghe-pt-pilates-omfit.png',
-        style: 'Photorealistic 4K',
-        source: 'leonardo-nano-banana-2'
-      },
-      articleImages: []
-    }
-  ]);
-
-  const [selectedArticle, setSelectedArticle] = useState<GeneratedArticle | null>(articles[0]);
-  const [selectedKeyword, setSelectedKeyword] = useState<string>('khóa học pt pilates chuyên nghiệp');
+  const [articles, setArticles] = useState<GeneratedArticle[]>([]);
+  const [selectedArticle, setSelectedArticle] = useState<GeneratedArticle | null>(null);
+  const [selectedKeyword, setSelectedKeyword] = useState('');
 
   const handleArticleGenerated = (newArticle: GeneratedArticle) => {
-    setArticles((prev) => [newArticle, ...prev]);
+    setArticles((previous) => [newArticle, ...previous]);
     setSelectedArticle(newArticle);
   };
 
   const handleSaveArticle = (updatedArticle: GeneratedArticle) => {
-    setArticles((prev) => prev.map((art) => (art.id === updatedArticle.id ? updatedArticle : art)));
+    setArticles((previous) => previous.map((article) => (
+      article.id === updatedArticle.id ? updatedArticle : article
+    )));
     setSelectedArticle(updatedArticle);
   };
 
   const handleImageGenerated = (newImage: GeneratedImage) => {
-    if (selectedArticle) {
-      const updated = {
-        ...selectedArticle,
-        featuredImage: newImage
-      };
-      handleSaveArticle(updated);
-    }
+    if (!selectedArticle) return;
+    handleSaveArticle({
+      ...selectedArticle,
+      featuredImage: newImage
+    });
   };
+
+  const handleLogout = async () => {
+    try {
+      await disconnectGoogleAds();
+    } catch {
+      // Supabase logout must still complete if Google Ads was never connected.
+    }
+    await supabase.auth.signOut();
+    setArticles([]);
+    setSelectedArticle(null);
+    setSelectedKeyword('');
+    setActiveTab('overview');
+  };
+
+  if (session === undefined) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-[#F8FAFC]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!session) return <LoginScreen />;
+
+  const userLabel = String(
+    session.user.user_metadata?.full_name
+    || session.user.email?.replace('@omfit.local', '')
+    || 'Người dùng OMFIT'
+  );
 
   return (
     <div className="min-h-dvh bg-[#F8FAFC] text-[#071827] flex">
@@ -133,6 +112,8 @@ export function App() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           settings={settings}
+          userLabel={userLabel}
+          onLogout={() => void handleLogout()}
           onQuickGenerate={() => setActiveTab('generator')}
           onMenuToggle={() => setIsSidebarOpen((open) => !open)}
         />
@@ -141,9 +122,10 @@ export function App() {
           {activeTab === 'overview' && (
             <OverviewDashboard
               articles={articles}
+              wpConnected={settings.wpMcpConnected}
               setActiveTab={setActiveTab}
-              onSelectArticleForEdit={(art) => {
-                setSelectedArticle(art);
+              onSelectArticleForEdit={(article) => {
+                setSelectedArticle(article);
                 setActiveTab('editor');
               }}
             />
@@ -151,7 +133,7 @@ export function App() {
 
           {activeTab === 'keywords' && (
             <KeywordTrendFinder
-              onSelectKeywordForArticle={(kw) => setSelectedKeyword(kw)}
+              onSelectKeywordForArticle={setSelectedKeyword}
               setActiveTab={setActiveTab}
             />
           )}
@@ -185,8 +167,8 @@ export function App() {
           {activeTab === 'history' && (
             <PostHistory
               articles={articles}
-              onSelectArticleForEdit={(art) => {
-                setSelectedArticle(art);
+              onSelectArticleForEdit={(article) => {
+                setSelectedArticle(article);
                 setActiveTab('editor');
               }}
               setActiveTab={setActiveTab}

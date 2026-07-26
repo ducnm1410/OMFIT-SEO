@@ -12,6 +12,7 @@
     "start": "node server/index.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
     "canvas-confetti": "^1.9.4",
     "dotenv": "^17.4.2",
     "echarts": "^6.1.0",

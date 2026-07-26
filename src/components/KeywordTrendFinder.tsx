@@ -1,7 +1,24 @@
-import React, { useState } from 'react';
-import { Search, TrendingUp, FilePenLine, ArrowRight, Activity, Info, Database } from 'lucide-react';
-import type { KeywordTrend, KeywordResearchResponse, ActiveTab } from '../types';
-import { analyzeKeywords } from '../services/keywordResearchService';
+import React, { useEffect, useState } from 'react';
+import {
+  Search,
+  TrendingUp,
+  FilePenLine,
+  ArrowRight,
+  Activity,
+  Info,
+  Database,
+  Link2,
+  Unplug,
+  CircleCheck
+} from 'lucide-react';
+import type { KeywordTrend, KeywordResearchResponse, ActiveTab, GoogleAdsConnection } from '../types';
+import {
+  analyzeKeywords,
+  disconnectGoogleAds,
+  getGoogleAdsConnection,
+  selectGoogleAdsAccount,
+  startGoogleAdsConnection
+} from '../services/keywordResearchService';
 
 interface KeywordTrendFinderProps {
   onSelectKeywordForArticle: (keyword: string) => void;
@@ -12,17 +29,107 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
   onSelectKeywordForArticle,
   setActiveTab
 }) => {
-  const [query, setQuery] = useState('tập pilates giảm cân');
+  const [query, setQuery] = useState('');
   const [industry, setIndustry] = useState('OMFIT PILATES');
   const [isLoading, setIsLoading] = useState(false);
   const [trends, setTrends] = useState<KeywordTrend[]>([]);
   const [meta, setMeta] = useState<KeywordResearchResponse['meta'] | null>(null);
   const [error, setError] = useState('');
+  const [connection, setConnection] = useState<GoogleAdsConnection | null>(null);
+  const [isConnectionLoading, setIsConnectionLoading] = useState(true);
+  const [connectionMessage, setConnectionMessage] = useState('');
+
+  const loadConnection = async () => {
+    setIsConnectionLoading(true);
+    try {
+      const status = await getGoogleAdsConnection();
+      setConnection(status);
+      if (status.reconnectRequired) {
+        setConnectionMessage('Phiên Google Ads đã hết hạn. Vui lòng kết nối lại.');
+      }
+    } catch (err) {
+      setConnection({
+        connected: false,
+        selectedCustomerId: '',
+        accounts: []
+      });
+      setConnectionMessage(err instanceof Error ? err.message : 'Không thể kiểm tra kết nối Google Ads.');
+    } finally {
+      setIsConnectionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthResult = params.get('google_ads');
+    if (oauthResult === 'connected') {
+      setConnectionMessage('Đã kết nối Google Ads thành công.');
+    } else if (oauthResult === 'select_account') {
+      setConnectionMessage('Đã đăng nhập. Hãy chọn tài khoản Google Ads cần sử dụng.');
+    } else if (oauthResult === 'denied') {
+      setConnectionMessage('Bạn đã hủy cấp quyền Google Ads.');
+    } else if (oauthResult === 'error') {
+      setConnectionMessage('Không thể hoàn tất kết nối Google Ads. Hãy kiểm tra OAuth Client và Redirect URI.');
+    }
+
+    if (oauthResult) {
+      params.delete('google_ads');
+      params.delete('detail');
+      const search = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${search ? `?${search}` : ''}`);
+    }
+
+    void loadConnection();
+  }, []);
+
+  const handleAccountChange = async (customerId: string) => {
+    setIsConnectionLoading(true);
+    setConnectionMessage('');
+    try {
+      await selectGoogleAdsAccount(customerId);
+      await loadConnection();
+      setConnectionMessage('Đã chọn tài khoản Google Ads.');
+    } catch (err) {
+      setConnectionMessage(err instanceof Error ? err.message : 'Không thể chọn tài khoản Google Ads.');
+      setIsConnectionLoading(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    setIsConnectionLoading(true);
+    setConnectionMessage('');
+    try {
+      await startGoogleAdsConnection();
+    } catch (err) {
+      setConnectionMessage(err instanceof Error ? err.message : 'Không thể kết nối Google Ads.');
+      setIsConnectionLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setIsConnectionLoading(true);
+    setConnectionMessage('');
+    try {
+      await disconnectGoogleAds();
+      setConnection({ connected: false, selectedCustomerId: '', accounts: [] });
+      setTrends([]);
+      setMeta(null);
+      setConnectionMessage('Đã ngắt kết nối Google Ads.');
+    } catch (err) {
+      setConnectionMessage(err instanceof Error ? err.message : 'Không thể ngắt kết nối Google Ads.');
+    } finally {
+      setIsConnectionLoading(false);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedQuery = query.trim();
     if (!normalizedQuery) return;
+    if (!connection?.connected || !connection.selectedCustomerId) {
+      setError('Hãy kết nối và chọn tài khoản Google Ads trước khi phân tích.');
+      return;
+    }
     setIsLoading(true);
     setError('');
     try {
@@ -61,6 +168,76 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
           </span>
         </div>
 
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                {connection?.connected ? (
+                  <CircleCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <Link2 className="h-4 w-4 shrink-0 text-[#0879D9]" />
+                )}
+                <p className="text-sm font-bold text-[#071827]">
+                  {isConnectionLoading
+                    ? 'Đang kiểm tra kết nối Google Ads...'
+                    : connection?.connected
+                      ? 'Google Ads đã kết nối'
+                      : 'Kết nối tài khoản Google Ads'}
+                </p>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                User đăng nhập trực tiếp với Google. Token được mã hóa trong cookie bảo mật và không hiển thị trên trình duyệt.
+              </p>
+            </div>
+
+            {!isConnectionLoading && !connection?.connected && (
+              <button
+                type="button"
+                onClick={() => void handleConnect()}
+                className="shrink-0 rounded-xl bg-[#0879D9] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#0668bb]"
+              >
+                Đăng nhập Google Ads
+              </button>
+            )}
+
+            {!isConnectionLoading && connection?.connected && (
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+                {connection.accounts.length > 0 && (
+                  <select
+                    aria-label="Chọn tài khoản Google Ads"
+                    value={connection.selectedCustomerId}
+                    onChange={(event) => void handleAccountChange(event.target.value)}
+                    className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#0879D9] focus:outline-none"
+                  >
+                    <option value="">Chọn Customer ID</option>
+                    {connection.accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleDisconnect()}
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-rose-200 hover:text-rose-600"
+                >
+                  <Unplug className="h-3.5 w-3.5" /> Ngắt kết nối
+                </button>
+              </div>
+            )}
+          </div>
+
+          {connection?.connected && connection.accounts.length === 0 && !isConnectionLoading && (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Tài khoản Google hiện tại chưa truy cập được Customer ID Google Ads nào.
+            </p>
+          )}
+          {connectionMessage && (
+            <p className="mt-3 text-xs font-medium text-slate-600">{connectionMessage}</p>
+          )}
+        </div>
+
         {/* Form Input */}
         <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
           <div className="md:col-span-6">
@@ -94,7 +271,7 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
           <div className="md:col-span-2 flex items-end">
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isConnectionLoading || !connection?.connected || !connection.selectedCustomerId}
               className="w-full gradient-bg-omfit-btn px-4 py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20 disabled:opacity-50"
             >
               {isLoading ? (

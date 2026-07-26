@@ -46,10 +46,8 @@ export class LeonardoService {
       };
       
       // Note: Leonardo Image to Image API requires presigned URL uploads.
-      // In a real application, we would handle the `referenceImage` (base64) by uploading to the presigned URL first.
-      // For this Nano Banana 2 configuration, we are using it for direct prompt-based generation as requested.
       if (referenceImage) {
-          console.warn('Leonardo reference image upload is not fully implemented in this demo (requires presigned URLs). Ignoring reference image.');
+        throw new Error('Luồng upload ảnh tham chiếu lên Leonardo chưa được cấu hình; ảnh không được gửi để tránh tạo kết quả sai.');
       }
 
       const generateResponse = await fetch(`${this.endpoint}/v2/generations`, {

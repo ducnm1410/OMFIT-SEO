@@ -5,6 +5,21 @@
     "api/health.mjs": {
       "maxDuration": 15
     },
+    "api/auth/google/start.mjs": {
+      "maxDuration": 15
+    },
+    "api/auth/google/callback.mjs": {
+      "maxDuration": 30
+    },
+    "api/auth/google/status.mjs": {
+      "maxDuration": 30
+    },
+    "api/auth/google/select-account.mjs": {
+      "maxDuration": 30
+    },
+    "api/auth/google/disconnect.mjs": {
+      "maxDuration": 15
+    },
     "api/keywords/analyze.mjs": {
       "maxDuration": 60
     }

@@ -33,6 +33,17 @@ export interface KeywordResearchResponse {
   };
 }
 
+export interface GoogleAdsConnection {
+  connected: boolean;
+  selectedCustomerId: string;
+  accounts: {
+    id: string;
+    label: string;
+  }[];
+  reconnectRequired?: boolean;
+  error?: string;
+}
+
 export interface SeoOutline {
   title: string;
   metaTitle: string;

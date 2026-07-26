@@ -168,7 +168,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 >
                   {referenceImage ? (
                     <div className="flex items-center justify-center gap-3">
-                      <img src={referenceImage} alt="Sample reference" className="w-16 h-16 object-cover rounded-lg border border-[#0879D9]" />
+                      <img src={referenceImage} alt="Ảnh tham chiếu" className="w-16 h-16 object-cover rounded-lg border border-[#0879D9]" />
                       <div className="text-left text-xs">
                         <p className="font-bold text-[#0879D9]">Đã nạp ảnh mẫu định hướng</p>
                         <p className="text-slate-500 text-[11px]">Bố cục ảnh này sẽ được dùng làm tham chiếu</p>

@@ -428,7 +428,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               </button>
 
               <span className="text-xs font-mono text-[#0879D9] flex items-center gap-1 font-extrabold">
-                <Award className="w-3.5 h-3.5 text-[#0879D9]" /> SEO Score: 98/100
+                <Award className="w-3.5 h-3.5 text-[#0879D9]" /> SEO Score: {article.seoScore > 0 ? `${article.seoScore}/100` : 'Chưa chấm'}
               </span>
             </div>
           </div>

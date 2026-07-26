@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import express from 'express';
+import crypto from 'node:crypto';
 
 dotenv.config({ override: true, quiet: true });
 
@@ -12,10 +13,14 @@ app.use(express.json({ limit: '256kb' }));
 const requiredGoogleAdsEnv = [
   'GOOGLE_ADS_CLIENT_ID',
   'GOOGLE_ADS_CLIENT_SECRET',
-  'GOOGLE_ADS_REFRESH_TOKEN',
   'GOOGLE_ADS_DEVELOPER_TOKEN',
-  'GOOGLE_ADS_CUSTOMER_ID'
+  'OAUTH_SESSION_SECRET'
 ];
+const googleAdsScope = 'https://www.googleapis.com/auth/adwords';
+const oauthStateCookie = 'omfit_google_ads_state';
+const oauthSessionCookie = 'omfit_google_ads_session';
+const oauthStateMaxAgeMs = 10 * 60 * 1000;
+const oauthSessionMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
 const keywordCache = new Map();
 const cacheTtlMs = Number(process.env.KEYWORD_CACHE_TTL_MS || 21_600_000);
 const monthOrder = {
@@ -35,6 +40,148 @@ const monthOrder = {
 
 const cleanCustomerId = (value = '') => value.replace(/\D/g, '');
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+class ApiError extends Error {
+  constructor(statusCode, message, code) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+  }
+}
+
+function getRequestOrigin(request) {
+  const configuredOrigin = String(process.env.OAUTH_REDIRECT_BASE || '').trim().replace(/\/+$/, '');
+  if (configuredOrigin) return configuredOrigin;
+  const forwardedProto = String(request.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || request.protocol || 'http';
+  return `${protocol}://${request.get('host')}`;
+}
+
+function getCallbackUrl(request) {
+  return `${getRequestOrigin(request)}/api/auth/google/callback`;
+}
+
+function parseCookies(request) {
+  return String(request.headers.cookie || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex < 1) return cookies;
+      const name = part.slice(0, separatorIndex);
+      const value = part.slice(separatorIndex + 1);
+      try {
+        cookies[name] = decodeURIComponent(value);
+      } catch {
+        cookies[name] = value;
+      }
+      return cookies;
+    }, {});
+}
+
+function getCookieOptions(request, maxAge) {
+  return {
+    httpOnly: true,
+    secure: getRequestOrigin(request).startsWith('https://'),
+    sameSite: 'lax',
+    path: '/api',
+    maxAge
+  };
+}
+
+function clearOAuthCookie(request, response, name) {
+  response.clearCookie(name, {
+    ...getCookieOptions(request, 0),
+    maxAge: undefined
+  });
+}
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left || ''));
+  const rightBuffer = Buffer.from(String(right || ''));
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function getSessionEncryptionKey() {
+  const secret = String(process.env.OAUTH_SESSION_SECRET || '');
+  if (!secret) throw new ApiError(503, 'Chưa cấu hình khóa bảo mật cho phiên Google Ads.', 'oauth_not_configured');
+  return crypto.createHash('sha256').update(secret).digest();
+}
+
+function sealEncryptedPayload(payload) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', getSessionEncryptionKey(), iv);
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(payload), 'utf8'),
+    cipher.final()
+  ]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([iv, authTag, encrypted]).toString('base64url');
+}
+
+function openEncryptedPayload(value) {
+  if (!value) return null;
+  try {
+    const packed = Buffer.from(value, 'base64url');
+    if (packed.length < 29) return null;
+    const iv = packed.subarray(0, 12);
+    const authTag = packed.subarray(12, 28);
+    const encrypted = packed.subarray(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', getSessionEncryptionKey(), iv);
+    decipher.setAuthTag(authTag);
+    return JSON.parse(Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ]).toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function getOAuthSession(request) {
+  const payload = openEncryptedPayload(parseCookies(request)[oauthSessionCookie]);
+  return typeof payload?.refreshToken === 'string' && payload.refreshToken ? payload : null;
+}
+
+function saveOAuthSession(request, response, payload) {
+  response.cookie(
+    oauthSessionCookie,
+    sealEncryptedPayload(payload),
+    getCookieOptions(request, oauthSessionMaxAgeMs)
+  );
+}
+
+async function requireSupabaseUser(request, response, next) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const authorization = String(request.headers.authorization || '');
+  const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return response.status(503).json({ error: 'Chưa cấu hình Supabase Auth.' });
+  }
+  if (!accessToken) {
+    return response.status(401).json({ error: 'Bạn cần đăng nhập để sử dụng chức năng này.' });
+  }
+
+  try {
+    const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${accessToken}`
+      },
+      signal: AbortSignal.timeout(10_000)
+    });
+    if (!userResponse.ok) {
+      return response.status(401).json({ error: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.' });
+    }
+    request.supabaseUser = await userResponse.json();
+    return next();
+  } catch {
+    return response.status(503).json({ error: 'Không thể xác thực phiên đăng nhập lúc này.' });
+  }
+}
 
 function formatSearchVolume(value) {
   const number = Number(value || 0);
@@ -77,22 +224,29 @@ function scoreKeyword(item, maxVolume) {
   return Math.round(clamp((volumeScore * 0.55 + opportunityScore * 0.25 + momentumScore * 0.2) * 100, 0, 100));
 }
 
-async function getGoogleAccessToken() {
+async function getGoogleAccessToken(refreshToken) {
+  if (!refreshToken) {
+    throw new ApiError(401, 'Hãy kết nối tài khoản Google Ads trước khi phân tích keyword.', 'google_ads_auth_required');
+  }
+
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: process.env.GOOGLE_ADS_CLIENT_ID,
       client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
-      refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token'
     }),
     signal: AbortSignal.timeout(20_000)
   });
 
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Không thể làm mới Google OAuth token (${response.status}): ${detail.slice(0, 300)}`);
+    throw new ApiError(
+      401,
+      'Phiên Google Ads đã hết hạn hoặc không còn hợp lệ. Vui lòng kết nối lại.',
+      'google_ads_reconnect_required'
+    );
   }
 
   const payload = await response.json();
@@ -100,9 +254,60 @@ async function getGoogleAccessToken() {
   return payload.access_token;
 }
 
-async function fetchGoogleKeywordIdeas({ query, industry, pageUrl }) {
-  const accessToken = await getGoogleAccessToken();
-  const customerId = cleanCustomerId(process.env.GOOGLE_ADS_CUSTOMER_ID);
+async function listAccessibleGoogleAdsCustomers(accessToken) {
+  const apiVersion = process.env.GOOGLE_ADS_API_VERSION || 'v25';
+  const response = await fetch(
+    `https://googleads.googleapis.com/${apiVersion}/customers:listAccessibleCustomers`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'developer-token': process.env.GOOGLE_ADS_DEVELOPER_TOKEN
+      },
+      signal: AbortSignal.timeout(20_000)
+    }
+  );
+
+  if (!response.ok) {
+    throw new ApiError(
+      502,
+      'Không thể đọc danh sách tài khoản Google Ads. Hãy kiểm tra quyền truy cập và Developer Token.',
+      'google_ads_accounts_failed'
+    );
+  }
+
+  const payload = await response.json();
+  return (Array.isArray(payload.resourceNames) ? payload.resourceNames : [])
+    .map((resourceName) => cleanCustomerId(resourceName))
+    .filter(Boolean);
+}
+
+function resolveGoogleAdsSession(request) {
+  const session = getOAuthSession(request);
+  if (session && session.supabaseUserId === request.supabaseUser?.id) {
+    return {
+      refreshToken: session.refreshToken,
+      customerId: cleanCustomerId(session.selectedCustomerId)
+    };
+  }
+
+  return {
+    refreshToken: '',
+    customerId: ''
+  };
+}
+
+async function fetchGoogleKeywordIdeas({ query, industry, pageUrl, request }) {
+  const auth = resolveGoogleAdsSession(request);
+  if (!auth.customerId) {
+    throw new ApiError(
+      409,
+      'Hãy chọn tài khoản Google Ads dùng để lấy dữ liệu keyword.',
+      'google_ads_account_required'
+    );
+  }
+
+  const accessToken = await getGoogleAccessToken(auth.refreshToken);
+  const customerId = auth.customerId;
   const loginCustomerId = cleanCustomerId(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID);
   const apiVersion = process.env.GOOGLE_ADS_API_VERSION || 'v25';
   const headers = {
@@ -227,6 +432,176 @@ Dữ liệu: ${JSON.stringify(items.map(({ keyword, searchVolumeValue, competiti
   return { modelApplied: true, enrichments: Array.isArray(parsed) ? parsed : [] };
 }
 
+app.get('/api/auth/google/start', requireSupabaseUser, (request, response) => {
+  const missing = requiredGoogleAdsEnv.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    return response.status(503).json({
+      error: 'Chưa cấu hình đầy đủ OAuth cho Google Ads.',
+      missing
+    });
+  }
+
+  const state = crypto.randomBytes(32).toString('base64url');
+  response.cookie(
+    oauthStateCookie,
+    sealEncryptedPayload({ nonce: state, supabaseUserId: request.supabaseUser.id }),
+    getCookieOptions(request, oauthStateMaxAgeMs)
+  );
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+    redirect_uri: getCallbackUrl(request),
+    response_type: 'code',
+    scope: googleAdsScope,
+    access_type: 'offline',
+    include_granted_scopes: 'true',
+    prompt: 'consent',
+    state
+  });
+  return response.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+});
+
+app.get('/api/auth/google/callback', async (request, response) => {
+  const redirectToApp = (status, detail) => {
+    const params = new URLSearchParams({ tab: 'keywords', google_ads: status });
+    if (detail) params.set('detail', detail);
+    return response.redirect(`${getRequestOrigin(request)}/?${params}`);
+  };
+
+  const storedState = openEncryptedPayload(parseCookies(request)[oauthStateCookie]);
+  clearOAuthCookie(request, response, oauthStateCookie);
+
+  if (request.query.error) {
+    return redirectToApp('denied', String(request.query.error));
+  }
+  if (
+    !request.query.code
+    || !request.query.state
+    || !storedState?.supabaseUserId
+    || !safeEqual(storedState.nonce, request.query.state)
+  ) {
+    return redirectToApp('error', 'invalid_state');
+  }
+
+  try {
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: String(request.query.code),
+        client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+        client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+        redirect_uri: getCallbackUrl(request),
+        grant_type: 'authorization_code'
+      }),
+      signal: AbortSignal.timeout(20_000)
+    });
+
+    if (!tokenResponse.ok) {
+      console.error('[google-ads-oauth] Token exchange failed with status', tokenResponse.status);
+      return redirectToApp('error', 'token_exchange_failed');
+    }
+
+    const tokens = await tokenResponse.json();
+    if (!tokens.refresh_token) {
+      return redirectToApp('error', 'refresh_token_missing');
+    }
+
+    const customerIds = await listAccessibleGoogleAdsCustomers(tokens.access_token);
+    const configuredCustomerId = cleanCustomerId(process.env.GOOGLE_ADS_CUSTOMER_ID);
+    const selectedCustomerId = customerIds.includes(configuredCustomerId)
+      ? configuredCustomerId
+      : customerIds.length === 1
+        ? customerIds[0]
+        : '';
+
+    saveOAuthSession(request, response, {
+      refreshToken: tokens.refresh_token,
+      selectedCustomerId,
+      supabaseUserId: storedState.supabaseUserId,
+      connectedAt: new Date().toISOString()
+    });
+
+    return redirectToApp(selectedCustomerId ? 'connected' : 'select_account');
+  } catch (error) {
+    console.error('[google-ads-oauth]', error instanceof Error ? error.message : error);
+    return redirectToApp('error', 'connection_failed');
+  }
+});
+
+app.get('/api/auth/google/status', requireSupabaseUser, async (request, response) => {
+  const session = getOAuthSession(request);
+  if (!session || session.supabaseUserId !== request.supabaseUser.id) {
+    if (session) clearOAuthCookie(request, response, oauthSessionCookie);
+    return response.json({
+      connected: false,
+      selectedCustomerId: '',
+      accounts: []
+    });
+  }
+
+  try {
+    const accessToken = await getGoogleAccessToken(session.refreshToken);
+    const customerIds = await listAccessibleGoogleAdsCustomers(accessToken);
+    return response.json({
+      connected: true,
+      selectedCustomerId: customerIds.includes(cleanCustomerId(session.selectedCustomerId))
+        ? cleanCustomerId(session.selectedCustomerId)
+        : '',
+      accounts: customerIds.map((id) => ({
+        id,
+        label: `${id.slice(0, 3)}-${id.slice(3, 6)}-${id.slice(6)}`
+      }))
+    });
+  } catch (error) {
+    clearOAuthCookie(request, response, oauthSessionCookie);
+    return response.status(401).json({
+      connected: false,
+      selectedCustomerId: '',
+      accounts: [],
+      reconnectRequired: true,
+      error: error instanceof Error ? error.message : 'Phiên Google Ads không còn hợp lệ.'
+    });
+  }
+});
+
+app.post('/api/auth/google/select-account', requireSupabaseUser, async (request, response) => {
+  const session = getOAuthSession(request);
+  if (!session || session.supabaseUserId !== request.supabaseUser.id) {
+    return response.status(401).json({
+      error: 'Hãy kết nối tài khoản Google Ads trước.',
+      code: 'google_ads_auth_required'
+    });
+  }
+
+  const customerId = cleanCustomerId(String(request.body?.customerId || ''));
+  if (!customerId) {
+    return response.status(400).json({ error: 'Customer ID không hợp lệ.' });
+  }
+
+  try {
+    const accessToken = await getGoogleAccessToken(session.refreshToken);
+    const customerIds = await listAccessibleGoogleAdsCustomers(accessToken);
+    if (!customerIds.includes(customerId)) {
+      return response.status(403).json({ error: 'Tài khoản Google này không có quyền với Customer ID đã chọn.' });
+    }
+
+    saveOAuthSession(request, response, {
+      ...session,
+      selectedCustomerId: customerId
+    });
+    return response.json({ ok: true, selectedCustomerId: customerId });
+  } catch (error) {
+    return response.status(error instanceof ApiError ? error.statusCode : 502).json({
+      error: error instanceof Error ? error.message : 'Không thể chọn tài khoản Google Ads.'
+    });
+  }
+});
+
+app.post('/api/auth/google/disconnect', requireSupabaseUser, (request, response) => {
+  clearOAuthCookie(request, response, oauthSessionCookie);
+  return response.json({ ok: true });
+});
+
 app.get('/api/health', (_request, response) => {
   const missing = requiredGoogleAdsEnv.filter((name) => !process.env[name]);
   response.json({
@@ -237,14 +612,16 @@ app.get('/api/health', (_request, response) => {
   });
 });
 
-app.post('/api/keywords/analyze', async (request, response) => {
+app.post('/api/keywords/analyze', requireSupabaseUser, async (request, response) => {
   const query = String(request.body?.query || '').trim();
   const industry = String(request.body?.industry || '').trim();
   const pageUrl = String(request.body?.pageUrl || process.env.KEYWORD_SEED_URL || '').trim();
+  const authContext = resolveGoogleAdsSession(request);
   const cacheKey = JSON.stringify({
     query: query.toLocaleLowerCase('vi-VN'),
     industry,
     pageUrl,
+    customerId: authContext.customerId,
     language: process.env.GOOGLE_ADS_LANGUAGE_ID || '1040',
     geo: process.env.GOOGLE_ADS_GEO_TARGET_ID || '2704'
   });
@@ -270,7 +647,7 @@ app.post('/api/keywords/analyze', async (request, response) => {
       });
     }
 
-    const ideas = await fetchGoogleKeywordIdeas({ query, industry, pageUrl });
+    const ideas = await fetchGoogleKeywordIdeas({ query, industry, pageUrl, request });
     const maxVolume = Math.max(
       0,
       ...ideas.map((item) => Number(item.keywordIdeaMetrics?.avgMonthlySearches || 0))
@@ -344,8 +721,14 @@ app.post('/api/keywords/analyze', async (request, response) => {
     return response.json(payload);
   } catch (error) {
     console.error('[keyword-research]', error);
-    return response.status(502).json({
-      error: error instanceof Error ? error.message : 'Không thể lấy dữ liệu keyword.'
+    const statusCode = error instanceof ApiError ? error.statusCode : 502;
+    return response.status(statusCode).json({
+      error: error instanceof Error ? error.message : 'Không thể lấy dữ liệu keyword.',
+      code: error instanceof ApiError ? error.code : 'keyword_research_failed',
+      authRequired: error instanceof ApiError && (
+        error.code === 'google_ads_auth_required'
+        || error.code === 'google_ads_reconnect_required'
+      )
     });
   }
 });

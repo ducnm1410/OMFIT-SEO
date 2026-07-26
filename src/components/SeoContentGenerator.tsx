@@ -16,7 +16,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
   onArticleGenerated,
   setActiveTab
 }) => {
-  const [keyword, setKeyword] = useState(selectedKeyword || 'khóa học pt pilates chuyên nghiệp');
+  const [keyword, setKeyword] = useState(selectedKeyword);
   const [tone, setTone] = useState('Chuyên nghiệp, truyền cảm hứng, cân bằng');
   const [wordCount, setWordCount] = useState(1500);
   const [step, setStep] = useState<'input' | 'outline' | 'generating'>('input');
