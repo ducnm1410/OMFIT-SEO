@@ -19,11 +19,19 @@ import {
   ImageIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import DOMPurify from 'dompurify';
 import type { GeneratedArticle, GeneratedImage, ActiveTab } from '../types';
 import { WordpressMcpService } from '../services/wordpressMcpService';
 import { LeonardoService } from '../services/leonardoService';
 import { uploadMediaFile } from '../services/contentRepository';
 import { ArticleImagePackage } from './ArticleImagePackage';
+import {
+  articleContainsImage,
+  buildArticleImageMarkup,
+  collectArticleAltTexts,
+  mergeUniqueArticleImages,
+  sectionHasImage
+} from '../utils/articleImageMarkup';
 
 interface LiveEditorPublisherProps {
   article: GeneratedArticle | null;
@@ -70,6 +78,11 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishLogs, setPublishLogs] = useState<string[]>([]);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const sanitizedPreviewHtml = DOMPurify.sanitize(contentHtml, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['button', 'form', 'input', 'math', 'option', 'select', 'style', 'svg', 'textarea'],
+    FORBID_ATTR: ['style']
+  });
 
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,18 +116,41 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     if (file) {
       try {
         const uploaded = await uploadMediaFile(file, article.id);
-        const image = { ...uploaded, role: 'inline' as const };
         const altText = uploaded.altText || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-        const imgHtml = `\n<figure>\n  <img src="${uploaded.url}" alt="${altText}" loading="lazy" decoding="async" />\n  <figcaption>${altText}</figcaption>\n</figure>\n`;
-        const nextContent = `${contentHtml}${imgHtml}`;
+        const image = { ...uploaded, altText, role: 'inline' as const };
+        const document = new DOMParser().parseFromString(`<main>${contentHtml}</main>`, 'text/html');
+        const main = document.querySelector('main');
+        if (!main || articleContainsImage(main, image)) return;
+        const heading = [...main.querySelectorAll('h2')]
+          .find((item) => (
+            !item.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer')
+            && !sectionHasImage(item)
+          ));
+        const markup = buildArticleImageMarkup({
+          image,
+          sectionTitle: heading?.textContent?.trim(),
+          articleTitle: article.title,
+          focusKeyword: article.focusKeyword,
+          existingAltTexts: collectArticleAltTexts(main)
+        });
+        if (heading) heading.insertAdjacentHTML('afterend', markup.html);
+        else main.insertAdjacentHTML('beforeend', markup.html);
+        const nextContent = main.innerHTML;
+        const normalizedImage = {
+          ...image,
+          altText: markup.altText,
+          caption: markup.caption
+        };
         setContentHtml(nextContent);
         onSaveArticle({
           ...article,
           contentHtml: nextContent,
-          articleImages: [...article.articleImages, image]
+          articleImages: mergeUniqueArticleImages(article.articleImages, [normalizedImage])
         });
       } catch (error) {
         console.error('Không thể tải ảnh nội dung lên kho OMFIT:', error);
+      } finally {
+        e.target.value = '';
       }
     }
   };
@@ -362,6 +398,11 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   <img
                     src={article.featuredImage.url}
                     alt={article.featuredImage.altText}
+                    width={1200}
+                    height={896}
+                    loading="lazy"
+                    decoding="async"
+                    sizes="(max-width: 768px) 100vw, 384px"
                     className="w-full h-44 object-cover"
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
@@ -484,6 +525,11 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   <img
                     src={article.featuredImage.url}
                     alt={article.featuredImage.altText}
+                    width={1200}
+                    height={896}
+                    loading="lazy"
+                    decoding="async"
+                    sizes="(max-width: 768px) 100vw, 768px"
                     className="w-full h-80 object-cover rounded-2xl border border-slate-200 shadow-sm mx-auto"
                   />
                   <figcaption className="text-xs text-slate-500 italic mt-2">
@@ -491,7 +537,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   </figcaption>
                 </figure>
               )}
-              <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
+              <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewHtml }} />
               {article.seoIssues && article.seoIssues.some((issue) => issue.level !== 'success') && (
                 <aside className="seo-audit-notes">
                   <strong>Các mục cần kiểm tra trước khi xuất bản</strong>

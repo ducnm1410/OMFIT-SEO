@@ -299,6 +299,16 @@
   color: #fff;
 }
 
+.article-preview.prose-custom .omfit-related-content p,
+.article-preview.prose-custom .omfit-related-content li,
+.article-preview.prose-custom .omfit-related-content a,
+.article-preview.prose-custom .omfit-article-cta p,
+.article-preview.prose-custom .omfit-article-cta li,
+.article-preview.prose-custom .omfit-article-cta span,
+.article-preview.prose-custom .omfit-article-cta a {
+  font-weight: 400;
+}
+
 .article-preview.prose-custom .omfit-footer-brand {
   display: flex;
   align-items: flex-start;

@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import sanitizeHtml from 'sanitize-html';
 
 dotenv.config({ override: true, quiet: true });
 
@@ -829,8 +830,98 @@ async function getActiveBrandProfile(ownerId) {
   return data;
 }
 
+function repairGeneratedText(value = '') {
+  return String(value)
+    // Gemini occasionally produces fragments such as "bỏ l lỡ".
+    .replace(/(?<!\p{L})l\s+lỡ(?!\p{L})/giu, 'lỡ')
+    .replace(/\.{3,}/g, '.')
+    .replace(/[ \t]+([,.;:!?])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ');
+}
+
+function repairGeneratedHtmlText(content = '') {
+  return String(content).replace(/>([^<]+)</g, (_match, text) => `>${repairGeneratedText(text)}<`);
+}
+
+function truncateAtWordBoundary(value, maxLength) {
+  const normalized = repairGeneratedText(value).replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  const candidate = normalized.slice(0, Math.max(1, maxLength - 1));
+  const lastSpace = candidate.lastIndexOf(' ');
+  const trimmed = (lastSpace >= Math.floor(maxLength * 0.65) ? candidate.slice(0, lastSpace) : candidate)
+    .replace(/[\s,;:!?–—-]+$/g, '');
+  return `${trimmed}.`.slice(0, maxLength);
+}
+
+function normalizeSeoDescription(value, focusKeyword = '') {
+  let description = repairGeneratedText(value)
+    .replace(/\s+/g, ' ')
+    .replace(/[.!?…]+$/g, '')
+    .trim();
+
+  if (description.length < 140) {
+    const topic = repairGeneratedText(focusKeyword).replace(/\s+/g, ' ').trim();
+    const lead = description ? `${description.replace(/[.!?]+$/g, '')}.` : '';
+    const suffixes = [
+      topic ? ` Cùng OMFIT tìm hiểu ${topic} và chọn giải pháp phù hợp với nhu cầu của bạn.` : '',
+      ' Cùng OMFIT chọn giải pháp phù hợp với nhu cầu của bạn.',
+      ' Khám phá thêm cùng OMFIT.'
+    ].filter(Boolean);
+    const naturalExtension = suffixes.find((suffix) => {
+      const length = `${lead}${suffix}`.trim().length;
+      return length >= 140 && length <= 155;
+    });
+    if (naturalExtension) description = `${lead}${naturalExtension}`.trim();
+  }
+
+  description = truncateAtWordBoundary(description, 154).replace(/[.!?…]+$/g, '');
+  return description ? `${description}.` : '';
+}
+
+function normalizeForSearch(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('vi-VN')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function keywordCoverage(value, keyword) {
+  const haystack = new Set(normalizeForSearch(value).split(' ').filter((word) => word.length > 1));
+  const needles = normalizeForSearch(keyword).split(' ').filter((word) => word.length > 1);
+  if (needles.length === 0) return 0;
+  return needles.filter((word) => haystack.has(word)).length / needles.length;
+}
+
+function normalizeArticleMetadata(outline, requestedKeyword = '') {
+  const focusKeyword = repairGeneratedText(requestedKeyword || outline?.focusKeyword || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const titleCandidates = [outline?.title, outline?.metaTitle]
+    .map((value) => repairGeneratedText(value).replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .sort((left, right) => {
+      const coverageDelta = keywordCoverage(right, focusKeyword) - keywordCoverage(left, focusKeyword);
+      if (coverageDelta !== 0) return coverageDelta;
+      const leftFits = left.length >= 35 && left.length <= 60 ? 1 : 0;
+      const rightFits = right.length >= 35 && right.length <= 60 ? 1 : 0;
+      return rightFits - leftFits;
+    });
+  const title = truncateAtWordBoundary(titleCandidates[0] || focusKeyword || 'Bài viết OMFIT', 60);
+  return {
+    title,
+    // Keep the SERP title and visible H1 aligned so the search intent cannot drift.
+    metaTitle: title,
+    metaDescription: normalizeSeoDescription(outline?.metaDescription, focusKeyword),
+    focusKeyword
+  };
+}
+
 function cleanGeneratedHtml(content) {
-  return String(content || '')
+  const cleaned = String(content || '')
     .replace(/^```html\s*/i, '')
     .replace(/^```\s*/i, '')
     .replace(/\s*```$/i, '')
@@ -839,6 +930,40 @@ function cleanGeneratedHtml(content) {
     .replace(/<(script|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
     .replace(/\son\w+="[^"]*"/gi, '')
     .trim();
+  const sanitized = sanitizeHtml(cleaned, {
+    allowedTags: [
+      'a', 'article', 'aside', 'b', 'blockquote', 'br', 'caption', 'code', 'col',
+      'colgroup', 'div', 'em', 'figcaption', 'figure', 'footer', 'h2', 'h3', 'hr', 'i', 'img',
+      'li', 'main', 'ol', 'p', 'pre', 'section', 'span', 'strong', 'table', 'tbody',
+      'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'
+    ],
+    allowedAttributes: {
+      '*': ['aria-label', 'class', 'id', 'lang'],
+      a: ['href', 'rel', 'target', 'title'],
+      col: ['span', 'width'],
+      img: ['alt', 'class', 'decoding', 'height', 'loading', 'sizes', 'src', 'srcset', 'title', 'width'],
+      figure: ['class', 'data-omfit-section-image'],
+      td: ['colspan', 'rowspan'],
+      th: ['colspan', 'rowspan', 'scope']
+    },
+    allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+    allowedSchemesByTag: {
+      img: ['http', 'https']
+    },
+    allowProtocolRelative: false,
+    disallowedTagsMode: 'discard',
+    enforceHtmlBoundary: true,
+    transformTags: {
+      a: (tagName, attributes) => {
+        const nextAttributes = { ...attributes };
+        if (nextAttributes.target === '_blank') {
+          nextAttributes.rel = 'noopener noreferrer';
+        }
+        return { tagName, attribs: nextAttributes };
+      }
+    }
+  });
+  return repairGeneratedHtmlText(sanitized);
 }
 
 function escapeWordpressHtml(value = '') {
@@ -855,13 +980,16 @@ function prepareWordpressContent(contentHtml, articleTitle) {
   const withoutTitle = String(contentHtml || '')
     .replace(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi, '')
     .trim();
-  return `<h1 class="omfit-article-title">${safeTitle}</h1>\n${withoutTitle}`;
+  return [
+    '<article class="omfit-article-content" lang="vi">',
+    `<h1 class="omfit-article-title">${safeTitle}</h1>`,
+    withoutTitle,
+    '</article>'
+  ].join('\n');
 }
 
 function normalizeWordpressPostTitle(article) {
-  const metaTitle = String(article?.metaTitle || '').replace(/\s+/g, ' ').trim();
-  const title = String(article?.title || '').replace(/\s+/g, ' ').trim();
-  return metaTitle.length >= 35 && metaTitle.length <= 65 ? metaTitle : title;
+  return truncateAtWordBoundary(article?.title || article?.metaTitle || 'Bài viết OMFIT', 60);
 }
 
 const suspiciousWordpressSlugPattern = /(?:nfl|seahawks|quarterback|titans|super-bowl|sam-darnold|geno-smith|nba|baseball|\/\d+-\d+\/?$)/i;
@@ -904,9 +1032,9 @@ Brand context (chỉ sử dụng dữ liệu này, không tự tạo claim): ${J
 
 Trả về đúng một JSON object:
 {
-  "title": "Tiêu đề H1",
-  "metaTitle": "45 đến 60 ký tự",
-  "metaDescription": "140 đến 160 ký tự",
+  "title": "Tiêu đề H1 từ 45 đến 60 ký tự, chứa đúng ý định của từ khóa",
+  "metaTitle": "Cùng ý định và cùng thông điệp với H1, từ 45 đến 60 ký tự",
+  "metaDescription": "Một câu tự nhiên từ 145 đến 155 ký tự, kết thúc bằng đúng một dấu chấm",
   "slug": "slug-khong-dau",
   "focusKeyword": "${keyword}",
   "headings": [
@@ -916,11 +1044,14 @@ Trả về đúng một JSON object:
   "faq": [{ "question": "Câu hỏi?", "answer": "Câu trả lời ngắn, không bịa dữ kiện." }]
 }
 
-Bao phủ đúng search intent, cấu trúc heading logic, không nhồi từ khóa và không thêm Markdown.`,
+Bao phủ đúng search intent, giữ nguyên các từ bổ nghĩa quan trọng trong từ khóa (ví dụ "giá rẻ" không được đổi thành "giá trị"), cấu trúc heading logic, không nhồi từ khóa và không thêm Markdown.`,
       'application/json'
     );
     const outline = JSON.parse(text);
-    return response.json(outline);
+    return response.json({
+      ...outline,
+      ...normalizeArticleMetadata(outline, keyword)
+    });
   } catch (error) {
     return response.status(error instanceof ApiError ? error.statusCode : 502).json({
       error: error instanceof Error ? error.message : 'Không thể tạo dàn ý.'
@@ -958,6 +1089,8 @@ Yêu cầu:
 - Trả về HTML semantic fragment, không có html/body và không có H1.
 - Dùng h2, h3, p, ul, ol, blockquote và bảng khi thực sự phù hợp.
 - Mỗi đoạn 2–4 câu; câu rõ ràng, tiếng Việt tự nhiên.
+- Rà soát chính tả trước khi trả về; không được có từ hoặc ký tự lặp như "l lỡ".
+- Heading phải theo thứ tự H2 rồi mới đến H3; không dùng cỡ chữ hay style inline.
 - Từ khóa xuất hiện tự nhiên ở phần mở đầu, không nhồi nhét.
 - Không tự tạo số liệu, giá, chứng nhận, địa chỉ, cam kết kết quả hoặc lời khuyên y khoa.
 - Không chèn URL, ảnh giả, Markdown hay footer website.
@@ -967,15 +1100,16 @@ Chỉ trả về HTML.`,
       'text/plain'
     );
     const contentHtml = cleanGeneratedHtml(content);
+    const normalizedMetadata = normalizeArticleMetadata(outline, outline.focusKeyword);
     const plainText = contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     if (!plainText) throw new ApiError(502, 'Nội dung bài viết trả về rỗng.', 'article_empty');
     return response.json({
       id: crypto.randomUUID(),
-      title: outline.title,
+      title: normalizedMetadata.title,
       slug: outline.slug,
-      metaTitle: outline.metaTitle,
-      metaDescription: outline.metaDescription,
-      focusKeyword: outline.focusKeyword,
+      metaTitle: normalizedMetadata.metaTitle,
+      metaDescription: normalizedMetadata.metaDescription,
+      focusKeyword: normalizedMetadata.focusKeyword,
       contentHtml,
       wordCount: plainText.split(' ').filter(Boolean).length,
       readabilityScore: 0,
@@ -999,6 +1133,7 @@ function safeAssetName(value, fallback = 'omfit-image') {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+    .replace(/đ/g, 'd')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 80) || fallback;
@@ -1256,14 +1391,236 @@ function getWordpressConfig() {
   };
 }
 
-async function uploadWordpressMedia(config, image) {
-  const sourceUrl = String(image?.url || '').trim();
-  if (!sourceUrl) return null;
-  const sourceResponse = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
-  if (!sourceResponse.ok) throw new Error(`Không thể tải ảnh ${image.fileName || ''}.`);
-  const blob = await sourceResponse.blob();
+const wordpressMediaMaxBytes = 10 * 1024 * 1024;
+const wordpressMediaUploadsInFlight = new Map();
+
+async function resolveOwnedMediaAsset(ownerId, image) {
+  const mediaId = String(image?.id || '').trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mediaId)) {
+    throw new ApiError(400, 'Ảnh chưa được lưu trong kho OMFIT.', 'wordpress_media_invalid');
+  }
+  const { data, error } = await getSupabaseAdmin()
+    .from('media_assets')
+    .select('id,public_url,file_name,mime_type,bytes,metadata')
+    .eq('id', mediaId)
+    .eq('owner_id', ownerId)
+    .maybeSingle();
+  if (error || !data?.public_url) {
+    throw new ApiError(403, 'Bạn không có quyền sử dụng ảnh này.', 'wordpress_media_forbidden');
+  }
+  if (Number(data.bytes || 0) > wordpressMediaMaxBytes) {
+    throw new ApiError(413, 'Ảnh vượt quá giới hạn 10 MB.', 'wordpress_media_too_large');
+  }
+  const sourceUrl = new URL(String(data.public_url));
+  const storageHost = new URL(getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL')).hostname;
+  if (sourceUrl.protocol !== 'https:' || sourceUrl.hostname !== storageHost) {
+    throw new ApiError(400, 'Nguồn ảnh không thuộc kho OMFIT.', 'wordpress_media_source_invalid');
+  }
+  return { ...data, sourceUrl: sourceUrl.toString() };
+}
+
+async function downloadWordpressMediaBlob(sourceUrl) {
+  const sourceResponse = await fetch(sourceUrl, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(30_000)
+  });
+  if (!sourceResponse.ok || !sourceResponse.body) {
+    throw new ApiError(502, 'Không thể tải ảnh từ kho OMFIT.', 'wordpress_media_download_failed');
+  }
+  const contentLength = Number(sourceResponse.headers.get('content-length') || 0);
+  if (contentLength > wordpressMediaMaxBytes) {
+    throw new ApiError(413, 'Ảnh vượt quá giới hạn 10 MB.', 'wordpress_media_too_large');
+  }
+  const contentType = String(sourceResponse.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(contentType)) {
+    throw new ApiError(415, 'Định dạng ảnh không được hỗ trợ.', 'wordpress_media_type_invalid');
+  }
+  const reader = sourceResponse.body.getReader();
+  const chunks = [];
+  let receivedBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    receivedBytes += value.byteLength;
+    if (receivedBytes > wordpressMediaMaxBytes) {
+      await reader.cancel();
+      throw new ApiError(413, 'Ảnh vượt quá giới hạn 10 MB.', 'wordpress_media_too_large');
+    }
+    chunks.push(value);
+  }
+  return new Blob(chunks, { type: contentType });
+}
+
+function buildWordpressMediaIdentity(asset) {
+  const originalBaseName = String(asset.file_name || '')
+    .replace(/\.[^.]+$/, '')
+    .trim();
+  const descriptiveName = safeAssetName(originalBaseName, 'omfit-image').slice(0, 40);
+  const assetKey = String(asset.id).replace(/-/g, '').toLowerCase();
+  const slug = `${descriptiveName}-${assetKey}`;
+  const extensionByMimeType = {
+    'image/gif': 'gif',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp'
+  };
+  return {
+    slug,
+    fileName: `${slug}.${extensionByMimeType[String(asset.mime_type || '').toLowerCase()] || 'jpg'}`
+  };
+}
+
+function getStoredWordpressMediaId(asset, config) {
+  const mapping = asset?.metadata?.wordpress;
+  if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping)) return 0;
+  const mappedSiteUrl = String(mapping.site_url || '').replace(/\/+$/, '');
+  if (mappedSiteUrl !== config.siteUrl) return 0;
+  const attachmentId = Number(mapping.attachment_id || 0);
+  return Number.isSafeInteger(attachmentId) && attachmentId > 0 ? attachmentId : 0;
+}
+
+async function getWordpressMediaById(config, attachmentId) {
+  const mediaResponse = await fetch(
+    `${config.siteUrl}/wp-json/wp/v2/media/${attachmentId}?context=edit`,
+    {
+      headers: { Authorization: config.authHeader },
+      signal: AbortSignal.timeout(20_000)
+    }
+  );
+  if (mediaResponse.status === 404) return null;
+  if (!mediaResponse.ok) {
+    const detail = await mediaResponse.text();
+    throw new ApiError(
+      502,
+      `WordPress không thể kiểm tra ảnh ${attachmentId} (${mediaResponse.status}): ${detail.slice(0, 250)}`,
+      'wordpress_media_lookup_failed'
+    );
+  }
+  return mediaResponse.json();
+}
+
+async function findWordpressMediaBySlug(config, slug) {
+  const mediaResponse = await fetch(
+    `${config.siteUrl}/wp-json/wp/v2/media?slug=${encodeURIComponent(slug)}&per_page=1&context=edit`,
+    {
+      headers: { Authorization: config.authHeader },
+      signal: AbortSignal.timeout(20_000)
+    }
+  );
+  if (!mediaResponse.ok) {
+    const detail = await mediaResponse.text();
+    throw new ApiError(
+      502,
+      `WordPress không thể tìm ảnh đã đồng bộ (${mediaResponse.status}): ${detail.slice(0, 250)}`,
+      'wordpress_media_lookup_failed'
+    );
+  }
+  const rows = await mediaResponse.json();
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+async function updateWordpressMediaText(config, media, image) {
+  if (!media?.id) return null;
+  const altText = String(image?.altText || '').trim();
+  const caption = String(image?.caption || '').trim();
+  const currentCaption = String(media?.caption?.raw || media?.caption?.rendered || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (String(media.alt_text || '').trim() === altText && currentCaption === caption) return media;
+
+  const mediaResponse = await fetch(`${config.siteUrl}/wp-json/wp/v2/media/${media.id}`, {
+    method: 'POST',
+    headers: { Authorization: config.authHeader, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alt_text: altText, caption }),
+    signal: AbortSignal.timeout(20_000)
+  });
+  if (mediaResponse.status === 404) return null;
+  if (!mediaResponse.ok) {
+    const detail = await mediaResponse.text();
+    throw new ApiError(
+      502,
+      `WordPress không thể cập nhật metadata ảnh (${mediaResponse.status}): ${detail.slice(0, 250)}`,
+      'wordpress_media_update_failed'
+    );
+  }
+  return mediaResponse.json();
+}
+
+async function persistWordpressMediaMapping(asset, ownerId, config, media, slug) {
+  const currentMetadata = asset.metadata && typeof asset.metadata === 'object' && !Array.isArray(asset.metadata)
+    ? asset.metadata
+    : {};
+  const currentWordpressMetadata = currentMetadata.wordpress
+    && typeof currentMetadata.wordpress === 'object'
+    && !Array.isArray(currentMetadata.wordpress)
+    ? currentMetadata.wordpress
+    : {};
+  const nextMetadata = {
+    ...currentMetadata,
+    wordpress: {
+      ...currentWordpressMetadata,
+      site_url: config.siteUrl,
+      attachment_id: Number(media.id),
+      slug: String(media.slug || slug),
+      source_url: String(media.source_url || ''),
+      synced_at: new Date().toISOString()
+    }
+  };
+  const { data, error } = await getSupabaseAdmin()
+    .from('media_assets')
+    .update({ metadata: nextMetadata })
+    .eq('id', asset.id)
+    .eq('owner_id', ownerId)
+    .select('id')
+    .maybeSingle();
+  if (error || !data) {
+    throw new ApiError(
+      502,
+      'Ảnh đã được đồng bộ lên WordPress nhưng chưa thể lưu liên kết attachment.',
+      'wordpress_media_link_failed'
+    );
+  }
+  asset.metadata = nextMetadata;
+}
+
+async function removeDuplicateWordpressMedia(config, attachmentId) {
+  try {
+    await fetch(`${config.siteUrl}/wp-json/wp/v2/media/${attachmentId}?force=true`, {
+      method: 'DELETE',
+      headers: { Authorization: config.authHeader },
+      signal: AbortSignal.timeout(20_000)
+    });
+  } catch {
+    // The canonical attachment is already usable; orphan cleanup is best effort only.
+  }
+}
+
+async function syncWordpressMedia(config, image, ownerId, asset) {
+  const identity = buildWordpressMediaIdentity(asset);
+  const storedAttachmentId = getStoredWordpressMediaId(asset, config);
+  if (storedAttachmentId) {
+    const storedMedia = await getWordpressMediaById(config, storedAttachmentId);
+    // media_assets.metadata is user-editable under RLS. Never trust an ID unless
+    // the WordPress slug proves that this server created it for this exact asset.
+    if (storedMedia && String(storedMedia.slug || '') === identity.slug) {
+      const updatedStoredMedia = await updateWordpressMediaText(config, storedMedia, image);
+      if (updatedStoredMedia) return updatedStoredMedia;
+    }
+  }
+
+  const matchedMedia = await findWordpressMediaBySlug(config, identity.slug);
+  if (matchedMedia) {
+    const updatedMatchedMedia = await updateWordpressMediaText(config, matchedMedia, image);
+    if (updatedMatchedMedia) {
+      await persistWordpressMediaMapping(asset, ownerId, config, updatedMatchedMedia, identity.slug);
+      return updatedMatchedMedia;
+    }
+  }
+
+  const blob = await downloadWordpressMediaBlob(asset.sourceUrl);
   const formData = new FormData();
-  formData.append('file', blob, image.fileName || `omfit-${Date.now()}.jpg`);
+  formData.append('file', blob, identity.fileName);
   formData.append('alt_text', image.altText || '');
   formData.append('caption', image.caption || '');
   const mediaResponse = await fetch(`${config.siteUrl}/wp-json/wp/v2/media`, {
@@ -1276,7 +1633,129 @@ async function uploadWordpressMedia(config, image) {
     const detail = await mediaResponse.text();
     throw new Error(`WordPress upload ảnh lỗi ${mediaResponse.status}: ${detail.slice(0, 250)}`);
   }
-  return mediaResponse.json();
+  const uploadedMedia = await mediaResponse.json();
+  if (!Number(uploadedMedia?.id) || !uploadedMedia?.source_url) {
+    throw new ApiError(502, 'WordPress không trả về attachment hợp lệ.', 'wordpress_media_response_invalid');
+  }
+
+  // A deterministic slug makes retries recoverable even if the database write failed.
+  // It also lets concurrent server instances converge on one canonical attachment.
+  const canonicalMedia = await findWordpressMediaBySlug(config, identity.slug);
+  let media = canonicalMedia || uploadedMedia;
+  if (canonicalMedia?.id && Number(canonicalMedia.id) !== Number(uploadedMedia.id)) {
+    await removeDuplicateWordpressMedia(config, uploadedMedia.id);
+    media = (await updateWordpressMediaText(config, canonicalMedia, image)) || canonicalMedia;
+  }
+  await persistWordpressMediaMapping(asset, ownerId, config, media, identity.slug);
+  return media;
+}
+
+async function uploadWordpressMedia(config, image, ownerId) {
+  const asset = await resolveOwnedMediaAsset(ownerId, image);
+  const inFlightKey = `${config.siteUrl}:${ownerId}:${asset.id}`;
+  const existingUpload = wordpressMediaUploadsInFlight.get(inFlightKey);
+  if (existingUpload) {
+    const media = await existingUpload;
+    return (await updateWordpressMediaText(config, media, image)) || syncWordpressMedia(config, image, ownerId, asset);
+  }
+
+  const upload = syncWordpressMedia(config, image, ownerId, asset);
+  wordpressMediaUploadsInFlight.set(inFlightKey, upload);
+  try {
+    return await upload;
+  } finally {
+    if (wordpressMediaUploadsInFlight.get(inFlightKey) === upload) {
+      wordpressMediaUploadsInFlight.delete(inFlightKey);
+    }
+  }
+}
+
+async function getOwnedArticlePublishState(ownerId, articleId) {
+  const { data, error } = await getSupabaseAdmin()
+    .from('articles')
+    .select('id,wp_post_id')
+    .eq('id', articleId)
+    .eq('owner_id', ownerId)
+    .maybeSingle();
+  if (error || !data) {
+    throw new ApiError(403, 'Bạn không có quyền xuất bản bài viết này.', 'wordpress_article_forbidden');
+  }
+  return data;
+}
+
+function readHtmlAttribute(tag, name) {
+  const match = String(tag).match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? '';
+}
+
+function contentReferencesImage(contentHtml, image) {
+  const sourceUrl = String(image?.url || '').trim();
+  if (!sourceUrl) return false;
+  return (String(contentHtml).match(/<img\b[^>]*>/gi) || []).some((tag) => {
+    const currentSource = readHtmlAttribute(tag, 'src');
+    return currentSource === sourceUrl
+      || currentSource === escapeWordpressHtml(sourceUrl);
+  });
+}
+
+function setHtmlAttribute(tag, name, value) {
+  const attribute = ` ${name}="${escapeWordpressHtml(String(value))}"`;
+  const pattern = new RegExp(`\\s${name}(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+))?`, 'i');
+  if (pattern.test(tag)) return tag.replace(pattern, attribute);
+  return tag.replace(/\/?>$/, (ending) => `${attribute}${ending}`);
+}
+
+function buildWordpressSrcSet(media) {
+  const candidates = Object.values(media?.media_details?.sizes || {})
+    .filter((size) => size?.source_url && Number(size?.width) > 0)
+    .map((size) => `${size.source_url} ${Number(size.width)}w`);
+  const fullWidth = Number(media?.media_details?.width);
+  if (media?.source_url && fullWidth > 0) candidates.push(`${media.source_url} ${fullWidth}w`);
+  return [...new Set(candidates)].join(', ');
+}
+
+function replaceWordpressImageMarkup(contentHtml, image, media) {
+  const originalUrl = String(image?.url || '').trim();
+  if (!originalUrl || !media?.source_url) return contentHtml;
+  const width = Number(media?.media_details?.width) || 1200;
+  const height = Number(media?.media_details?.height) || 896;
+  const srcSet = buildWordpressSrcSet(media);
+  let updatedHtml = String(contentHtml).replace(/<img\b[^>]*>/gi, (tag) => {
+    const currentSource = readHtmlAttribute(tag, 'src');
+    if (currentSource !== originalUrl && !tag.includes(originalUrl)) return tag;
+    let nextTag = setHtmlAttribute(tag, 'src', media.source_url);
+    nextTag = setHtmlAttribute(nextTag, 'alt', image.altText || 'Hình ảnh OMFIT');
+    nextTag = setHtmlAttribute(nextTag, 'width', width);
+    nextTag = setHtmlAttribute(nextTag, 'height', height);
+    nextTag = setHtmlAttribute(nextTag, 'loading', 'lazy');
+    nextTag = setHtmlAttribute(nextTag, 'decoding', 'async');
+    nextTag = setHtmlAttribute(nextTag, 'sizes', '(max-width: 1200px) 100vw, 1200px');
+    if (srcSet) nextTag = setHtmlAttribute(nextTag, 'srcset', srcSet);
+    return nextTag;
+  });
+  const caption = repairGeneratedText(image?.caption).replace(/\s+/g, ' ').trim();
+  if (!caption) return updatedHtml;
+  updatedHtml = updatedHtml.replace(/<figure\b[\s\S]*?<\/figure>/gi, (figure) => {
+    const imageTag = figure.match(/<img\b[^>]*>/i)?.[0] || '';
+    if (readHtmlAttribute(imageTag, 'src') !== media.source_url) return figure;
+    const safeCaption = escapeWordpressHtml(caption);
+    if (/<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/i.test(figure)) {
+      return figure.replace(
+        /<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/i,
+        `<figcaption>${safeCaption}</figcaption>`
+      );
+    }
+    return figure.replace(/<\/figure>/i, `<figcaption>${safeCaption}</figcaption></figure>`);
+  });
+  return updatedHtml;
+}
+
+function normalizeUniqueImageText(value, fallback, usedValues, position) {
+  const base = repairGeneratedText(value || fallback).replace(/\s+/g, ' ').trim() || fallback;
+  const key = normalizeForSearch(base);
+  const normalized = usedValues.has(key) ? `${base} – góc nhìn ${position + 1}` : base;
+  usedValues.add(normalizeForSearch(normalized));
+  return normalized;
 }
 
 async function findOrCreateWordpressTerm(config, type, name) {
@@ -1307,23 +1786,69 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
     if (!article?.id || !article?.title || !article?.contentHtml) {
       return response.status(400).json({ error: 'Bài viết không hợp lệ.' });
     }
+    const ownedArticle = await getOwnedArticlePublishState(request.supabaseUser.id, article.id);
+    const requestedPostId = Number(article.wpPostId || 0);
+    const storedPostId = Number(ownedArticle.wp_post_id || 0);
+    if (requestedPostId && requestedPostId !== storedPostId) {
+      throw new ApiError(403, 'Bài viết WordPress không thuộc bản ghi này.', 'wordpress_post_forbidden');
+    }
     const config = getWordpressConfig();
     const logs = ['Bắt đầu đồng bộ nội dung và hình ảnh với WordPress.'];
+    const postTitle = normalizeWordpressPostTitle(article);
     let contentHtml = prepareWordpressContent(
       cleanGeneratedHtml(article.contentHtml),
-      article.title
+      postTitle
     );
     let featuredMediaId;
     if (article.featuredImage) {
-      const media = await uploadWordpressMedia(config, article.featuredImage);
+      const media = await uploadWordpressMedia(config, article.featuredImage, request.supabaseUser.id);
       featuredMediaId = media?.id;
-      logs.push('Đã upload featured image.');
+      logs.push('Đã đồng bộ featured image.');
     }
-    for (const image of Array.isArray(article.articleImages) ? article.articleImages : []) {
-      const media = await uploadWordpressMedia(config, image);
-      if (media?.source_url && image.url) contentHtml = contentHtml.split(image.url).join(media.source_url);
+    const usedAltTexts = new Set();
+    const usedCaptions = new Set();
+    const suppliedInlineImages = Array.isArray(article.articleImages) ? article.articleImages : [];
+    const seenInlineMediaIds = new Set();
+    const seenInlineSources = new Set();
+    const inlineImages = suppliedInlineImages.filter((image) => {
+      const mediaId = String(image?.id || '').trim();
+      const sourceUrl = String(image?.url || '').trim();
+      if (
+        !contentReferencesImage(contentHtml, image)
+        || seenInlineMediaIds.has(mediaId)
+        || seenInlineSources.has(sourceUrl)
+      ) return false;
+      seenInlineMediaIds.add(mediaId);
+      seenInlineSources.add(sourceUrl);
+      return true;
+    });
+    const skippedInlineImages = suppliedInlineImages.length - inlineImages.length;
+    if (skippedInlineImages > 0) {
+      logs.push(`Đã bỏ qua ${skippedInlineImages} ảnh không còn được tham chiếu trong nội dung.`);
     }
-    if (article.articleImages?.length) logs.push(`Đã upload ${article.articleImages.length} ảnh nội dung.`);
+    if (inlineImages.length > 10) {
+      throw new ApiError(400, 'Mỗi bài viết được upload tối đa 10 ảnh nội dung.', 'wordpress_media_limit');
+    }
+    for (const [position, image] of inlineImages.entries()) {
+      const preparedImage = {
+        ...image,
+        altText: normalizeUniqueImageText(
+          image.altText,
+          `${article.focusKeyword || postTitle} tại OMFIT`,
+          usedAltTexts,
+          position
+        ),
+        caption: normalizeUniqueImageText(
+          image.caption,
+          `Hình minh họa cho ${article.focusKeyword || postTitle}`,
+          usedCaptions,
+          position
+        )
+      };
+      const media = await uploadWordpressMedia(config, preparedImage, request.supabaseUser.id);
+      contentHtml = replaceWordpressImageMarkup(contentHtml, preparedImage, media);
+    }
+    if (inlineImages.length) logs.push(`Đã đồng bộ ${inlineImages.length} ảnh nội dung.`);
     const categoryIds = (await Promise.all(
       (article.categories || []).map((name) => findOrCreateWordpressTerm(config, 'categories', name))
     )).filter(Boolean);
@@ -1331,17 +1856,17 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
       (article.tags || []).map((name) => findOrCreateWordpressTerm(config, 'tags', name))
     )).filter(Boolean);
     const postPayload = {
-      title: normalizeWordpressPostTitle(article),
+      title: postTitle,
       content: contentHtml,
-      excerpt: article.metaDescription || '',
+      excerpt: normalizeSeoDescription(article.metaDescription, article.focusKeyword),
       status,
       slug: article.slug,
       categories: categoryIds,
       tags: tagIds,
       ...(featuredMediaId ? { featured_media: featuredMediaId } : {})
     };
-    const postUrl = article.wpPostId
-      ? `${config.siteUrl}/wp-json/wp/v2/posts/${article.wpPostId}`
+    const postUrl = storedPostId
+      ? `${config.siteUrl}/wp-json/wp/v2/posts/${storedPostId}`
       : `${config.siteUrl}/wp-json/wp/v2/posts`;
     const postResponse = await fetch(postUrl, {
       method: 'POST',
@@ -1354,6 +1879,20 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
       throw new ApiError(502, `WordPress trả về lỗi ${postResponse.status}: ${detail.slice(0, 400)}`, 'wordpress_publish_failed');
     }
     const post = await postResponse.json();
+    const { error: articleUpdateError } = await getSupabaseAdmin()
+      .from('articles')
+      .update({
+        wp_post_id: post.id,
+        wp_post_url: post.link,
+        status: status === 'publish' ? 'published' : 'draft',
+        published_at: status === 'publish' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', article.id)
+      .eq('owner_id', request.supabaseUser.id);
+    if (articleUpdateError) {
+      throw new ApiError(502, 'Đã đăng WordPress nhưng chưa thể lưu liên kết bài viết.', 'wordpress_article_link_failed');
+    }
     logs.push(status === 'publish' ? 'Đã xuất bản bài viết.' : 'Đã lưu bản nháp WordPress.');
     return response.json({
       postId: post.id,

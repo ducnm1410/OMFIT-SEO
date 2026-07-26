@@ -8,6 +8,13 @@ import {
 } from 'lucide-react';
 import type { GeneratedArticle, GeneratedImage } from '../types';
 import { LeonardoService } from '../services/leonardoService';
+import {
+  articleContainsImage,
+  buildArticleImageMarkup,
+  collectArticleAltTexts,
+  mergeUniqueArticleImages,
+  sectionHasImage
+} from '../utils/articleImageMarkup';
 
 interface ArticleImagePackageProps {
   article: GeneratedArticle;
@@ -31,46 +38,59 @@ function getSections(contentHtml: string): ArticleSection[] {
   return [...document.querySelectorAll('main h2')]
     .filter((heading) => !heading.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer'))
     .map((heading, index) => {
-      let sibling = heading.nextElementSibling;
-      let hasImage = false;
-      while (sibling && sibling.tagName !== 'H2') {
-        if (sibling.matches('figure, img') || sibling.querySelector('img')) {
-          hasImage = true;
-          break;
-        }
-        sibling = sibling.nextElementSibling;
-      }
       return {
         index,
         title: heading.textContent?.trim() || `Phần ${index + 1}`,
-        hasImage
+        hasImage: sectionHasImage(heading)
       };
     });
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function insertSectionImage(contentHtml: string, sectionIndex: number, image: GeneratedImage, caption: string) {
+function insertSectionImage(
+  contentHtml: string,
+  sectionIndex: number,
+  image: GeneratedImage,
+  caption: string,
+  article: GeneratedArticle,
+  allowAdditional = false
+) {
   const document = parseContent(contentHtml);
   const main = document.querySelector('main');
   const headings = [...document.querySelectorAll('main h2')]
     .filter((heading) => !heading.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer'));
   const heading = headings[sectionIndex];
-  if (!main || !heading) return contentHtml;
-  heading.insertAdjacentHTML(
-    'afterend',
-    `<figure data-omfit-section-image="${escapeHtml(image.id)}">
-      <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.altText)}" loading="lazy" decoding="async" width="1200" height="896" />
-      <figcaption>${escapeHtml(caption)}</figcaption>
-    </figure>`
-  );
-  return main.innerHTML.trim();
+  if (
+    !main
+    || !heading
+    || articleContainsImage(main, image)
+    || (!allowAdditional && sectionHasImage(heading))
+  ) {
+    return { contentHtml, image, inserted: false };
+  }
+  const markup = buildArticleImageMarkup({
+    image,
+    caption,
+    sectionTitle: heading.textContent?.trim(),
+    articleTitle: article.title,
+    focusKeyword: article.focusKeyword,
+    existingAltTexts: collectArticleAltTexts(main)
+  });
+  let insertionTarget = heading;
+  if (allowAdditional) {
+    let sibling = heading.nextElementSibling;
+    while (sibling && sibling.tagName !== 'H2') {
+      if (sibling.matches('figure, img') || sibling.querySelector('img')) {
+        insertionTarget = sibling;
+      }
+      sibling = sibling.nextElementSibling;
+    }
+  }
+  insertionTarget.insertAdjacentHTML('afterend', markup.html);
+  return {
+    contentHtml: main.innerHTML.trim(),
+    image: { ...image, altText: markup.altText, caption: markup.caption },
+    inserted: true
+  };
 }
 
 export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
@@ -120,13 +140,26 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
         `Ảnh minh họa cho mục "${section.title}" trong bài "${article.title}". Bám sát chủ đề "${article.focusKeyword}", bối cảnh OMFIT fitness và wellness chân thực, chuyển động an toàn, không có chữ trong ảnh.`
       );
       const inlineImage = { ...image, role: 'inline' as const, caption: section.title };
-      const nextContent = insertSectionImage(contentHtml, section.index, inlineImage, section.title);
+      const insertion = insertSectionImage(
+        contentHtml,
+        section.index,
+        inlineImage,
+        section.title,
+        article,
+        section.hasImage
+      );
+      if (!insertion.inserted) {
+        setMessage(`Ảnh này đã được chèn trước đó nên hệ thống không tạo bản trùng.`);
+        return;
+      }
       onApplyArticle({
         ...article,
-        contentHtml: nextContent,
-        articleImages: [...article.articleImages, inlineImage]
+        contentHtml: insertion.contentHtml,
+        articleImages: mergeUniqueArticleImages(article.articleImages, [insertion.image])
       });
-      setMessage(`Đã chèn ảnh ngay sau mục “${section.title}”.`);
+      setMessage(section.hasImage
+        ? `Đã chèn thêm một ảnh vào mục “${section.title}”.`
+        : `Đã chèn ảnh ngay sau mục “${section.title}”.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Không thể tạo ảnh cho mục này.');
     } finally {
@@ -137,7 +170,7 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
   const generateMissingPackage = async () => {
     const targets = sections.filter((section) => !section.hasImage).slice(0, 3);
     if (targets.length === 0) {
-      setMessage('Các mục chính đã có ảnh. Bạn vẫn có thể tạo thêm ở từng mục.');
+      setMessage('Mỗi mục H2 đã có ít nhất một ảnh. Dùng nút “Tạo thêm ảnh” nếu cần bổ sung ngữ cảnh cho từng mục.');
       return;
     }
     setGeneratingKey('package');
@@ -150,13 +183,20 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
           `Ảnh minh họa cho mục "${section.title}" trong bài "${article.title}". Bám sát từ khóa "${article.focusKeyword}", hình ảnh OMFIT cao cấp và chân thực, không có chữ trong ảnh.`
         );
         const inlineImage = { ...image, role: 'inline' as const, caption: section.title };
-        nextContent = insertSectionImage(nextContent, section.index, inlineImage, section.title);
-        newImages.push(inlineImage);
+        const insertion = insertSectionImage(
+          nextContent,
+          section.index,
+          inlineImage,
+          section.title,
+          article
+        );
+        nextContent = insertion.contentHtml;
+        if (insertion.inserted) newImages.push(insertion.image);
       }
       onApplyArticle({
         ...article,
         contentHtml: nextContent,
-        articleImages: [...article.articleImages, ...newImages]
+        articleImages: mergeUniqueArticleImages(article.articleImages, newImages)
       });
       setMessage(`Đã tạo và chèn ${newImages.length} ảnh vào các mục còn thiếu.`);
     } catch (error) {
@@ -164,7 +204,7 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
         onApplyArticle({
           ...article,
           contentHtml: nextContent,
-          articleImages: [...article.articleImages, ...newImages]
+          articleImages: mergeUniqueArticleImages(article.articleImages, newImages)
         });
       }
       setMessage(error instanceof Error
@@ -222,7 +262,7 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
             </div>
             <button type="button" onClick={() => void generateSection(section)} disabled={Boolean(generatingKey)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF] disabled:opacity-50">
               {generatingKey === `section-${section.index}` ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <PlusCircle className="h-4 w-4" />}
-              Tạo và chèn ảnh
+              {section.hasImage ? 'Tạo thêm ảnh' : 'Tạo và chèn ảnh'}
             </button>
           </div>
         ))}

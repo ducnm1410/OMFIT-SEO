@@ -270,19 +270,44 @@ export async function uploadBrandAsset(
   assetType: BrandAsset['assetType']
 ): Promise<BrandAsset> {
   const ownerId = await requireUserId();
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  const mimeTypeByExtension: Record<string, string> = {
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    jpeg: 'image/jpeg',
+    jpg: 'image/jpeg',
+    md: 'text/markdown',
+    pdf: 'application/pdf',
+    png: 'image/png',
+    txt: 'text/plain',
+    webp: 'image/webp'
+  };
+  const contentType = file.type || mimeTypeByExtension[extension] || 'application/octet-stream';
+  const allowedMimeTypes = assetType === 'logo'
+    ? new Set(['image/jpeg', 'image/png', 'image/webp'])
+    : new Set([
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'text/markdown',
+        'text/plain'
+      ]);
+  if (file.size > 10 * 1024 * 1024) throw new Error('Tệp vượt quá giới hạn 10 MB.');
+  if (!allowedMimeTypes.has(contentType)) throw new Error('Định dạng tài sản thương hiệu không được hỗ trợ.');
   const safeName = file.name
     .replace(/\.[^/.]+$/, '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '') || assetType;
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'bin';
   const bucket = assetType === 'guideline' ? 'omfit-draft-assets' : 'omfit-public-assets';
   const storagePath = `${ownerId}/brand/${brandProfileId}/${Date.now()}-${safeName}.${extension}`;
   const { error: uploadError } = await supabase.storage
     .from(bucket)
-    .upload(storagePath, file, { contentType: file.type, upsert: false });
+    .upload(storagePath, file, { contentType, upsert: false });
   if (uploadError) throw uploadError;
   const publicUrl = bucket === 'omfit-public-assets'
     ? supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
@@ -297,7 +322,7 @@ export async function uploadBrandAsset(
       bucket,
       storage_path: storagePath,
       public_url: publicUrl,
-      mime_type: file.type,
+      mime_type: contentType,
       metadata: { bytes: file.size }
     })
     .select('*')
@@ -351,9 +376,12 @@ export async function saveArticle(article: GeneratedArticle, audit?: SeoAuditRes
   const images = [
     ...(article.featuredImage ? [{ ...article.featuredImage, role: 'featured' as const }] : []),
     ...article.articleImages.map((image) => ({ ...image, role: 'inline' as const }))
-  ].filter((image) => /^[0-9a-f-]{36}$/i.test(image.id));
+  ]
+    .filter((image) => /^[0-9a-f-]{36}$/i.test(image.id))
+    .filter((image, index, rows) => rows.findIndex((row) => row.id === image.id) === index);
+
   if (images.length > 0) {
-    await supabase.from('article_media').upsert(
+    const { error: mediaError } = await supabase.from('article_media').upsert(
       images.map((image, index) => ({
         article_id: article.id,
         media_id: image.id,
@@ -363,6 +391,28 @@ export async function saveArticle(article: GeneratedArticle, audit?: SeoAuditRes
       })),
       { onConflict: 'article_id,media_id' }
     );
+    if (mediaError) throw mediaError;
+  }
+
+  const desiredMediaIds = new Set(images.map((image) => image.id));
+  const { data: currentRelations, error: relationsError } = await supabase
+    .from('article_media')
+    .select('media_id')
+    .eq('article_id', article.id)
+    .eq('owner_id', ownerId);
+  if (relationsError) throw relationsError;
+
+  const staleMediaIds = (currentRelations || [])
+    .map((relation) => relation.media_id)
+    .filter((mediaId) => !desiredMediaIds.has(mediaId));
+  if (staleMediaIds.length > 0) {
+    const { error: removeMediaError } = await supabase
+      .from('article_media')
+      .delete()
+      .eq('article_id', article.id)
+      .eq('owner_id', ownerId)
+      .in('media_id', staleMediaIds);
+    if (removeMediaError) throw removeMediaError;
   }
 
   if (audit) {
@@ -400,6 +450,7 @@ export async function uploadMediaFile(file: File, articleId?: string): Promise<G
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
   const storagePath = `${ownerId}/${articleId || 'library'}/${Date.now()}-${safeName}.${extension}`;

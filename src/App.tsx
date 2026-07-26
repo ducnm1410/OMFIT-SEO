@@ -32,6 +32,13 @@ import {
   syncWordpressIndex
 } from './services/contentRepository';
 import { auditArticle, enhanceArticleSeoHtml } from './services/seoAuditService';
+import {
+  articleContainsImage,
+  buildArticleImageMarkup,
+  collectArticleAltTexts,
+  mergeUniqueArticleImages,
+  sectionHasImage
+} from './utils/articleImageMarkup';
 
 export function App() {
   const [session, setSession] = useState<Session | null>();
@@ -145,8 +152,10 @@ export function App() {
         `<main>${prepared.article.contentHtml}</main>`,
         'text/html'
       );
-      const headings = [...document.querySelectorAll('main > h2')]
-        .filter((heading) => !heading.closest('.omfit-related-content, .omfit-article-cta'))
+      const main = document.querySelector('main');
+      const headings = [...document.querySelectorAll('main h2')]
+        .filter((heading) => !heading.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer'))
+        .filter((heading) => !sectionHasImage(heading))
         .slice(0, 2);
       const generatedImages: GeneratedImage[] = [];
       for (const heading of headings) {
@@ -160,22 +169,31 @@ export function App() {
             'nano-banana-2',
             prepared.article.id
           );
-          const inlineImage = { ...image, role: 'inline' as const, caption: sectionTitle };
-          generatedImages.push(inlineImage);
-          heading.insertAdjacentHTML(
-            'afterend',
-            `<figure><img src="${image.url}" alt="${image.altText}" loading="lazy" decoding="async" /><figcaption>${sectionTitle}</figcaption></figure>`
-          );
+          if (!main || articleContainsImage(main, image)) continue;
+          const markup = buildArticleImageMarkup({
+            image,
+            caption: sectionTitle,
+            sectionTitle,
+            articleTitle: prepared.article.title,
+            focusKeyword: prepared.article.focusKeyword,
+            existingAltTexts: collectArticleAltTexts(main)
+          });
+          generatedImages.push({
+            ...image,
+            role: 'inline' as const,
+            altText: markup.altText,
+            caption: markup.caption
+          });
+          heading.insertAdjacentHTML('afterend', markup.html);
         } catch (error) {
           console.error('Không thể tự động tạo ảnh cho section:', error);
         }
       }
       if (generatedImages.length > 0) {
-        const main = document.querySelector('main');
         const withImages = prepareArticle({
           ...prepared.article,
           contentHtml: main?.innerHTML || prepared.article.contentHtml,
-          articleImages: generatedImages
+          articleImages: mergeUniqueArticleImages(prepared.article.articleImages, generatedImages)
         });
         await saveArticle(withImages.article, withImages.audit);
         setArticles((previous) => previous.map((item) => (
@@ -211,22 +229,42 @@ export function App() {
       'text/html'
     );
     const main = document.querySelector('main');
+    if (!main) return;
+    if (articleContainsImage(main, newImage)) {
+      handleSaveArticle({
+        ...selectedArticle,
+        articleImages: mergeUniqueArticleImages(selectedArticle.articleImages, [
+          { ...newImage, role: 'inline' }
+        ])
+      });
+      return;
+    }
     const heading = [...document.querySelectorAll('main h2')]
-      .find((item) => !item.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer'));
-    const caption = newImage.caption || newImage.altText || selectedArticle.focusKeyword;
-    const figure = `<figure data-omfit-section-image="${newImage.id}">
-      <img src="${newImage.url}" alt="${newImage.altText}" loading="lazy" decoding="async" width="1200" height="896" />
-      <figcaption>${caption}</figcaption>
-    </figure>`;
-    if (heading) heading.insertAdjacentHTML('afterend', figure);
-    else main?.insertAdjacentHTML('beforeend', figure);
+      .find((item) => (
+        !item.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer')
+        && !sectionHasImage(item)
+      ));
+    const sectionTitle = heading?.textContent?.trim();
+    const markup = buildArticleImageMarkup({
+      image: newImage,
+      caption: newImage.caption,
+      sectionTitle,
+      articleTitle: selectedArticle.title,
+      focusKeyword: selectedArticle.focusKeyword,
+      existingAltTexts: collectArticleAltTexts(main)
+    });
+    if (heading) heading.insertAdjacentHTML('afterend', markup.html);
+    else main.insertAdjacentHTML('beforeend', markup.html);
+    const inlineImage = {
+      ...newImage,
+      role: 'inline' as const,
+      altText: markup.altText,
+      caption: markup.caption
+    };
     handleSaveArticle({
       ...selectedArticle,
-      contentHtml: main?.innerHTML || `${selectedArticle.contentHtml}${figure}`,
-      articleImages: [
-        ...selectedArticle.articleImages.filter((image) => image.id !== newImage.id),
-        { ...newImage, role: 'inline' }
-      ]
+      contentHtml: main.innerHTML,
+      articleImages: mergeUniqueArticleImages(selectedArticle.articleImages, [inlineImage])
     });
   };
 

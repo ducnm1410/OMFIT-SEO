@@ -21,6 +21,19 @@ interface BrandSettingsProps {
 }
 
 const inputClass = 'mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-3 py-2.5 text-base leading-6 text-[#071827] outline-none transition placeholder:text-slate-400 focus:border-[#0879D9] focus:ring-2 focus:ring-[#0879D9]/10';
+const brandAssetMaxBytes = 10 * 1024 * 1024;
+const brandAssetMimeTypes = {
+  logo: new Set(['image/jpeg', 'image/png', 'image/webp']),
+  guideline: new Set([
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'text/markdown',
+    'text/plain'
+  ])
+};
 
 function createBranch(): BrandBranch {
   return {
@@ -102,6 +115,22 @@ export const BrandSettings: React.FC<BrandSettingsProps> = ({
   ) => {
     const file = event.target.files?.[0];
     if (!file || !draft.id) return;
+    if (file.size > brandAssetMaxBytes) {
+      setMessage('Tệp vượt quá giới hạn 10 MB.');
+      event.target.value = '';
+      return;
+    }
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    const acceptedByExtension = assetType === 'logo'
+      ? ['jpeg', 'jpg', 'png', 'webp'].includes(extension)
+      : ['docx', 'jpeg', 'jpg', 'md', 'pdf', 'png', 'txt', 'webp'].includes(extension);
+    if (!brandAssetMimeTypes[assetType].has(file.type) && !acceptedByExtension) {
+      setMessage(assetType === 'logo'
+        ? 'Logo chỉ hỗ trợ PNG, JPG hoặc WEBP.'
+        : 'Brand guideline chỉ hỗ trợ PDF, DOCX, TXT, Markdown, PNG, JPG hoặc WEBP.');
+      event.target.value = '';
+      return;
+    }
     setIsUploading(assetType);
     setMessage('');
     try {
