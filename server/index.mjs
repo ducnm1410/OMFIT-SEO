@@ -1,21 +1,9 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import crypto from 'node:crypto';
-import { createRequire } from 'node:module';
 import { createClient } from '@supabase/supabase-js';
 
 dotenv.config({ override: true, quiet: true });
-
-const requireServerPackage = createRequire(import.meta.url);
-let sanitizeHtmlPackage;
-
-function getHtmlSanitizer() {
-  if (!sanitizeHtmlPackage) {
-    const loadedPackage = requireServerPackage('sanitize-html');
-    sanitizeHtmlPackage = loadedPackage?.default || loadedPackage;
-  }
-  return sanitizeHtmlPackage;
-}
 
 const app = express();
 const port = Number(process.env.API_PORT || 8787);
@@ -931,6 +919,173 @@ function normalizeArticleMetadata(outline, requestedKeyword = '') {
   };
 }
 
+const generatedHtmlAllowedTags = new Set([
+  'a', 'article', 'aside', 'b', 'blockquote', 'br', 'caption', 'code', 'col',
+  'colgroup', 'div', 'em', 'figcaption', 'figure', 'footer', 'h2', 'h3', 'hr',
+  'i', 'img', 'li', 'main', 'ol', 'p', 'pre', 'section', 'span', 'strong',
+  'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'
+]);
+const generatedHtmlVoidTags = new Set(['br', 'col', 'hr', 'img']);
+const generatedHtmlGlobalAttributes = new Set(['aria-label', 'class', 'id', 'lang']);
+const generatedHtmlTagAttributes = {
+  a: new Set(['href', 'rel', 'target', 'title']),
+  col: new Set(['span', 'width']),
+  figure: new Set(['data-omfit-section-image']),
+  img: new Set(['alt', 'decoding', 'height', 'loading', 'sizes', 'src', 'srcset', 'title', 'width']),
+  td: new Set(['colspan', 'rowspan']),
+  th: new Set(['colspan', 'rowspan', 'scope'])
+};
+const generatedHtmlBlockedContainers = /<\s*(script|style|iframe|object|embed|svg|math|form|template|noscript)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi;
+
+function escapeSanitizedHtmlText(value = '') {
+  return String(value)
+    .replace(/&(?!(?:#[0-9]{1,7}|#x[0-9a-f]{1,6}|[a-z][a-z0-9]{1,31});)/gi, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeSanitizedHtmlAttribute(value = '') {
+  return escapeSanitizedHtmlText(value)
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function decodeUrlEntities(value = '') {
+  return String(value)
+    .replace(/&amp;/gi, '&')
+    .replace(/&colon;/gi, ':')
+    .replace(/&tab;|&newline;/gi, '')
+    .replace(/&#(\d{1,7});?/g, (_match, code) => String.fromCodePoint(Math.min(Number(code), 0x10ffff)))
+    .replace(/&#x([0-9a-f]{1,6});?/gi, (_match, code) => String.fromCodePoint(parseInt(code, 16)));
+}
+
+function sanitizeGeneratedUrl(value, { image = false } = {}) {
+  const decoded = decodeUrlEntities(value).trim();
+  const compact = decoded.replace(/[\u0000-\u0020\u007f-\u009f]+/g, '');
+  if (!compact || compact.startsWith('//') || compact.includes('\\')) return '';
+  if (!image && /^(?:#|\/(?!\/)|\.{1,2}\/|\?)/.test(compact)) return compact;
+  try {
+    const parsed = new URL(compact);
+    const protocols = image
+      ? new Set(['http:', 'https:'])
+      : new Set(['http:', 'https:', 'mailto:', 'tel:']);
+    return protocols.has(parsed.protocol.toLowerCase()) ? compact : '';
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeGeneratedSrcSet(value = '') {
+  const candidates = String(value)
+    .split(',')
+    .map((candidate) => candidate.trim())
+    .filter(Boolean)
+    .map((candidate) => {
+      const [source, descriptor = ''] = candidate.split(/\s+/, 2);
+      const safeSource = sanitizeGeneratedUrl(source, { image: true });
+      const safeDescriptor = /^(?:\d+w|\d+(?:\.\d+)?x)$/.test(descriptor) ? descriptor : '';
+      return safeSource && (!descriptor || safeDescriptor)
+        ? `${safeSource}${safeDescriptor ? ` ${safeDescriptor}` : ''}`
+        : '';
+    })
+    .filter(Boolean);
+  return candidates.join(', ');
+}
+
+function sanitizeGeneratedAttribute(tagName, attributeName, rawValue) {
+  const value = String(rawValue || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  if (attributeName === 'href') return sanitizeGeneratedUrl(value);
+  if (attributeName === 'src') return sanitizeGeneratedUrl(value, { image: true });
+  if (attributeName === 'srcset') return sanitizeGeneratedSrcSet(value);
+  if (attributeName === 'class') {
+    return value
+      .split(/\s+/)
+      .filter((token) => /^[a-z0-9_-]{1,80}$/i.test(token))
+      .slice(0, 20)
+      .join(' ');
+  }
+  if (attributeName === 'id' || attributeName === 'data-omfit-section-image') {
+    return /^[a-z0-9_-]{1,120}$/i.test(value) ? value : '';
+  }
+  if (attributeName === 'lang') {
+    return /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(value) ? value : '';
+  }
+  if (['width', 'height', 'span', 'colspan', 'rowspan'].includes(attributeName)) {
+    const numericValue = Number(value);
+    return Number.isInteger(numericValue) && numericValue > 0 && numericValue <= 10000
+      ? String(numericValue)
+      : '';
+  }
+  if (attributeName === 'loading') return ['eager', 'lazy'].includes(value.toLowerCase()) ? value.toLowerCase() : '';
+  if (attributeName === 'decoding') return ['async', 'auto', 'sync'].includes(value.toLowerCase()) ? value.toLowerCase() : '';
+  if (attributeName === 'target') return ['_blank', '_self'].includes(value.toLowerCase()) ? value.toLowerCase() : '';
+  if (attributeName === 'scope') return ['col', 'colgroup', 'row', 'rowgroup'].includes(value.toLowerCase()) ? value.toLowerCase() : '';
+  if (attributeName === 'rel') {
+    return value
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((token) => ['nofollow', 'noopener', 'noreferrer', 'sponsored', 'ugc'].includes(token))
+      .filter((token, index, rows) => rows.indexOf(token) === index)
+      .join(' ');
+  }
+  if (attributeName === 'sizes') {
+    return /^[a-z0-9\s():.,%+\-/]{1,300}$/i.test(value) ? value : '';
+  }
+  if (['alt', 'aria-label', 'title'].includes(attributeName)) return value.slice(0, 500);
+  return tagName === 'img' ? '' : value.slice(0, 500);
+}
+
+function sanitizeGeneratedTag(rawTag) {
+  if (/^<!--|^<![^-]/.test(rawTag)) return '';
+  const match = rawTag.match(/^<\s*(\/?)\s*([a-z0-9-]+)([\s\S]*?)(\/?)\s*>$/i);
+  if (!match) return escapeSanitizedHtmlText(rawTag);
+  const closing = Boolean(match[1]);
+  const tagName = match[2].toLowerCase();
+  if (!generatedHtmlAllowedTags.has(tagName)) return '';
+  if (closing) return generatedHtmlVoidTags.has(tagName) ? '' : `</${tagName}>`;
+
+  const allowedForTag = generatedHtmlTagAttributes[tagName] || new Set();
+  const attributes = new Map();
+  const attributePattern = /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  let attributeMatch;
+  while ((attributeMatch = attributePattern.exec(match[3])) !== null) {
+    const attributeName = attributeMatch[1].toLowerCase();
+    if (
+      attributeName.startsWith('on')
+      || (!generatedHtmlGlobalAttributes.has(attributeName) && !allowedForTag.has(attributeName))
+    ) continue;
+    const rawValue = attributeMatch[2] ?? attributeMatch[3] ?? attributeMatch[4] ?? '';
+    const safeValue = sanitizeGeneratedAttribute(tagName, attributeName, rawValue);
+    if (safeValue) attributes.set(attributeName, safeValue);
+  }
+  if (tagName === 'a' && attributes.get('target') === '_blank') {
+    attributes.set('rel', 'noopener noreferrer');
+  }
+  const serializedAttributes = [...attributes.entries()]
+    .map(([name, value]) => ` ${name}="${escapeSanitizedHtmlAttribute(value)}"`)
+    .join('');
+  return `<${tagName}${serializedAttributes}${generatedHtmlVoidTags.has(tagName) ? ' />' : '>'}`;
+}
+
+function sanitizeGeneratedHtml(content = '') {
+  let html = String(content || '').replace(/\u0000/g, '');
+  let previousHtml;
+  do {
+    previousHtml = html;
+    html = html.replace(generatedHtmlBlockedContainers, '');
+  } while (html !== previousHtml);
+  html = html
+    .replace(/<\s*\/?\s*(script|style|iframe|object|embed|svg|math|form|template|noscript)\b[^>]*>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  const tokens = html.match(/<[^>]*>|[^<]+|</g) || [];
+  return tokens
+    .map((token) => token.startsWith('<') && token.endsWith('>')
+      ? sanitizeGeneratedTag(token)
+      : escapeSanitizedHtmlText(token))
+    .join('')
+    .trim();
+}
+
 function cleanGeneratedHtml(content) {
   const cleaned = String(content || '')
     .replace(/^```html\s*/i, '')
@@ -941,39 +1096,7 @@ function cleanGeneratedHtml(content) {
     .replace(/<(script|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
     .replace(/\son\w+="[^"]*"/gi, '')
     .trim();
-  const sanitized = getHtmlSanitizer()(cleaned, {
-    allowedTags: [
-      'a', 'article', 'aside', 'b', 'blockquote', 'br', 'caption', 'code', 'col',
-      'colgroup', 'div', 'em', 'figcaption', 'figure', 'footer', 'h2', 'h3', 'hr', 'i', 'img',
-      'li', 'main', 'ol', 'p', 'pre', 'section', 'span', 'strong', 'table', 'tbody',
-      'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'
-    ],
-    allowedAttributes: {
-      '*': ['aria-label', 'class', 'id', 'lang'],
-      a: ['href', 'rel', 'target', 'title'],
-      col: ['span', 'width'],
-      img: ['alt', 'class', 'decoding', 'height', 'loading', 'sizes', 'src', 'srcset', 'title', 'width'],
-      figure: ['class', 'data-omfit-section-image'],
-      td: ['colspan', 'rowspan'],
-      th: ['colspan', 'rowspan', 'scope']
-    },
-    allowedSchemes: ['http', 'https', 'mailto', 'tel'],
-    allowedSchemesByTag: {
-      img: ['http', 'https']
-    },
-    allowProtocolRelative: false,
-    disallowedTagsMode: 'discard',
-    enforceHtmlBoundary: true,
-    transformTags: {
-      a: (tagName, attributes) => {
-        const nextAttributes = { ...attributes };
-        if (nextAttributes.target === '_blank') {
-          nextAttributes.rel = 'noopener noreferrer';
-        }
-        return { tagName, attribs: nextAttributes };
-      }
-    }
-  });
+  const sanitized = sanitizeGeneratedHtml(cleaned);
   return repairGeneratedHtmlText(sanitized);
 }
 
@@ -1976,10 +2099,7 @@ app.post('/api/wordpress/sync-index', requireSupabaseUser, async (request, respo
 
 app.get('/api/health', (_request, response) => {
   const missing = requiredGoogleAdsEnv.filter((name) => !getEnv(name));
-  const sanitizerReady = getHtmlSanitizer()(
-    '<p>ok</p><script>bad</script>',
-    { allowedTags: ['p'], allowedAttributes: {} }
-  ) === '<p>ok</p>';
+  const sanitizerReady = sanitizeGeneratedHtml('<p>ok</p><script>bad</script>') === '<p>ok</p>';
   const contentRequired = [
     'GEMINI_API_KEY',
     'LEONARDO_API_KEY',
@@ -2126,4 +2246,5 @@ if (!process.env.VERCEL) {
   });
 }
 
+export { sanitizeGeneratedHtml };
 export default app;
