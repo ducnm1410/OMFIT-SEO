@@ -22,6 +22,18 @@ function escapeHtml(value = '') {
     .replace(/"/g, '&quot;');
 }
 
+const suspiciousInternalLinkPattern = /(?:nfl|seahawks|quarterback|titans|super-bowl|sam-darnold|geno-smith|nba|baseball|\/\d+-\d+\/?$)/i;
+
+function isSafeInternalLink(urlValue: string) {
+  try {
+    const url = new URL(urlValue, 'https://omfit.com.vn');
+    return url.hostname.replace(/^www\./i, '') === 'omfit.com.vn'
+      && !suspiciousInternalLinkPattern.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function enhanceArticleSeoHtml(
   contentHtml: string,
   focusKeyword: string,
@@ -45,8 +57,11 @@ export function enhanceArticleSeoHtml(
     const contextual = OMFIT_LINKS
       .filter((link) => link.terms.length === 0 || link.terms.some((term) => keyword.includes(term)))
       .slice(0, 3);
-    const selected = suggestedLinks && suggestedLinks.length >= 2
-      ? suggestedLinks.slice(0, 4)
+    const safeSuggestedLinks = (suggestedLinks || [])
+      .filter((link) => isSafeInternalLink(link.url))
+      .filter((link, index, rows) => rows.findIndex((row) => row.url === link.url) === index);
+    const selected = safeSuggestedLinks.length >= 2
+      ? safeSuggestedLinks.slice(0, 4)
       : contextual.length >= 2
         ? contextual
         : OMFIT_LINKS.slice(0, 3);
@@ -120,14 +135,16 @@ export function auditArticle(article: Pick<
   const heading3Count = main?.querySelectorAll('h3').length || 0;
   const h1Count = main?.querySelectorAll('h1').length || 0;
   const imageCount = main?.querySelectorAll('img').length || 0;
-  const internalLinks = [...(main?.querySelectorAll('a[href]') || [])]
+  const allInternalLinks = [...(main?.querySelectorAll('a[href]') || [])]
     .filter((link) => {
       try {
-        return new URL(link.getAttribute('href') || '', 'https://omfit.com.vn').hostname === 'omfit.com.vn';
+        return new URL(link.getAttribute('href') || '', 'https://omfit.com.vn').hostname.replace(/^www\./i, '') === 'omfit.com.vn';
       } catch {
         return false;
       }
     });
+  const internalLinks = allInternalLinks.filter((link) => isSafeInternalLink(link.getAttribute('href') || ''));
+  const unsafeInternalLinks = allInternalLinks.length - internalLinks.length;
   const focusKeyword = normalize(article.focusKeyword);
   const keywordMatches = focusKeyword
     ? plainText.split(focusKeyword).length - 1
@@ -142,8 +159,9 @@ export function auditArticle(article: Pick<
     score -= penalty;
   };
 
-  if (h1Count > 0) add('content_h1', 'error', 'Nội dung không nên có H1 vì tiêu đề WordPress đã là H1.', 12);
-  else add('content_h1', 'success', 'Không lặp H1 bên trong nội dung.');
+  if (h1Count > 1) add('content_h1', 'error', 'Nội dung chỉ được có một H1.', 12);
+  else if (h1Count === 1) add('content_h1', 'success', 'Nội dung có đúng một H1.');
+  else add('content_h1', 'success', 'Hệ thống sẽ tự thêm một H1 từ tiêu đề khi đăng WordPress.');
   if (article.metaTitle.length < 45 || article.metaTitle.length > 60) {
     add('meta_title_length', 'warning', 'Meta title nên nằm trong khoảng 45–60 ký tự.', 8);
   } else add('meta_title_length', 'success', 'Độ dài meta title phù hợp.');
@@ -160,6 +178,9 @@ export function auditArticle(article: Pick<
   if (keywordDensity > 2.5) add('keyword_density', 'warning', 'Mật độ từ khóa cao; cần viết tự nhiên hơn.', 8);
   if (internalLinks.length < 2) add('internal_links', 'warning', 'Nên có ít nhất hai internal link phù hợp.', 8);
   else add('internal_links', 'success', `Đã có ${internalLinks.length} internal link.`);
+  if (unsafeInternalLinks > 0) {
+    add('unsafe_internal_links', 'error', `Có ${unsafeInternalLinks} internal link dùng slug không an toàn hoặc sai chủ đề.`, 15);
+  }
   if (imageCount + (article.articleImages?.length || 0) < 2) {
     add('inline_images', 'warning', 'Bài dài nên có ít nhất hai hình ảnh minh họa.', 8);
   } else add('inline_images', 'success', 'Số lượng ảnh minh họa phù hợp.');
@@ -185,6 +206,7 @@ export function auditArticle(article: Pick<
       heading3Count,
       imageCount,
       internalLinkCount: internalLinks.length,
+      unsafeInternalLinkCount: unsafeInternalLinks,
       keywordDensity: Number(keywordDensity.toFixed(2)),
       averageSentenceWords: Number(averageSentenceWords.toFixed(1))
     }

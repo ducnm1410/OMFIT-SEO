@@ -841,6 +841,44 @@ function cleanGeneratedHtml(content) {
     .trim();
 }
 
+function escapeWordpressHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function prepareWordpressContent(contentHtml, articleTitle) {
+  const safeTitle = escapeWordpressHtml(String(articleTitle || 'Bài viết OMFIT').trim());
+  const withoutTitle = String(contentHtml || '')
+    .replace(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi, '')
+    .trim();
+  return `<h1 class="omfit-article-title">${safeTitle}</h1>\n${withoutTitle}`;
+}
+
+function normalizeWordpressPostTitle(article) {
+  const metaTitle = String(article?.metaTitle || '').replace(/\s+/g, ' ').trim();
+  const title = String(article?.title || '').replace(/\s+/g, ' ').trim();
+  return metaTitle.length >= 35 && metaTitle.length <= 65 ? metaTitle : title;
+}
+
+const suspiciousWordpressSlugPattern = /(?:nfl|seahawks|quarterback|titans|super-bowl|sam-darnold|geno-smith|nba|baseball|\/\d+-\d+\/?$)/i;
+
+function isSafeWordpressIndexEntry(row, siteUrl) {
+  try {
+    const url = new URL(String(row?.link || ''));
+    const expectedHost = new URL(siteUrl).hostname.replace(/^www\./i, '');
+    const actualHost = url.hostname.replace(/^www\./i, '');
+    return actualHost === expectedHost
+      && !suspiciousWordpressSlugPattern.test(`${row?.slug || ''} ${url.pathname}`)
+      && !/^\/(?:wp-admin|wp-json)\b/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 app.post('/api/content/outline', requireSupabaseUser, async (request, response) => {
   try {
     const keyword = String(request.body?.keyword || '').trim();
@@ -977,10 +1015,80 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
     const style = String(request.body?.style || 'Photorealistic 4K').trim();
     const keyword = String(request.body?.keyword || 'omfit-seo').trim();
     const articleId = String(request.body?.articleId || '').trim() || null;
+    const logoAssetId = String(request.body?.logoAssetId || '').trim() || null;
     if (prompt.length < 10 || prompt.length > 1200) {
       return response.status(400).json({ error: 'Mô tả ảnh phải có từ 10 đến 1200 ký tự.' });
     }
+    if (logoAssetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(logoAssetId)) {
+      return response.status(400).json({ error: 'Mã logo không hợp lệ.' });
+    }
+    const supabase = getSupabaseAdmin();
     const brand = await getActiveBrandProfile(request.supabaseUser.id);
+    let logoAsset = null;
+    let leonardoLogoId = null;
+
+    if (logoAssetId) {
+      const { data, error } = await supabase
+        .from('brand_assets')
+        .select('id, name, bucket, storage_path, mime_type')
+        .eq('id', logoAssetId)
+        .eq('owner_id', request.supabaseUser.id)
+        .eq('asset_type', 'logo')
+        .maybeSingle();
+      if (error) throw new ApiError(502, `Không thể đọc logo thương hiệu: ${error.message}`, 'brand_logo_lookup_failed');
+      if (!data) throw new ApiError(400, 'Logo đã chọn không tồn tại hoặc bạn không có quyền sử dụng.', 'brand_logo_invalid');
+      logoAsset = data;
+
+      const { data: logoFile, error: logoDownloadError } = await supabase.storage
+        .from(data.bucket)
+        .download(data.storage_path);
+      if (logoDownloadError || !logoFile) {
+        throw new ApiError(502, `Không thể tải logo thương hiệu: ${logoDownloadError?.message || 'tệp rỗng'}`, 'brand_logo_download_failed');
+      }
+      if (logoFile.size > 10 * 1024 * 1024) {
+        throw new ApiError(413, 'Logo vượt quá giới hạn 10 MB.', 'brand_logo_too_large');
+      }
+
+      const mimeType = data.mime_type || logoFile.type || 'image/png';
+      const extension = mimeType.includes('jpeg') || mimeType.includes('jpg')
+        ? 'jpg'
+        : mimeType.includes('webp') ? 'webp' : 'png';
+      const initResponse = await fetch('https://cloud.leonardo.ai/api/rest/v1/init-image', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({ extension }),
+        signal: AbortSignal.timeout(30_000)
+      });
+      if (!initResponse.ok) {
+        const detail = await initResponse.text();
+        throw new ApiError(502, `Leonardo không thể khởi tạo logo tham chiếu (${initResponse.status}): ${detail.slice(0, 300)}`, 'leonardo_logo_init_failed');
+      }
+      const initPayload = await initResponse.json();
+      const upload = initPayload?.uploadInitImage;
+      if (!upload?.id || !upload?.url || !upload?.fields) {
+        throw new ApiError(502, 'Leonardo không trả về thông tin tải logo tham chiếu.', 'leonardo_logo_upload_missing');
+      }
+
+      const formData = new FormData();
+      const uploadFields = typeof upload.fields === 'string' ? JSON.parse(upload.fields) : upload.fields;
+      Object.entries(uploadFields || {}).forEach(([key, value]) => formData.append(key, String(value)));
+      formData.append('file', logoFile, `brand-logo.${extension}`);
+      const uploadResponse = await fetch(upload.url, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(30_000)
+      });
+      if (!uploadResponse.ok) {
+        const detail = await uploadResponse.text();
+        throw new ApiError(502, `Không thể tải logo lên Leonardo (${uploadResponse.status}): ${detail.slice(0, 300)}`, 'leonardo_logo_upload_failed');
+      }
+      leonardoLogoId = upload.id;
+    }
+
     const styleSuffix = style === 'Modern Tech 3D Render'
       ? 'premium modern 3D render, clean composition, realistic materials'
       : style === 'Corporate Minimalist'
@@ -996,7 +1104,10 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
         branches: brand?.branches || []
       }).slice(0, 2500)}`,
       `Visual rules: ${JSON.stringify(brand?.visual_rules || {})}`,
-      `Avoid: ${[...(brand?.prohibited_elements || []), brand?.negative_prompt || ''].filter(Boolean).join(', ')}`
+      `Avoid: ${[...(brand?.prohibited_elements || []), brand?.negative_prompt || ''].filter(Boolean).join(', ')}`,
+      logoAsset
+        ? `Official logo exception: use the supplied reference image ${logoAsset.name} as the only approved OMFIT logo. Preserve its proportions, colors and recognizable mark, place it naturally, and do not invent or redraw a different logo.`
+        : 'Do not invent or add a brand logo unless explicitly requested.'
     ].join('\n');
     const generationResponse = await fetch('https://cloud.leonardo.ai/api/rest/v2/generations', {
       method: 'POST',
@@ -1013,7 +1124,15 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
           prompt: finalPrompt,
           quantity: 1,
           prompt_enhance: 'OFF',
-          style_ids: ['111dc692-d470-4eec-b791-3475abac4c46']
+          style_ids: ['111dc692-d470-4eec-b791-3475abac4c46'],
+          ...(leonardoLogoId ? {
+            guidances: {
+              image_reference: [{
+                image: { id: leonardoLogoId, type: 'UPLOADED' },
+                strength: 'HIGH'
+              }]
+            }
+          } : {})
         },
         public: false
       }),
@@ -1072,7 +1191,6 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
     const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
     const fileName = `${safeAssetName(keyword)}-${Date.now()}.${extension}`;
     const storagePath = `${request.supabaseUser.id}/${articleId || 'library'}/${fileName}`;
-    const supabase = getSupabaseAdmin();
     const { error: uploadError } = await supabase.storage
       .from('omfit-public-assets')
       .upload(storagePath, imageBytes, { contentType: mimeType, upsert: false });
@@ -1191,7 +1309,10 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
     }
     const config = getWordpressConfig();
     const logs = ['Bắt đầu đồng bộ nội dung và hình ảnh với WordPress.'];
-    let contentHtml = cleanGeneratedHtml(article.contentHtml);
+    let contentHtml = prepareWordpressContent(
+      cleanGeneratedHtml(article.contentHtml),
+      article.title
+    );
     let featuredMediaId;
     if (article.featuredImage) {
       const media = await uploadWordpressMedia(config, article.featuredImage);
@@ -1210,7 +1331,7 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
       (article.tags || []).map((name) => findOrCreateWordpressTerm(config, 'tags', name))
     )).filter(Boolean);
     const postPayload = {
-      title: article.title,
+      title: normalizeWordpressPostTitle(article),
       content: contentHtml,
       excerpt: article.metaDescription || '',
       status,
@@ -1264,6 +1385,7 @@ app.post('/api/wordpress/sync-index', requireSupabaseUser, async (request, respo
       if (!indexResponse.ok) continue;
       const rows = await indexResponse.json();
       for (const row of rows) {
+        if (!isSafeWordpressIndexEntry(row, config.siteUrl)) continue;
         const title = stripWordpressHtml(row.title?.rendered);
         collected.push({
           owner_id: request.supabaseUser.id,
@@ -1280,8 +1402,16 @@ app.post('/api/wordpress/sync-index', requireSupabaseUser, async (request, respo
         });
       }
     }
+    const supabase = getSupabaseAdmin();
+    const { error: deleteError } = await supabase
+      .from('site_content_index')
+      .delete()
+      .eq('owner_id', request.supabaseUser.id);
+    if (deleteError) {
+      throw new ApiError(502, `Không thể làm sạch WordPress index cũ: ${deleteError.message}`, 'wordpress_index_cleanup_failed');
+    }
     if (collected.length > 0) {
-      const { error } = await getSupabaseAdmin()
+      const { error } = await supabase
         .from('site_content_index')
         .upsert(collected, { onConflict: 'owner_id,url' });
       if (error) throw new ApiError(502, `Không thể lưu WordPress index: ${error.message}`, 'wordpress_index_failed');

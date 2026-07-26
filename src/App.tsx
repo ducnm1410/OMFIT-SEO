@@ -314,6 +314,12 @@ export function App() {
               leonardoService={leonardoService}
               currentKeyword={selectedArticle?.focusKeyword || selectedKeyword}
               articleId={selectedArticle?.id}
+              brandProfile={brandProfile}
+              brandAssets={brandAssets}
+              onBrandAssetUploaded={(asset) => setBrandAssets((previous) => [
+                asset,
+                ...previous.filter((item) => item.id !== asset.id)
+              ])}
               onImageGenerated={handleImageGenerated}
               onInsertInline={selectedArticle ? handleInlineImage : undefined}
             />

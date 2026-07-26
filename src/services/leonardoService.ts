@@ -10,11 +10,12 @@ export class LeonardoService {
     referenceImage?: string,
     keyword = 'omfit-seo',
     _modelId = 'nano-banana-2',
-    articleId?: string
+    articleId?: string,
+    logoAssetId?: string
   ): Promise<GeneratedImage> {
     return authenticatedFetch('/api/images/generate', {
       method: 'POST',
-      body: JSON.stringify({ prompt, style, referenceImage, keyword, articleId })
+      body: JSON.stringify({ prompt, style, referenceImage, keyword, articleId, logoAssetId })
     }) as Promise<GeneratedImage>;
   }
 }

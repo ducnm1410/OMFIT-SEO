@@ -426,7 +426,19 @@ export async function syncWordpressIndex() {
 }
 
 export async function suggestInternalLinks(keyword: string) {
-  const terms = keyword.toLocaleLowerCase('vi-VN').split(/\s+/).filter((term) => term.length > 2);
+  const normalizeForMatch = (value: string) => value
+    .toLocaleLowerCase('vi-VN')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const stopWords = new Set(['cho', 'cua', 'voi', 'tai', 'the', 'nao', 'nhung', 'mot', 'cac', 'omfit']);
+  const terms = normalizeForMatch(keyword)
+    .split(/\s+/)
+    .filter((term) => term.length > 2 && !stopWords.has(term));
+  const suspiciousSlug = /(?:nfl|seahawks|quarterback|titans|super-bowl|sam-darnold|geno-smith|nba|baseball|\/\d+-\d+\/?$)/i;
   const { data, error } = await supabase
     .from('site_content_index')
     .select('title,url,keywords,content_type')
@@ -434,15 +446,31 @@ export async function suggestInternalLinks(keyword: string) {
     .limit(200);
   if (error) throw error;
   return (data || [])
+    .filter((row) => {
+      try {
+        const url = new URL(row.url);
+        return url.hostname.replace(/^www\./i, '') === 'omfit.com.vn'
+          && !suspiciousSlug.test(`${url.pathname} ${row.title}`);
+      } catch {
+        return false;
+      }
+    })
     .map((row) => {
-      const haystack = `${row.title} ${(row.keywords || []).join(' ')}`.toLocaleLowerCase('vi-VN');
+      const normalizedTitle = normalizeForMatch(row.title);
+      const haystack = normalizeForMatch(`${row.title} ${(row.keywords || []).join(' ')}`);
+      const matchedTerms = terms.filter((term) => haystack.split(' ').includes(term));
       return {
         title: row.title,
-        url: row.url,
-        score: terms.reduce((sum, term) => sum + (haystack.includes(term) ? 1 : 0), 0)
+        url: row.url.replace(/^https:\/\/www\.omfit\.com\.vn/i, 'https://omfit.com.vn'),
+        score: matchedTerms.reduce(
+          (sum, term) => sum + (normalizedTitle.split(' ').includes(term) ? 3 : 1),
+          0
+        ),
+        matchedTerms: matchedTerms.length
       };
     })
     .sort((a, b) => b.score - a.score)
-    .filter((item, index) => item.score > 0 || index < 3)
+    .filter((item) => item.matchedTerms > 0 && item.score >= 3)
+    .filter((item, index, rows) => rows.findIndex((row) => row.url === item.url) === index)
     .slice(0, 4);
 }
