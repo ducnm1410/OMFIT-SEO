@@ -518,7 +518,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           </div>
 
           {activeView === 'visual' ? (
-            <div className="article-preview bg-[#F8FAFC] rounded-2xl border border-slate-200 min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
+            <div className="article-preview bg-[#110E10] rounded-2xl border border-[#2A3340] min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
               <h1>{title}</h1>
               {article.featuredImage && (
                 <figure className="mb-6 text-center">

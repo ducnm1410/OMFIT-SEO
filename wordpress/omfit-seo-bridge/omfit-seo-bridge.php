@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OMFIT SEO Bridge
  * Description: Technical SEO, Vietnamese article typography, metadata, schema, redirects and sitemaps for OMFIT.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: OMFIT
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 
 define('OMFIT_SEO_CANONICAL_HOST', 'omfit.com.vn');
 define('OMFIT_SEO_SITE_NAME', 'OMFIT Fitness & Wellness');
-define('OMFIT_SEO_BRIDGE_VERSION', '1.0.4');
+define('OMFIT_SEO_BRIDGE_VERSION', '1.0.5');
 
 function omfit_seo_canonical_url($url) {
     $url = preg_replace('#^http://#i', 'https://', (string) $url);
@@ -78,7 +78,6 @@ function omfit_seo_handle_legacy_paths() {
 
     $redirects = array(
         '/career-category/group-trainers' => '/huan-luyen-vien/',
-        '/wdt_careers/therapeutic-yoga-teacher' => '/huan-luyen-vien/',
         '/category/wellness' => '/kien-thuc-wellness/',
         '/service-category/sports-nutrition' => '/che-do-dinh-duong/',
     );
@@ -101,6 +100,7 @@ function omfit_seo_handle_legacy_paths() {
         '/sample-page',
         '/wdt_footers/footer-3',
         '/our-gallery-section',
+        '/wdt_careers/therapeutic-yoga-teacher',
         '/portfolio-category/sound-theraphy',
         '/service-list',
         '/wdt_classes/digital-coaching',
@@ -232,7 +232,7 @@ function omfit_seo_print_single_post_typography() {
         body.single-post article.type-post .entry-content,
         body.single-post article.type-post .post-content,
         body.single-post article.type-post .pxl-post--content {
-            color: #334155 !important;
+            color: #e5e7eb !important;
             font-family: "Be Vietnam Pro", Inter, "Noto Sans", "Segoe UI", Arial, sans-serif !important;
             font-size: 16px !important;
             font-weight: 400 !important;
@@ -252,10 +252,37 @@ function omfit_seo_print_single_post_typography() {
             line-height: 1.75 !important;
         }
 
+        body.single-post .omfit-article-content p,
+        body.single-post .omfit-article-content li,
+        body.single-post .omfit-article-content blockquote,
+        body.single-post .omfit-article-content td,
+        body.single-post .omfit-article-content th {
+            color: #e5e7eb !important;
+        }
+
+        body.single-post .omfit-article-content figcaption {
+            color: #cbd5e1 !important;
+        }
+
+        body.single-post .omfit-article-content blockquote {
+            padding: 18px 20px;
+            border-left: 4px solid #67c1ff;
+            border-radius: 0 12px 12px 0;
+            background: #18232e !important;
+        }
+
+        body.single-post .omfit-article-content p :where(span, strong, b, em),
+        body.single-post .omfit-article-content li :where(span, strong, b, em),
+        body.single-post .omfit-article-content blockquote :where(span, strong, b, em),
+        body.single-post .omfit-article-content td :where(span, strong, b, em),
+        body.single-post .omfit-article-content th :where(span, strong, b, em) {
+            color: inherit !important;
+        }
+
         body.single-post .omfit-article-content h1,
         body.single-post article.type-post h1.omfit-article-title,
         body.single-post article.type-post .entry-content h1 {
-            color: #0f172a !important;
+            color: #f8fafc !important;
             font-size: 32px !important;
             font-weight: 700 !important;
             letter-spacing: -0.02em !important;
@@ -265,7 +292,7 @@ function omfit_seo_print_single_post_typography() {
 
         body.single-post .omfit-article-content h2,
         body.single-post article.type-post .entry-content h2 {
-            color: #0f172a !important;
+            color: #f8fafc !important;
             font-size: 24px !important;
             font-weight: 700 !important;
             letter-spacing: -0.01em !important;
@@ -275,7 +302,7 @@ function omfit_seo_print_single_post_typography() {
 
         body.single-post .omfit-article-content h3,
         body.single-post article.type-post .entry-content h3 {
-            color: #1e293b !important;
+            color: #f8fafc !important;
             font-size: 20px !important;
             font-weight: 600 !important;
             line-height: 1.45 !important;
@@ -287,17 +314,35 @@ function omfit_seo_print_single_post_typography() {
             max-width: 100%;
         }
 
-        body.single-post .omfit-article-content .omfit-related-content {
+        body.single-post .omfit-article-content a {
+            color: #67c1ff !important;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 3px;
+        }
+
+        body.single-post .omfit-article-content .omfit-related-content,
+        body.single-post .omfit-article-content nav[aria-label="Mục lục bài viết"] {
             margin-top: 32px;
             padding: 20px 22px;
-            border: 1px solid #dbeafe;
+            border: 1px solid rgba(103, 193, 255, .35);
             border-radius: 16px;
-            background: #f8fafc;
+            background: #18232e !important;
+            color: #e5e7eb !important;
         }
 
         body.single-post .omfit-article-content .omfit-related-content p,
         body.single-post .omfit-article-content .omfit-related-content li,
-        body.single-post .omfit-article-content .omfit-related-content a {
+        body.single-post .omfit-article-content .omfit-related-content span,
+        body.single-post .omfit-article-content nav[aria-label="Mục lục bài viết"] p,
+        body.single-post .omfit-article-content nav[aria-label="Mục lục bài viết"] li,
+        body.single-post .omfit-article-content nav[aria-label="Mục lục bài viết"] span {
+            color: #e5e7eb !important;
+            font-weight: 400 !important;
+        }
+
+        body.single-post .omfit-article-content .omfit-related-content a,
+        body.single-post .omfit-article-content nav[aria-label="Mục lục bài viết"] a {
+            color: #67c1ff !important;
             font-weight: 400 !important;
         }
 
@@ -375,7 +420,7 @@ function omfit_seo_print_single_post_typography() {
             align-items: center;
             padding: 10px 16px;
             border-radius: 12px;
-            background: #0879d9;
+            background: #076fbd;
             color: #fff !important;
             text-decoration: none;
         }
