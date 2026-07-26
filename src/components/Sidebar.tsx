@@ -9,6 +9,7 @@ import {
   Globe,
   CheckCircle2,
   Activity,
+  Settings2,
   X
 } from 'lucide-react';
 import type { ActiveTab } from '../types';
@@ -34,7 +35,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'generator', label: 'Soạn Bài Viết SEO', icon: FilePenLine, badge: '' },
     { id: 'imagestudio', label: 'Thư Viện Hình Ảnh', icon: ImageIcon, badge: '' },
     { id: 'editor', label: 'Xem & Đăng Bài MCP', icon: Edit3, badge: 'Live' },
-    { id: 'history', label: 'Lịch Sử Đăng Bài', icon: History, badge: '' }
+    { id: 'history', label: 'Lịch Sử Đăng Bài', icon: History, badge: '' },
+    { id: 'settings', label: 'Brand Settings', icon: Settings2, badge: '' }
   ];
 
   return (

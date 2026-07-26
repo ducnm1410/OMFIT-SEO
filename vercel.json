@@ -22,6 +22,21 @@
     },
     "api/keywords/analyze.mjs": {
       "maxDuration": 60
+    },
+    "api/content/outline.mjs": {
+      "maxDuration": 60
+    },
+    "api/content/article.mjs": {
+      "maxDuration": 60
+    },
+    "api/images/generate.mjs": {
+      "maxDuration": 60
+    },
+    "api/wordpress/publish.mjs": {
+      "maxDuration": 60
+    },
+    "api/wordpress/sync-index.mjs": {
+      "maxDuration": 60
     }
   }
 }

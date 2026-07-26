@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import crypto from 'node:crypto';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config({ override: true, quiet: true });
 
@@ -8,7 +9,7 @@ const app = express();
 const port = Number(process.env.API_PORT || 8787);
 
 app.disable('x-powered-by');
-app.use(express.json({ limit: '256kb' }));
+app.use(express.json({ limit: '2mb' }));
 
 const requiredGoogleAdsEnv = [
   'GOOGLE_ADS_CLIENT_ID',
@@ -23,6 +24,20 @@ const oauthStateMaxAgeMs = 10 * 60 * 1000;
 
 function getEnv(name, fallback = '') {
   return String(process.env[name] ?? fallback).trim();
+}
+
+let supabaseAdminClient;
+function getSupabaseAdmin() {
+  if (supabaseAdminClient) return supabaseAdminClient;
+  const url = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
+  const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !serviceRoleKey) {
+    throw new ApiError(503, 'Chưa cấu hình Supabase service role cho kho nội dung.', 'supabase_admin_missing');
+  }
+  supabaseAdminClient = createClient(url, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+  return supabaseAdminClient;
 }
 const oauthSessionMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
 const keywordCache = new Map();
@@ -380,6 +395,44 @@ async function listSelectableGoogleAdsAccounts(accessToken) {
   return [...accounts.values()];
 }
 
+async function resolveGoogleAdsLoginCustomerId(accessToken, customerId) {
+  const apiVersion = getEnv('GOOGLE_ADS_API_VERSION', 'v25');
+  const accessibleCustomerIds = await listAccessibleGoogleAdsCustomers(accessToken);
+
+  for (const managerCustomerId of accessibleCustomerIds) {
+    if (managerCustomerId === customerId) continue;
+    try {
+      const response = await fetch(
+        `https://googleads.googleapis.com/${apiVersion}/customers/${managerCustomerId}/googleAds:searchStream`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'developer-token': getEnv('GOOGLE_ADS_DEVELOPER_TOKEN'),
+            'login-customer-id': managerCustomerId
+          },
+          body: JSON.stringify({
+            query: `SELECT customer_client.id FROM customer_client WHERE customer_client.id = ${customerId}`
+          }),
+          signal: AbortSignal.timeout(20_000)
+        }
+      );
+      if (!response.ok) continue;
+
+      const payload = await response.json();
+      const rows = Array.isArray(payload)
+        ? payload.flatMap((batch) => batch?.results || [])
+        : [];
+      if (rows.length > 0) return managerCustomerId;
+    } catch {
+      // Try the next directly accessible manager.
+    }
+  }
+
+  return '';
+}
+
 function resolveGoogleAdsSession(request) {
   const session = getOAuthSession(request);
   if (session && session.supabaseUserId === request.supabaseUser?.id) {
@@ -397,7 +450,7 @@ function resolveGoogleAdsSession(request) {
   };
 }
 
-async function fetchGoogleKeywordIdeas({ query, industry, pageUrl, request }) {
+async function fetchGoogleKeywordIdeas({ query, industry, pageUrl, request, response }) {
   const auth = resolveGoogleAdsSession(request);
   if (!auth.customerId) {
     throw new ApiError(
@@ -409,45 +462,67 @@ async function fetchGoogleKeywordIdeas({ query, industry, pageUrl, request }) {
 
   const accessToken = await getGoogleAccessToken(auth.refreshToken);
   const customerId = auth.customerId;
-  const loginCustomerId = auth.loginCustomerId
-    || cleanCustomerId(getEnv('GOOGLE_ADS_LOGIN_CUSTOMER_ID'));
+  let loginCustomerId = auth.loginCustomerId;
   const apiVersion = getEnv('GOOGLE_ADS_API_VERSION', 'v25');
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-    'developer-token': getEnv('GOOGLE_ADS_DEVELOPER_TOKEN')
-  };
-
-  if (loginCustomerId) headers['login-customer-id'] = loginCustomerId;
 
   const keywords = [...new Set([query, industry].map((value) => value.trim()).filter(Boolean))];
   const seed = pageUrl
     ? { keywordAndUrlSeed: { keywords, url: pageUrl } }
     : { keywordSeed: { keywords } };
 
-  const response = await fetch(
-    `https://googleads.googleapis.com/${apiVersion}/customers/${customerId}:generateKeywordIdeas`,
-    {
+  const keywordIdeasUrl =
+    `https://googleads.googleapis.com/${apiVersion}/customers/${customerId}:generateKeywordIdeas`;
+  const keywordIdeasBody = JSON.stringify({
+    language: `languageConstants/${getEnv('GOOGLE_ADS_LANGUAGE_ID', '1040')}`,
+    geoTargetConstants: [`geoTargetConstants/${getEnv('GOOGLE_ADS_GEO_TARGET_ID', '2704')}`],
+    includeAdultKeywords: false,
+    keywordPlanNetwork: 'GOOGLE_SEARCH',
+    pageSize: 100,
+    ...seed
+  });
+  const sendKeywordIdeasRequest = (managerCustomerId) => {
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'developer-token': getEnv('GOOGLE_ADS_DEVELOPER_TOKEN')
+    };
+    if (managerCustomerId) headers['login-customer-id'] = managerCustomerId;
+    return fetch(keywordIdeasUrl, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        language: `languageConstants/${getEnv('GOOGLE_ADS_LANGUAGE_ID', '1040')}`,
-        geoTargetConstants: [`geoTargetConstants/${getEnv('GOOGLE_ADS_GEO_TARGET_ID', '2704')}`],
-        includeAdultKeywords: false,
-        keywordPlanNetwork: 'GOOGLE_SEARCH',
-        pageSize: 100,
-        ...seed
-      }),
+      body: keywordIdeasBody,
       signal: AbortSignal.timeout(35_000)
-    }
-  );
+    });
+  };
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Google Ads Keyword Planner trả về lỗi ${response.status}: ${detail.slice(0, 600)}`);
+  let googleResponse = await sendKeywordIdeasRequest(loginCustomerId);
+  if (googleResponse.status === 403) {
+    const resolvedManagerId = await resolveGoogleAdsLoginCustomerId(accessToken, customerId);
+    if (resolvedManagerId && resolvedManagerId !== loginCustomerId) {
+      loginCustomerId = resolvedManagerId;
+      const oauthSession = getOAuthSession(request);
+      if (oauthSession) {
+        saveOAuthSession(request, response, {
+          ...oauthSession,
+          loginCustomerId: resolvedManagerId
+        });
+      }
+      googleResponse = await sendKeywordIdeasRequest(resolvedManagerId);
+    }
   }
 
-  const payload = await response.json();
+  if (!googleResponse.ok) {
+    const detail = await googleResponse.text();
+    console.error('[google-ads-keywords]', {
+      status: googleResponse.status,
+      customerSuffix: customerId.slice(-4),
+      loginCustomerSuffix: loginCustomerId ? loginCustomerId.slice(-4) : 'direct',
+      requestId: googleResponse.headers.get('request-id') || ''
+    });
+    throw new Error(`Google Ads Keyword Planner trả về lỗi ${googleResponse.status}: ${detail.slice(0, 600)}`);
+  }
+
+  const payload = await googleResponse.json();
   return Array.isArray(payload.results) ? payload.results : [];
 }
 
@@ -715,13 +790,527 @@ app.post('/api/auth/google/disconnect', requireSupabaseUser, (request, response)
   return response.json({ ok: true });
 });
 
+async function generateGeminiContent(prompt, responseMimeType = 'text/plain') {
+  const apiKey = getEnv('GEMINI_API_KEY');
+  const model = getEnv('GEMINI_MODEL', 'gemini-2.5-flash');
+  if (!apiKey) throw new ApiError(503, 'Chưa cấu hình Gemini API trên máy chủ.', 'gemini_missing');
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType }
+      }),
+      signal: AbortSignal.timeout(55_000)
+    }
+  );
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new ApiError(502, `Gemini trả về lỗi ${response.status}: ${detail.slice(0, 300)}`, 'gemini_failed');
+  }
+  const payload = await response.json();
+  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new ApiError(502, 'Gemini không trả về nội dung.', 'gemini_empty');
+  return String(text).trim();
+}
+
+async function getActiveBrandProfile(ownerId) {
+  const { data, error } = await getSupabaseAdmin()
+    .from('brand_profiles')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .eq('is_active', true)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new ApiError(502, 'Không thể đọc OMFIT Brand Guideline.', 'brand_profile_failed');
+  return data;
+}
+
+function cleanGeneratedHtml(content) {
+  return String(content || '')
+    .replace(/^```html\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/<h1\b[^>]*>/gi, '<h2>')
+    .replace(/<\/h1>/gi, '</h2>')
+    .replace(/<(script|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .trim();
+}
+
+app.post('/api/content/outline', requireSupabaseUser, async (request, response) => {
+  try {
+    const keyword = String(request.body?.keyword || '').trim();
+    const tone = String(request.body?.tone || 'Chuyên nghiệp, truyền cảm hứng, cân bằng').trim();
+    if (keyword.length < 2 || keyword.length > 120) {
+      return response.status(400).json({ error: 'Từ khóa phải có từ 2 đến 120 ký tự.' });
+    }
+    const brand = await getActiveBrandProfile(request.supabaseUser.id);
+    const text = await generateGeminiContent(
+      `Tạo dàn ý SEO On-Page bằng tiếng Việt cho thương hiệu OMFIT.
+Từ khóa chính: ${keyword}
+Giọng văn: ${tone}
+Brand context (chỉ sử dụng dữ liệu này, không tự tạo claim): ${JSON.stringify({
+        mission: brand?.mission || '',
+        positioning: brand?.positioning || '',
+        audience: brand?.audience || [],
+        voice: brand?.voice || {},
+        approvedClaims: brand?.approved_claims || [],
+        guidelineNotes: String(brand?.guideline_notes || '').slice(0, 4000),
+        companyInfo: brand?.company_info || {},
+        branches: Array.isArray(brand?.branches) ? brand.branches.slice(0, 20) : []
+      })}
+
+Trả về đúng một JSON object:
+{
+  "title": "Tiêu đề H1",
+  "metaTitle": "45 đến 60 ký tự",
+  "metaDescription": "140 đến 160 ký tự",
+  "slug": "slug-khong-dau",
+  "focusKeyword": "${keyword}",
+  "headings": [
+    { "tag": "h2", "text": "Tiêu đề mục", "points": ["Ý chính có ích"] },
+    { "tag": "h3", "text": "Tiêu đề mục con", "points": ["Ý chính có ích"] }
+  ],
+  "faq": [{ "question": "Câu hỏi?", "answer": "Câu trả lời ngắn, không bịa dữ kiện." }]
+}
+
+Bao phủ đúng search intent, cấu trúc heading logic, không nhồi từ khóa và không thêm Markdown.`,
+      'application/json'
+    );
+    const outline = JSON.parse(text);
+    return response.json(outline);
+  } catch (error) {
+    return response.status(error instanceof ApiError ? error.statusCode : 502).json({
+      error: error instanceof Error ? error.message : 'Không thể tạo dàn ý.'
+    });
+  }
+});
+
+app.post('/api/content/article', requireSupabaseUser, async (request, response) => {
+  try {
+    const outline = request.body?.outline;
+    const targetWordCount = clamp(Number(request.body?.targetWordCount || 1500), 800, 2500);
+    if (!outline?.title || !outline?.focusKeyword || !Array.isArray(outline?.headings)) {
+      return response.status(400).json({ error: 'Dàn ý bài viết không hợp lệ.' });
+    }
+    const brand = await getActiveBrandProfile(request.supabaseUser.id);
+    const content = await generateGeminiContent(
+      `Viết bài hoàn chỉnh bằng tiếng Việt dựa đúng trên dàn ý:
+${JSON.stringify(outline)}
+
+OMFIT Brand Guideline:
+${JSON.stringify({
+        mission: brand?.mission || '',
+        positioning: brand?.positioning || '',
+        audience: brand?.audience || [],
+        voice: brand?.voice || {},
+        approvedClaims: brand?.approved_claims || [],
+        prohibitedElements: brand?.prohibited_elements || [],
+        guidelineNotes: String(brand?.guideline_notes || '').slice(0, 4000),
+        companyInfo: brand?.company_info || {},
+        branches: Array.isArray(brand?.branches) ? brand.branches.slice(0, 20) : []
+      })}
+
+Yêu cầu:
+- Khoảng ${targetWordCount} từ, hữu ích và đúng search intent.
+- Trả về HTML semantic fragment, không có html/body và không có H1.
+- Dùng h2, h3, p, ul, ol, blockquote và bảng khi thực sự phù hợp.
+- Mỗi đoạn 2–4 câu; câu rõ ràng, tiếng Việt tự nhiên.
+- Từ khóa xuất hiện tự nhiên ở phần mở đầu, không nhồi nhét.
+- Không tự tạo số liệu, giá, chứng nhận, địa chỉ, cam kết kết quả hoặc lời khuyên y khoa.
+- Không chèn URL, ảnh giả, Markdown hay footer website.
+- Có FAQ dựa trên dàn ý.
+
+Chỉ trả về HTML.`,
+      'text/plain'
+    );
+    const contentHtml = cleanGeneratedHtml(content);
+    const plainText = contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!plainText) throw new ApiError(502, 'Nội dung bài viết trả về rỗng.', 'article_empty');
+    return response.json({
+      id: crypto.randomUUID(),
+      title: outline.title,
+      slug: outline.slug,
+      metaTitle: outline.metaTitle,
+      metaDescription: outline.metaDescription,
+      focusKeyword: outline.focusKeyword,
+      contentHtml,
+      wordCount: plainText.split(' ').filter(Boolean).length,
+      readabilityScore: 0,
+      seoScore: 0,
+      categories: ['Tin Tức OMFIT'],
+      tags: [outline.focusKeyword, 'OMFIT'],
+      articleImages: [],
+      brandProfileId: brand?.id,
+      createdAt: new Date().toISOString(),
+      status: 'draft'
+    });
+  } catch (error) {
+    return response.status(error instanceof ApiError ? error.statusCode : 502).json({
+      error: error instanceof Error ? error.message : 'Không thể tạo bài viết.'
+    });
+  }
+});
+
+function safeAssetName(value, fallback = 'omfit-image') {
+  return String(value || fallback)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || fallback;
+}
+
+app.post('/api/images/generate', requireSupabaseUser, async (request, response) => {
+  try {
+    const apiKey = getEnv('LEONARDO_API_KEY');
+    if (!apiKey) throw new ApiError(503, 'Chưa cấu hình Leonardo API trên máy chủ.', 'leonardo_missing');
+    if (request.body?.referenceImage) {
+      return response.status(400).json({ error: 'Ảnh tham chiếu cần được tải vào Brand Assets trước khi tạo ảnh.' });
+    }
+    const prompt = String(request.body?.prompt || '').trim();
+    const style = String(request.body?.style || 'Photorealistic 4K').trim();
+    const keyword = String(request.body?.keyword || 'omfit-seo').trim();
+    const articleId = String(request.body?.articleId || '').trim() || null;
+    if (prompt.length < 10 || prompt.length > 1200) {
+      return response.status(400).json({ error: 'Mô tả ảnh phải có từ 10 đến 1200 ký tự.' });
+    }
+    const brand = await getActiveBrandProfile(request.supabaseUser.id);
+    const styleSuffix = style === 'Modern Tech 3D Render'
+      ? 'premium modern 3D render, clean composition, realistic materials'
+      : style === 'Corporate Minimalist'
+        ? 'premium minimalist editorial photography, clean composition'
+        : 'photorealistic premium fitness photography, natural light, realistic anatomy';
+    const finalPrompt = [
+      brand?.prompt_template || 'Premium OMFIT fitness and wellness image.',
+      prompt,
+      styleSuffix,
+      `Brand guideline notes: ${String(brand?.guideline_notes || '').slice(0, 2500)}`,
+      `Company and branch context: ${JSON.stringify({
+        companyInfo: brand?.company_info || {},
+        branches: brand?.branches || []
+      }).slice(0, 2500)}`,
+      `Visual rules: ${JSON.stringify(brand?.visual_rules || {})}`,
+      `Avoid: ${[...(brand?.prohibited_elements || []), brand?.negative_prompt || ''].filter(Boolean).join(', ')}`
+    ].join('\n');
+    const generationResponse = await fetch('https://cloud.leonardo.ai/api/rest/v2/generations', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'nano-banana-2',
+        parameters: {
+          width: 1200,
+          height: 896,
+          prompt: finalPrompt,
+          quantity: 1,
+          prompt_enhance: 'OFF',
+          style_ids: ['111dc692-d470-4eec-b791-3475abac4c46']
+        },
+        public: false
+      }),
+      signal: AbortSignal.timeout(30_000)
+    });
+    if (!generationResponse.ok) {
+      const detail = await generationResponse.text();
+      throw new ApiError(502, `Leonardo trả về lỗi ${generationResponse.status}: ${detail.slice(0, 300)}`, 'leonardo_failed');
+    }
+    const generationPayload = await generationResponse.json();
+    const generationId = generationPayload?.generate?.generationId
+      || generationPayload?.generationId
+      || generationPayload?.generation_id
+      || generationPayload?.id
+      || generationPayload?.data?.generate?.generationId
+      || generationPayload?.data?.generationId
+      || generationPayload?.data?.generation_id
+      || generationPayload?.data?.id
+      || generationPayload?.sdGenerationJob?.generationId;
+    if (!generationId) {
+      const detail = generationPayload?.error?.message
+        || generationPayload?.message
+        || JSON.stringify(generationPayload || {}).slice(0, 400);
+      throw new ApiError(
+        502,
+        `Leonardo không khởi tạo được generation: ${detail || 'response rỗng'}`,
+        'leonardo_generation_missing'
+      );
+    }
+
+    let sourceUrl = '';
+    for (let attempt = 0; attempt < 18 && !sourceUrl; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      const pollResponse = await fetch(
+        `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
+        { headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' } }
+      );
+      if (!pollResponse.ok) continue;
+      const pollPayload = await pollResponse.json();
+      if (pollPayload?.generations_by_pk?.status === 'FAILED') {
+        throw new ApiError(502, 'Leonardo không thể tạo ảnh từ prompt này.', 'leonardo_generation_failed');
+      }
+      if (pollPayload?.generations_by_pk?.status === 'COMPLETE') {
+        sourceUrl = pollPayload.generations_by_pk.generated_images?.[0]?.url || '';
+      }
+    }
+    if (!sourceUrl) throw new ApiError(504, 'Leonardo tạo ảnh quá thời gian chờ.', 'leonardo_timeout');
+
+    const imageResponse = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
+    if (!imageResponse.ok) throw new ApiError(502, 'Không thể tải ảnh từ Leonardo CDN.', 'leonardo_download_failed');
+    const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
+    if (imageBytes.byteLength > 10 * 1024 * 1024) {
+      throw new ApiError(413, 'Ảnh Leonardo vượt quá giới hạn 10 MB.', 'image_too_large');
+    }
+    const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+    const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+    const fileName = `${safeAssetName(keyword)}-${Date.now()}.${extension}`;
+    const storagePath = `${request.supabaseUser.id}/${articleId || 'library'}/${fileName}`;
+    const supabase = getSupabaseAdmin();
+    const { error: uploadError } = await supabase.storage
+      .from('omfit-public-assets')
+      .upload(storagePath, imageBytes, { contentType: mimeType, upsert: false });
+    if (uploadError) throw new ApiError(502, `Không thể lưu ảnh vào Supabase: ${uploadError.message}`, 'image_storage_failed');
+    const { data: publicUrlData } = supabase.storage
+      .from('omfit-public-assets')
+      .getPublicUrl(storagePath);
+    const altText = `OMFIT - ${keyword}`;
+    const { data: media, error: mediaError } = await supabase
+      .from('media_assets')
+      .insert({
+        owner_id: request.supabaseUser.id,
+        article_id: articleId,
+        brand_profile_id: brand?.id || null,
+        provider: 'leonardo',
+        provider_generation_id: generationId,
+        model: 'nano-banana-2',
+        bucket: 'omfit-public-assets',
+        storage_path: storagePath,
+        public_url: publicUrlData.publicUrl,
+        source_url: sourceUrl,
+        mime_type: mimeType,
+        bytes: imageBytes.byteLength,
+        file_name: fileName,
+        alt_text: altText,
+        prompt: finalPrompt,
+        negative_prompt: brand?.negative_prompt || '',
+        style,
+        status: 'approved',
+        metadata: { width: 1200, height: 896, brandVersion: brand?.version || 1 }
+      })
+      .select('*')
+      .single();
+    if (mediaError) throw new ApiError(502, `Không thể lưu metadata ảnh: ${mediaError.message}`, 'media_metadata_failed');
+    return response.json({
+      id: media.id,
+      url: media.public_url,
+      prompt: media.prompt,
+      altText: media.alt_text,
+      fileName: media.file_name,
+      style: media.style,
+      source: 'leonardo-nano-banana-2',
+      storagePath: media.storage_path,
+      providerGenerationId: generationId
+    });
+  } catch (error) {
+    return response.status(error instanceof ApiError ? error.statusCode : 502).json({
+      error: error instanceof Error ? error.message : 'Không thể tạo và lưu ảnh.'
+    });
+  }
+});
+
+function getWordpressConfig() {
+  const siteUrl = (getEnv('WP_SITE_URL') || getEnv('VITE_WP_SITE_URL', 'https://omfit.com.vn')).replace(/\/+$/, '');
+  const username = getEnv('WP_USERNAME') || getEnv('VITE_WP_USERNAME');
+  const appPassword = getEnv('WP_APP_PASSWORD') || getEnv('VITE_WP_APP_PASSWORD');
+  if (!username || !appPassword) {
+    throw new ApiError(503, 'Chưa cấu hình WordPress credentials trên máy chủ.', 'wordpress_missing');
+  }
+  return {
+    siteUrl,
+    authHeader: `Basic ${Buffer.from(`${username}:${appPassword}`).toString('base64')}`
+  };
+}
+
+async function uploadWordpressMedia(config, image) {
+  const sourceUrl = String(image?.url || '').trim();
+  if (!sourceUrl) return null;
+  const sourceResponse = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!sourceResponse.ok) throw new Error(`Không thể tải ảnh ${image.fileName || ''}.`);
+  const blob = await sourceResponse.blob();
+  const formData = new FormData();
+  formData.append('file', blob, image.fileName || `omfit-${Date.now()}.jpg`);
+  formData.append('alt_text', image.altText || '');
+  formData.append('caption', image.caption || '');
+  const mediaResponse = await fetch(`${config.siteUrl}/wp-json/wp/v2/media`, {
+    method: 'POST',
+    headers: { Authorization: config.authHeader },
+    body: formData,
+    signal: AbortSignal.timeout(45_000)
+  });
+  if (!mediaResponse.ok) {
+    const detail = await mediaResponse.text();
+    throw new Error(`WordPress upload ảnh lỗi ${mediaResponse.status}: ${detail.slice(0, 250)}`);
+  }
+  return mediaResponse.json();
+}
+
+async function findOrCreateWordpressTerm(config, type, name) {
+  const endpoint = type === 'categories' ? 'categories' : 'tags';
+  const searchResponse = await fetch(
+    `${config.siteUrl}/wp-json/wp/v2/${endpoint}?search=${encodeURIComponent(name)}&per_page=10`,
+    { headers: { Authorization: config.authHeader }, signal: AbortSignal.timeout(20_000) }
+  );
+  if (searchResponse.ok) {
+    const rows = await searchResponse.json();
+    const exact = rows.find((row) => String(row.name).toLocaleLowerCase('vi-VN') === name.toLocaleLowerCase('vi-VN'));
+    if (exact) return exact.id;
+  }
+  const createResponse = await fetch(`${config.siteUrl}/wp-json/wp/v2/${endpoint}`, {
+    method: 'POST',
+    headers: { Authorization: config.authHeader, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+    signal: AbortSignal.timeout(20_000)
+  });
+  if (!createResponse.ok) return 0;
+  return (await createResponse.json()).id || 0;
+}
+
+app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response) => {
+  try {
+    const article = request.body?.article;
+    const status = request.body?.status === 'draft' ? 'draft' : 'publish';
+    if (!article?.id || !article?.title || !article?.contentHtml) {
+      return response.status(400).json({ error: 'Bài viết không hợp lệ.' });
+    }
+    const config = getWordpressConfig();
+    const logs = ['Bắt đầu đồng bộ nội dung và hình ảnh với WordPress.'];
+    let contentHtml = cleanGeneratedHtml(article.contentHtml);
+    let featuredMediaId;
+    if (article.featuredImage) {
+      const media = await uploadWordpressMedia(config, article.featuredImage);
+      featuredMediaId = media?.id;
+      logs.push('Đã upload featured image.');
+    }
+    for (const image of Array.isArray(article.articleImages) ? article.articleImages : []) {
+      const media = await uploadWordpressMedia(config, image);
+      if (media?.source_url && image.url) contentHtml = contentHtml.split(image.url).join(media.source_url);
+    }
+    if (article.articleImages?.length) logs.push(`Đã upload ${article.articleImages.length} ảnh nội dung.`);
+    const categoryIds = (await Promise.all(
+      (article.categories || []).map((name) => findOrCreateWordpressTerm(config, 'categories', name))
+    )).filter(Boolean);
+    const tagIds = (await Promise.all(
+      (article.tags || []).map((name) => findOrCreateWordpressTerm(config, 'tags', name))
+    )).filter(Boolean);
+    const postPayload = {
+      title: article.title,
+      content: contentHtml,
+      excerpt: article.metaDescription || '',
+      status,
+      slug: article.slug,
+      categories: categoryIds,
+      tags: tagIds,
+      ...(featuredMediaId ? { featured_media: featuredMediaId } : {})
+    };
+    const postUrl = article.wpPostId
+      ? `${config.siteUrl}/wp-json/wp/v2/posts/${article.wpPostId}`
+      : `${config.siteUrl}/wp-json/wp/v2/posts`;
+    const postResponse = await fetch(postUrl, {
+      method: 'POST',
+      headers: { Authorization: config.authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(postPayload),
+      signal: AbortSignal.timeout(55_000)
+    });
+    if (!postResponse.ok) {
+      const detail = await postResponse.text();
+      throw new ApiError(502, `WordPress trả về lỗi ${postResponse.status}: ${detail.slice(0, 400)}`, 'wordpress_publish_failed');
+    }
+    const post = await postResponse.json();
+    logs.push(status === 'publish' ? 'Đã xuất bản bài viết.' : 'Đã lưu bản nháp WordPress.');
+    return response.json({
+      postId: post.id,
+      postUrl: post.link,
+      status: post.status,
+      featuredMediaId,
+      logs
+    });
+  } catch (error) {
+    return response.status(error instanceof ApiError ? error.statusCode : 502).json({
+      error: error instanceof Error ? error.message : 'Không thể đăng bài lên WordPress.'
+    });
+  }
+});
+
+function stripWordpressHtml(value) {
+  return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+app.post('/api/wordpress/sync-index', requireSupabaseUser, async (request, response) => {
+  try {
+    const config = getWordpressConfig();
+    const collected = [];
+    for (const contentType of ['posts', 'pages']) {
+      const indexResponse = await fetch(
+        `${config.siteUrl}/wp-json/wp/v2/${contentType}?per_page=100&status=publish&_fields=id,link,slug,title,excerpt,status,modified`,
+        { headers: { Authorization: config.authHeader }, signal: AbortSignal.timeout(30_000) }
+      );
+      if (!indexResponse.ok) continue;
+      const rows = await indexResponse.json();
+      for (const row of rows) {
+        const title = stripWordpressHtml(row.title?.rendered);
+        collected.push({
+          owner_id: request.supabaseUser.id,
+          wp_post_id: row.id,
+          content_type: contentType === 'posts' ? 'post' : 'page',
+          title,
+          url: row.link,
+          slug: row.slug,
+          excerpt: stripWordpressHtml(row.excerpt?.rendered),
+          keywords: title.toLocaleLowerCase('vi-VN').split(/\s+/).filter((word) => word.length > 3),
+          status: row.status || 'publish',
+          wp_modified_at: row.modified ? new Date(`${row.modified}Z`).toISOString() : null,
+          indexed_at: new Date().toISOString()
+        });
+      }
+    }
+    if (collected.length > 0) {
+      const { error } = await getSupabaseAdmin()
+        .from('site_content_index')
+        .upsert(collected, { onConflict: 'owner_id,url' });
+      if (error) throw new ApiError(502, `Không thể lưu WordPress index: ${error.message}`, 'wordpress_index_failed');
+    }
+    return response.json({ indexed: collected.length });
+  } catch (error) {
+    return response.status(error instanceof ApiError ? error.statusCode : 502).json({
+      error: error instanceof Error ? error.message : 'Không thể đồng bộ WordPress index.'
+    });
+  }
+});
+
 app.get('/api/health', (_request, response) => {
   const missing = requiredGoogleAdsEnv.filter((name) => !getEnv(name));
+  const contentRequired = [
+    'GEMINI_API_KEY',
+    'LEONARDO_API_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'WP_USERNAME',
+    'WP_APP_PASSWORD'
+  ];
+  const contentMissing = contentRequired.filter((name) => !getEnv(name));
   response.json({
     ok: true,
     googleAdsConfigured: missing.length === 0,
-    modelConfigured: Boolean(process.env.GEMINI_API_KEY),
-    missing
+    modelConfigured: Boolean(getEnv('GEMINI_API_KEY')),
+    contentPlatformConfigured: contentMissing.length === 0,
+    missing,
+    contentMissing
   });
 });
 
@@ -760,7 +1349,7 @@ app.post('/api/keywords/analyze', requireSupabaseUser, async (request, response)
       });
     }
 
-    const ideas = await fetchGoogleKeywordIdeas({ query, industry, pageUrl, request });
+    const ideas = await fetchGoogleKeywordIdeas({ query, industry, pageUrl, request, response });
     const maxVolume = Math.max(
       0,
       ...ideas.map((item) => Number(item.keywordIdeaMetrics?.avgMonthlySearches || 0))

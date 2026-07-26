@@ -9,18 +9,35 @@ import { SeoContentGenerator } from './components/SeoContentGenerator';
 import { ImageStudio } from './components/ImageStudio';
 import { LiveEditorPublisher } from './components/LiveEditorPublisher';
 import { PostHistory } from './components/PostHistory';
-import type { ActiveTab, ApiSettings, GeneratedArticle, GeneratedImage } from './types';
+import { BrandSettings } from './components/BrandSettings';
+import type {
+  ActiveTab,
+  ApiSettings,
+  BrandAsset,
+  BrandProfile,
+  GeneratedArticle,
+  GeneratedImage
+} from './types';
 import { GeminiService } from './services/geminiService';
 import { LeonardoService } from './services/leonardoService';
 import { WordpressMcpService } from './services/wordpressMcpService';
 import { disconnectGoogleAds } from './services/keywordResearchService';
 import { supabase } from './lib/supabase';
+import {
+  ensureBrandProfile,
+  loadBrandAssets,
+  loadArticles,
+  saveArticle,
+  suggestInternalLinks,
+  syncWordpressIndex
+} from './services/contentRepository';
+import { auditArticle, enhanceArticleSeoHtml } from './services/seoAuditService';
 
 export function App() {
   const [session, setSession] = useState<Session | null>();
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'editor', 'history'];
+    const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'editor', 'history', 'settings'];
     return allowedTabs.includes(requestedTab as ActiveTab) ? requestedTab as ActiveTab : 'overview';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -34,10 +51,10 @@ export function App() {
   }, []);
 
   const [settings] = useState<ApiSettings>({
-    geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
-    leonardoApiKey: import.meta.env.VITE_LEONARDO_API_KEY || '',
+    geminiApiKey: '',
+    leonardoApiKey: '',
     wpSiteUrl: import.meta.env.VITE_WP_SITE_URL || 'https://omfit.com.vn',
-    wpMcpConnected: Boolean(import.meta.env.VITE_WP_USERNAME && import.meta.env.VITE_WP_APP_PASSWORD),
+    wpMcpConnected: true,
     defaultStatus: 'publish',
     defaultAuthor: 'OMFIT Admin'
   });
@@ -49,17 +66,134 @@ export function App() {
   const [articles, setArticles] = useState<GeneratedArticle[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<GeneratedArticle | null>(null);
   const [selectedKeyword, setSelectedKeyword] = useState('');
+  const [brandProfile, setBrandProfile] = useState<BrandProfile | null>(null);
+  const [brandAssets, setBrandAssets] = useState<BrandAsset[]>([]);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    void Promise.all([loadArticles(), ensureBrandProfile()])
+      .then(async ([storedArticles, brand]) => {
+        if (cancelled) return;
+        const assets = brand.id ? await loadBrandAssets(brand.id) : [];
+        if (cancelled) return;
+        setArticles(storedArticles);
+        setBrandProfile(brand);
+        setBrandAssets(assets);
+        setSelectedArticle((current) => (
+          current ? storedArticles.find((article) => article.id === current.id) || null : null
+        ));
+      })
+      .catch((error) => console.error('Không thể tải kho bài viết:', error));
+    void syncWordpressIndex().catch((error) => console.error('Không thể đồng bộ WordPress index:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
+
+  const prepareArticle = (
+    article: GeneratedArticle,
+    profileOverride: BrandProfile | null = brandProfile
+  ) => {
+    const logoUrl = brandAssets.find((asset) => asset.assetType === 'logo')?.url;
+    const contentHtml = enhanceArticleSeoHtml(
+      article.contentHtml,
+      article.focusKeyword,
+      undefined,
+      profileOverride,
+      logoUrl
+    );
+    const plainText = contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const prepared = {
+      ...article,
+      contentHtml,
+      wordCount: plainText.split(' ').filter(Boolean).length,
+      updatedAt: new Date().toISOString()
+    };
+    const audit = auditArticle(prepared);
+    return {
+      article: {
+        ...prepared,
+        seoScore: audit.score,
+        readabilityScore: audit.readabilityScore,
+        seoIssues: audit.issues
+      },
+      audit
+    };
+  };
 
   const handleArticleGenerated = (newArticle: GeneratedArticle) => {
-    setArticles((previous) => [newArticle, ...previous]);
-    setSelectedArticle(newArticle);
+    void (async () => {
+      const brand = await ensureBrandProfile();
+      setBrandProfile(brand);
+      const suggestedLinks = await suggestInternalLinks(newArticle.focusKeyword).catch(() => []);
+      const prepared = prepareArticle({
+        ...newArticle,
+        brandProfileId: brand.id,
+        contentHtml: enhanceArticleSeoHtml(
+          newArticle.contentHtml,
+          newArticle.focusKeyword,
+          suggestedLinks,
+          brand,
+          brandAssets.find((asset) => asset.assetType === 'logo')?.url
+        )
+      }, brand);
+      await saveArticle(prepared.article, prepared.audit);
+      setArticles((previous) => [prepared.article, ...previous.filter((item) => item.id !== prepared.article.id)]);
+      setSelectedArticle(prepared.article);
+      const document = new DOMParser().parseFromString(
+        `<main>${prepared.article.contentHtml}</main>`,
+        'text/html'
+      );
+      const headings = [...document.querySelectorAll('main > h2')]
+        .filter((heading) => !heading.closest('.omfit-related-content, .omfit-article-cta'))
+        .slice(0, 2);
+      const generatedImages: GeneratedImage[] = [];
+      for (const heading of headings) {
+        try {
+          const sectionTitle = heading.textContent?.trim() || prepared.article.focusKeyword;
+          const image = await leonardoService.generateImage(
+            `Minh họa cho chủ đề "${sectionTitle}" trong bài viết "${prepared.article.title}". Hình ảnh thực tế tại không gian fitness và wellness cao cấp, chuyển động an toàn, không có chữ trong ảnh.`,
+            'Photorealistic 4K',
+            undefined,
+            prepared.article.focusKeyword,
+            'nano-banana-2',
+            prepared.article.id
+          );
+          const inlineImage = { ...image, role: 'inline' as const, caption: sectionTitle };
+          generatedImages.push(inlineImage);
+          heading.insertAdjacentHTML(
+            'afterend',
+            `<figure><img src="${image.url}" alt="${image.altText}" loading="lazy" decoding="async" /><figcaption>${sectionTitle}</figcaption></figure>`
+          );
+        } catch (error) {
+          console.error('Không thể tự động tạo ảnh cho section:', error);
+        }
+      }
+      if (generatedImages.length > 0) {
+        const main = document.querySelector('main');
+        const withImages = prepareArticle({
+          ...prepared.article,
+          contentHtml: main?.innerHTML || prepared.article.contentHtml,
+          articleImages: generatedImages
+        });
+        await saveArticle(withImages.article, withImages.audit);
+        setArticles((previous) => previous.map((item) => (
+          item.id === withImages.article.id ? withImages.article : item
+        )));
+        setSelectedArticle(withImages.article);
+      }
+    })().catch((error) => console.error('Không thể lưu bài viết mới:', error));
   };
 
   const handleSaveArticle = (updatedArticle: GeneratedArticle) => {
+    const prepared = prepareArticle(updatedArticle);
     setArticles((previous) => previous.map((article) => (
-      article.id === updatedArticle.id ? updatedArticle : article
+      article.id === prepared.article.id ? prepared.article : article
     )));
-    setSelectedArticle(updatedArticle);
+    setSelectedArticle(prepared.article);
+    void saveArticle(prepared.article, prepared.audit)
+      .catch((error) => console.error('Không thể lưu bài viết:', error));
   };
 
   const handleImageGenerated = (newImage: GeneratedImage) => {
@@ -67,6 +201,32 @@ export function App() {
     handleSaveArticle({
       ...selectedArticle,
       featuredImage: newImage
+    });
+  };
+
+  const handleInlineImage = (newImage: GeneratedImage) => {
+    if (!selectedArticle) return;
+    const document = new DOMParser().parseFromString(
+      `<main>${selectedArticle.contentHtml}</main>`,
+      'text/html'
+    );
+    const main = document.querySelector('main');
+    const heading = [...document.querySelectorAll('main h2')]
+      .find((item) => !item.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer'));
+    const caption = newImage.caption || newImage.altText || selectedArticle.focusKeyword;
+    const figure = `<figure data-omfit-section-image="${newImage.id}">
+      <img src="${newImage.url}" alt="${newImage.altText}" loading="lazy" decoding="async" width="1200" height="896" />
+      <figcaption>${caption}</figcaption>
+    </figure>`;
+    if (heading) heading.insertAdjacentHTML('afterend', figure);
+    else main?.insertAdjacentHTML('beforeend', figure);
+    handleSaveArticle({
+      ...selectedArticle,
+      contentHtml: main?.innerHTML || `${selectedArticle.contentHtml}${figure}`,
+      articleImages: [
+        ...selectedArticle.articleImages.filter((image) => image.id !== newImage.id),
+        { ...newImage, role: 'inline' }
+      ]
     });
   };
 
@@ -80,6 +240,8 @@ export function App() {
     setArticles([]);
     setSelectedArticle(null);
     setSelectedKeyword('');
+    setBrandProfile(null);
+    setBrandAssets([]);
     setActiveTab('overview');
   };
 
@@ -151,7 +313,9 @@ export function App() {
             <ImageStudio
               leonardoService={leonardoService}
               currentKeyword={selectedArticle?.focusKeyword || selectedKeyword}
+              articleId={selectedArticle?.id}
               onImageGenerated={handleImageGenerated}
+              onInsertInline={selectedArticle ? handleInlineImage : undefined}
             />
           )}
 
@@ -159,6 +323,7 @@ export function App() {
             <LiveEditorPublisher
               article={selectedArticle}
               wpService={wpService}
+              leonardoService={leonardoService}
               onSaveArticle={handleSaveArticle}
               setActiveTab={setActiveTab}
             />
@@ -172,6 +337,18 @@ export function App() {
                 setActiveTab('editor');
               }}
               setActiveTab={setActiveTab}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <BrandSettings
+              profile={brandProfile}
+              assets={brandAssets}
+              onProfileSaved={setBrandProfile}
+              onAssetUploaded={(asset) => setBrandAssets((previous) => [
+                asset,
+                ...previous.filter((item) => item.id !== asset.id)
+              ])}
             />
           )}
         </main>

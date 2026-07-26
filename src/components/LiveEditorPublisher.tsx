@@ -21,10 +21,14 @@ import {
 import confetti from 'canvas-confetti';
 import type { GeneratedArticle, GeneratedImage, ActiveTab } from '../types';
 import { WordpressMcpService } from '../services/wordpressMcpService';
+import { LeonardoService } from '../services/leonardoService';
+import { uploadMediaFile } from '../services/contentRepository';
+import { ArticleImagePackage } from './ArticleImagePackage';
 
 interface LiveEditorPublisherProps {
   article: GeneratedArticle | null;
   wpService: WordpressMcpService;
+  leonardoService: LeonardoService;
   onSaveArticle: (updatedArticle: GeneratedArticle) => void;
   setActiveTab: (tab: ActiveTab) => void;
 }
@@ -32,6 +36,7 @@ interface LiveEditorPublisherProps {
 export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   article,
   wpService,
+  leonardoService,
   onSaveArticle,
   setActiveTab
 }) => {
@@ -71,48 +76,46 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   const bodyImageInputRef = useRef<HTMLInputElement>(null);
 
   // Handle direct file upload for Featured Image from local device
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const fileBase64 = reader.result as string;
-        const cleanFileName = (file.name || `${slug}-featured-${Date.now()}`)
-          .toLowerCase()
-          .replace(/[^a-z0-9.]/g, '-');
-
+      try {
+        const uploaded = await uploadMediaFile(file, article.id);
         const newImage: GeneratedImage = {
-          id: 'img-upload-' + Date.now(),
-          url: fileBase64,
-          prompt: `Ảnh tự tải lên cho bài viết: ${title}`,
-          altText: article.title || 'Ảnh đại diện OMFIT',
-          fileName: cleanFileName,
-          style: 'Direct Upload',
-          source: 'upload'
+          ...uploaded,
+          altText: article.title || uploaded.altText || 'Ảnh đại diện OMFIT',
+          role: 'featured'
         };
-
         const updatedArticle = {
           ...article,
           featuredImage: newImage
         };
         onSaveArticle(updatedArticle);
-      };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        console.error('Không thể tải featured image lên kho OMFIT:', error);
+      }
     }
   };
 
   // Handle uploading an image directly into body content
-  const handleBodyImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBodyImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const fileBase64 = reader.result as string;
-        const altText = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-        const imgHtml = `\n<figure class="my-6 text-center">\n  <img src="${fileBase64}" alt="${altText}" class="w-full rounded-2xl border border-slate-200 shadow-sm mx-auto my-4 object-cover" />\n  <figcaption class="text-xs text-slate-500 italic mt-2">${altText}</figcaption>\n</figure>\n`;
-        setContentHtml((prev) => prev + imgHtml);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const uploaded = await uploadMediaFile(file, article.id);
+        const image = { ...uploaded, role: 'inline' as const };
+        const altText = uploaded.altText || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        const imgHtml = `\n<figure>\n  <img src="${uploaded.url}" alt="${altText}" loading="lazy" decoding="async" />\n  <figcaption>${altText}</figcaption>\n</figure>\n`;
+        const nextContent = `${contentHtml}${imgHtml}`;
+        setContentHtml(nextContent);
+        onSaveArticle({
+          ...article,
+          contentHtml: nextContent,
+          articleImages: [...article.articleImages, image]
+        });
+      } catch (error) {
+        console.error('Không thể tải ảnh nội dung lên kho OMFIT:', error);
+      }
     }
   };
 
@@ -135,6 +138,31 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
       featuredImage: undefined
     };
     onSaveArticle(updatedArticle);
+  };
+
+  const handleSaveDraft = () => {
+    onSaveArticle({
+      ...article,
+      title,
+      metaTitle,
+      metaDescription,
+      slug,
+      focusKeyword,
+      contentHtml,
+      status: 'draft'
+    });
+  };
+
+  const handleImagePackageApply = (updatedArticle: GeneratedArticle) => {
+    setContentHtml(updatedArticle.contentHtml);
+    onSaveArticle({
+      ...updatedArticle,
+      title,
+      metaTitle,
+      metaDescription,
+      slug,
+      focusKeyword
+    });
   };
 
   const handlePublish = async () => {
@@ -165,8 +193,9 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
 
       onSaveArticle({
         ...currentArticleState,
-        status: 'published',
-        wpPostId: result.postId
+        status: postStatus === 'publish' ? 'published' : 'draft',
+        wpPostId: result.postId,
+        wpPostUrl: result.postUrl
       });
       
       window.alert('🎉 Đăng bài thành công lên website omfit.com.vn!');
@@ -193,6 +222,13 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            className="px-4 py-2.5 rounded-xl border border-[#0879D9]/25 bg-white text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF]"
+          >
+            Lưu bản nháp
+          </button>
           <select
             value={postStatus}
             onChange={(e) => setPostStatus(e.target.value as 'draft' | 'publish')}
@@ -220,6 +256,13 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           </button>
         </div>
       </div>
+
+      <ArticleImagePackage
+        article={article}
+        contentHtml={contentHtml}
+        leonardoService={leonardoService}
+        onApplyArticle={handleImagePackageApply}
+      />
 
       {/* Editor Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -434,8 +477,8 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           </div>
 
           {activeView === 'visual' ? (
-            <div className="p-6 bg-[#F8FAFC] rounded-2xl border border-slate-200 min-h-[450px] prose-custom overflow-y-auto max-h-[600px]">
-              <h1 className="text-3xl font-black text-[#071827] mb-6">{title}</h1>
+            <div className="article-preview bg-[#F8FAFC] rounded-2xl border border-slate-200 min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
+              <h1>{title}</h1>
               {article.featuredImage && (
                 <figure className="mb-6 text-center">
                   <img
@@ -449,6 +492,16 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                 </figure>
               )}
               <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
+              {article.seoIssues && article.seoIssues.some((issue) => issue.level !== 'success') && (
+                <aside className="seo-audit-notes">
+                  <strong>Các mục cần kiểm tra trước khi xuất bản</strong>
+                  <ul>
+                    {article.seoIssues
+                      .filter((issue) => issue.level !== 'success')
+                      .map((issue) => <li key={issue.code}>{issue.message}</li>)}
+                  </ul>
+                </aside>
+              )}
             </div>
           ) : (
             <textarea

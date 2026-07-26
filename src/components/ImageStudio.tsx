@@ -2,17 +2,22 @@ import React, { useState, useRef } from 'react';
 import { Image as ImageIcon, Upload, ImagePlus, CheckCircle2, Tag, Activity, Trash2, ArrowRight } from 'lucide-react';
 import type { GeneratedImage } from '../types';
 import { LeonardoService } from '../services/leonardoService';
+import { uploadMediaFile } from '../services/contentRepository';
 
 interface ImageStudioProps {
   leonardoService: LeonardoService;
   currentKeyword: string;
+  articleId?: string;
   onImageGenerated: (image: GeneratedImage) => void;
+  onInsertInline?: (image: GeneratedImage) => void;
 }
 
 export const ImageStudio: React.FC<ImageStudioProps> = ({
   leonardoService,
   currentKeyword,
-  onImageGenerated
+  articleId,
+  onImageGenerated,
+  onInsertInline
 }) => {
   // Only using Leonardo Banana 2
   const [prompt, setPrompt] = useState(
@@ -40,31 +45,20 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
   };
 
   // Handle direct file upload from computer (Direct Custom Image Upload)
-  const handleDirectCustomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDirectCustomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const fileBase64 = reader.result as string;
-        const cleanFileName = (file.name || `${currentKeyword || 'omfit'}-custom-${Date.now()}`)
-          .toLowerCase()
-          .replace(/[^a-z0-9.]/g, '-');
-
-        const customImage: GeneratedImage = {
-          id: 'img-upload-' + Date.now(),
-          url: fileBase64,
-          prompt: `Ảnh tự tải lên từ máy tính (${file.name})`,
-          altText: `OMFIT - ${currentKeyword || 'Hình ảnh thương hiệu'}: ${file.name.replace(/\.[^/.]+$/, '')}`,
-          fileName: cleanFileName,
-          style: 'Direct Device Upload',
-          source: 'upload'
-        };
-
-        setGeneratedImages([customImage, ...generatedImages]);
+      setIsGenerating(true);
+      try {
+        const customImage = await uploadMediaFile(file, articleId);
+        setGeneratedImages((previous) => [customImage, ...previous]);
         setSelectedImage(customImage);
         onImageGenerated(customImage);
-      };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        console.error('Không thể lưu ảnh vào kho OMFIT:', error);
+      } finally {
+        setIsGenerating(false);
+      }
     }
   };
 
@@ -76,12 +70,13 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
       const newImg = await leonardoService.generateImage(
         prompt,
         style,
-        referenceImage || undefined,
+        undefined,
         currentKeyword || 'omfit-seo',
-        'nano-banana-2'
+        'nano-banana-2',
+        articleId
       );
 
-      setGeneratedImages([newImg, ...generatedImages]);
+      setGeneratedImages((previous) => [newImg, ...previous]);
       setSelectedImage(newImg);
       onImageGenerated(newImg);
     } catch (err) {
@@ -267,15 +262,28 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  onImageGenerated(selectedImage);
-                  alert('Đã áp dụng ảnh này làm ảnh đại diện cho bài viết.');
-                }}
-                className="w-full gradient-bg-omfit-btn px-4 py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20"
-              >
-                <CheckCircle2 className="w-4 h-4" /> Đặt Làm Featured Image Cho Bài Viết OMFIT <ArrowRight className="w-4 h-4" />
-              </button>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  onClick={() => {
+                    onImageGenerated(selectedImage);
+                    alert('Đã áp dụng ảnh này làm ảnh đại diện cho bài viết.');
+                  }}
+                  className="gradient-bg-omfit-btn min-h-11 rounded-xl px-4 text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Đặt làm featured
+                </button>
+                <button
+                  type="button"
+                  disabled={!onInsertInline}
+                  onClick={() => {
+                    onInsertInline?.(selectedImage);
+                    alert('Đã chèn ảnh vào nội dung bài viết.');
+                  }}
+                  className="min-h-11 rounded-xl border border-[#0879D9]/30 bg-[#F0F9FF] px-4 text-xs font-bold text-[#0879D9] flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ImagePlus className="w-4 h-4" /> Chèn vào bài <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="text-center py-20 bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200 space-y-3">

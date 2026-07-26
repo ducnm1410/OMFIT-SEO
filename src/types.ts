@@ -79,6 +79,10 @@ export interface GeneratedArticle {
   createdAt: string;
   status: 'draft' | 'published';
   wpPostId?: number;
+  wpPostUrl?: string;
+  updatedAt?: string;
+  brandProfileId?: string;
+  seoIssues?: SeoIssue[];
 }
 
 export interface GeneratedImage {
@@ -89,6 +93,79 @@ export interface GeneratedImage {
   fileName: string;
   style: string;
   source: 'upload' | 'leonardo-nano-banana-2' | 'leonardo-chatgpt-2';
+  storagePath?: string;
+  providerGenerationId?: string;
+  caption?: string;
+  role?: 'featured' | 'inline';
+}
+
+export interface SeoIssue {
+  code: string;
+  level: 'error' | 'warning' | 'success';
+  message: string;
+}
+
+export interface SeoAuditResult {
+  score: number;
+  readabilityScore: number;
+  passed: boolean;
+  issues: SeoIssue[];
+  metrics: Record<string, number | string | boolean>;
+}
+
+export interface BrandProfile {
+  id?: string;
+  name: string;
+  version: number;
+  mission: string;
+  positioning: string;
+  audience: string[];
+  voice: Record<string, unknown>;
+  colors: Record<string, string>;
+  typography: Record<string, string>;
+  visualRules: Record<string, unknown>;
+  prohibitedElements: string[];
+  approvedClaims: string[];
+  promptTemplate: string;
+  negativePrompt: string;
+  guidelineNotes: string;
+  companyInfo: {
+    displayName: string;
+    legalName: string;
+    tagline: string;
+    website: string;
+    hotline: string;
+    email: string;
+  };
+  branches: BrandBranch[];
+  footerSettings: {
+    enabled: boolean;
+    heading: string;
+    description: string;
+    ctaLabel: string;
+    ctaUrl: string;
+  };
+}
+
+export interface BrandBranch {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  email: string;
+  services: string[];
+  ctaUrl: string;
+}
+
+export interface BrandAsset {
+  id: string;
+  brandProfileId: string;
+  assetType: 'logo' | 'guideline' | 'reference' | 'texture' | 'font_sample';
+  name: string;
+  bucket: string;
+  storagePath: string;
+  url?: string;
+  mimeType?: string;
 }
 
 export interface ApiSettings {
@@ -100,4 +177,4 @@ export interface ApiSettings {
   defaultAuthor: string;
 }
 
-export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'editor' | 'history';
+export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'editor' | 'history' | 'settings';
