@@ -20,6 +20,10 @@ const googleAdsScope = 'https://www.googleapis.com/auth/adwords';
 const oauthStateCookie = 'omfit_google_ads_state';
 const oauthSessionCookie = 'omfit_google_ads_session';
 const oauthStateMaxAgeMs = 10 * 60 * 1000;
+
+function getEnv(name, fallback = '') {
+  return String(process.env[name] ?? fallback).trim();
+}
 const oauthSessionMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
 const keywordCache = new Map();
 const cacheTtlMs = Number(process.env.KEYWORD_CACHE_TTL_MS || 21_600_000);
@@ -104,7 +108,7 @@ function safeEqual(left, right) {
 }
 
 function getSessionEncryptionKey() {
-  const secret = String(process.env.OAUTH_SESSION_SECRET || '');
+  const secret = getEnv('OAUTH_SESSION_SECRET');
   if (!secret) throw new ApiError(503, 'Chưa cấu hình khóa bảo mật cho phiên Google Ads.', 'oauth_not_configured');
   return crypto.createHash('sha256').update(secret).digest();
 }
@@ -233,8 +237,8 @@ async function getGoogleAccessToken(refreshToken) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_ADS_CLIENT_ID,
-      client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+      client_id: getEnv('GOOGLE_ADS_CLIENT_ID'),
+      client_secret: getEnv('GOOGLE_ADS_CLIENT_SECRET'),
       refresh_token: refreshToken,
       grant_type: 'refresh_token'
     }),
@@ -255,13 +259,13 @@ async function getGoogleAccessToken(refreshToken) {
 }
 
 async function listAccessibleGoogleAdsCustomers(accessToken) {
-  const apiVersion = process.env.GOOGLE_ADS_API_VERSION || 'v25';
+  const apiVersion = getEnv('GOOGLE_ADS_API_VERSION', 'v25');
   const response = await fetch(
     `https://googleads.googleapis.com/${apiVersion}/customers:listAccessibleCustomers`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        'developer-token': process.env.GOOGLE_ADS_DEVELOPER_TOKEN
+        'developer-token': getEnv('GOOGLE_ADS_DEVELOPER_TOKEN')
       },
       signal: AbortSignal.timeout(20_000)
     }
@@ -308,12 +312,12 @@ async function fetchGoogleKeywordIdeas({ query, industry, pageUrl, request }) {
 
   const accessToken = await getGoogleAccessToken(auth.refreshToken);
   const customerId = auth.customerId;
-  const loginCustomerId = cleanCustomerId(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID);
-  const apiVersion = process.env.GOOGLE_ADS_API_VERSION || 'v25';
+  const loginCustomerId = cleanCustomerId(getEnv('GOOGLE_ADS_LOGIN_CUSTOMER_ID'));
+  const apiVersion = getEnv('GOOGLE_ADS_API_VERSION', 'v25');
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
-    'developer-token': process.env.GOOGLE_ADS_DEVELOPER_TOKEN
+    'developer-token': getEnv('GOOGLE_ADS_DEVELOPER_TOKEN')
   };
 
   if (loginCustomerId) headers['login-customer-id'] = loginCustomerId;
@@ -329,8 +333,8 @@ async function fetchGoogleKeywordIdeas({ query, industry, pageUrl, request }) {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        language: `languageConstants/${process.env.GOOGLE_ADS_LANGUAGE_ID || '1040'}`,
-        geoTargetConstants: [`geoTargetConstants/${process.env.GOOGLE_ADS_GEO_TARGET_ID || '2704'}`],
+        language: `languageConstants/${getEnv('GOOGLE_ADS_LANGUAGE_ID', '1040')}`,
+        geoTargetConstants: [`geoTargetConstants/${getEnv('GOOGLE_ADS_GEO_TARGET_ID', '2704')}`],
         includeAdultKeywords: false,
         keywordPlanNetwork: 'GOOGLE_SEARCH',
         pageSize: 100,
@@ -433,7 +437,7 @@ Dữ liệu: ${JSON.stringify(items.map(({ keyword, searchVolumeValue, competiti
 }
 
 app.get('/api/auth/google/start', requireSupabaseUser, (request, response) => {
-  const missing = requiredGoogleAdsEnv.filter((name) => !process.env[name]);
+  const missing = requiredGoogleAdsEnv.filter((name) => !getEnv(name));
   if (missing.length > 0) {
     return response.status(503).json({
       error: 'Chưa cấu hình đầy đủ OAuth cho Google Ads.',
@@ -448,7 +452,7 @@ app.get('/api/auth/google/start', requireSupabaseUser, (request, response) => {
     getCookieOptions(request, oauthStateMaxAgeMs)
   );
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+    client_id: getEnv('GOOGLE_ADS_CLIENT_ID'),
     redirect_uri: getCallbackUrl(request),
     response_type: 'code',
     scope: googleAdsScope,
@@ -491,8 +495,8 @@ app.get('/api/auth/google/callback', async (request, response) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code: String(request.query.code),
-        client_id: process.env.GOOGLE_ADS_CLIENT_ID,
-        client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+        client_id: getEnv('GOOGLE_ADS_CLIENT_ID'),
+        client_secret: getEnv('GOOGLE_ADS_CLIENT_SECRET'),
         redirect_uri: getCallbackUrl(request),
         grant_type: 'authorization_code'
       }),
@@ -510,7 +514,7 @@ app.get('/api/auth/google/callback', async (request, response) => {
     }
 
     const customerIds = await listAccessibleGoogleAdsCustomers(tokens.access_token);
-    const configuredCustomerId = cleanCustomerId(process.env.GOOGLE_ADS_CUSTOMER_ID);
+    const configuredCustomerId = cleanCustomerId(getEnv('GOOGLE_ADS_CUSTOMER_ID'));
     const selectedCustomerId = customerIds.includes(configuredCustomerId)
       ? configuredCustomerId
       : customerIds.length === 1
@@ -606,7 +610,7 @@ app.post('/api/auth/google/disconnect', requireSupabaseUser, (request, response)
 });
 
 app.get('/api/health', (_request, response) => {
-  const missing = requiredGoogleAdsEnv.filter((name) => !process.env[name]);
+  const missing = requiredGoogleAdsEnv.filter((name) => !getEnv(name));
   response.json({
     ok: true,
     googleAdsConfigured: missing.length === 0,
@@ -625,15 +629,15 @@ app.post('/api/keywords/analyze', requireSupabaseUser, async (request, response)
     industry,
     pageUrl,
     customerId: authContext.customerId,
-    language: process.env.GOOGLE_ADS_LANGUAGE_ID || '1040',
-    geo: process.env.GOOGLE_ADS_GEO_TARGET_ID || '2704'
+    language: getEnv('GOOGLE_ADS_LANGUAGE_ID', '1040'),
+    geo: getEnv('GOOGLE_ADS_GEO_TARGET_ID', '2704')
   });
 
   if (query.length < 2 || query.length > 120) {
     return response.status(400).json({ error: 'Từ khóa chủ đề phải có từ 2 đến 120 ký tự.' });
   }
 
-  const missing = requiredGoogleAdsEnv.filter((name) => !process.env[name]);
+  const missing = requiredGoogleAdsEnv.filter((name) => !getEnv(name));
   if (missing.length > 0) {
     return response.status(503).json({
       error: 'Chưa cấu hình kết nối Google Ads Keyword Planner.',
@@ -713,8 +717,8 @@ app.post('/api/keywords/analyze', requireSupabaseUser, async (request, response)
       meta: {
         source: 'Google Ads KeywordPlanIdeaService',
         modelApplied,
-        languageId: process.env.GOOGLE_ADS_LANGUAGE_ID || '1040',
-        geoTargetId: process.env.GOOGLE_ADS_GEO_TARGET_ID || '2704',
+        languageId: getEnv('GOOGLE_ADS_LANGUAGE_ID', '1040'),
+        geoTargetId: getEnv('GOOGLE_ADS_GEO_TARGET_ID', '2704'),
         generatedAt: new Date().toISOString(),
         warnings,
         cacheHit: false
