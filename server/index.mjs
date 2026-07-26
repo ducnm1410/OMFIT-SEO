@@ -285,18 +285,115 @@ async function listAccessibleGoogleAdsCustomers(accessToken) {
     .filter(Boolean);
 }
 
+function formatGoogleAdsCustomerId(customerId) {
+  return `${customerId.slice(0, 3)}-${customerId.slice(3, 6)}-${customerId.slice(6)}`;
+}
+
+async function queryGoogleAdsCustomerClients(accessToken, loginCustomerId, customerId) {
+  const apiVersion = getEnv('GOOGLE_ADS_API_VERSION', 'v25');
+  const response = await fetch(
+    `https://googleads.googleapis.com/${apiVersion}/customers/${customerId}/googleAds:search`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'developer-token': getEnv('GOOGLE_ADS_DEVELOPER_TOKEN'),
+        'login-customer-id': loginCustomerId
+      },
+      body: JSON.stringify({
+        query: [
+          'SELECT customer_client.client_customer, customer_client.id,',
+          'customer_client.level, customer_client.manager,',
+          'customer_client.descriptive_name, customer_client.status',
+          'FROM customer_client',
+          'WHERE customer_client.level <= 1'
+        ].join(' '),
+        pageSize: 10_000
+      }),
+      signal: AbortSignal.timeout(20_000)
+    }
+  );
+
+  if (!response.ok) return null;
+  const payload = await response.json();
+  return Array.isArray(payload.results) ? payload.results : [];
+}
+
+async function listSelectableGoogleAdsAccounts(accessToken) {
+  const rootCustomerIds = await listAccessibleGoogleAdsCustomers(accessToken);
+  const accounts = new Map();
+
+  for (const rootCustomerId of rootCustomerIds) {
+    const queue = [rootCustomerId];
+    const visited = new Set();
+    let hierarchyFound = false;
+    let childAccountFound = false;
+
+    while (queue.length > 0) {
+      const managerCustomerId = queue.shift();
+      if (!managerCustomerId || visited.has(managerCustomerId)) continue;
+      visited.add(managerCustomerId);
+
+      const rows = await queryGoogleAdsCustomerClients(
+        accessToken,
+        rootCustomerId,
+        managerCustomerId
+      );
+      if (!rows) continue;
+      hierarchyFound = true;
+
+      for (const row of rows) {
+        const customerClient = row?.customerClient;
+        const customerId = cleanCustomerId(
+          customerClient?.id || customerClient?.clientCustomer
+        );
+        if (!customerId) continue;
+
+        const level = Number(customerClient.level || 0);
+        const isManager = customerClient.manager === true;
+        if (level === 1 && isManager) queue.push(customerId);
+        if (level === 0 || isManager || customerClient.status === 'CANCELED') continue;
+
+        childAccountFound = true;
+        const formattedId = formatGoogleAdsCustomerId(customerId);
+        const descriptiveName = String(customerClient.descriptiveName || '').trim();
+        accounts.set(customerId, {
+          id: customerId,
+          loginCustomerId: rootCustomerId,
+          label: descriptiveName ? `${descriptiveName} (${formattedId})` : formattedId
+        });
+      }
+    }
+
+    // Directly accessible client accounts don't expose CustomerClient hierarchy
+    // rows. Keep them selectable and omit login-customer-id for their API calls.
+    if ((!hierarchyFound || !childAccountFound) && !accounts.has(rootCustomerId)) {
+      accounts.set(rootCustomerId, {
+        id: rootCustomerId,
+        loginCustomerId: '',
+        label: formatGoogleAdsCustomerId(rootCustomerId)
+      });
+    }
+  }
+
+  return [...accounts.values()];
+}
+
 function resolveGoogleAdsSession(request) {
   const session = getOAuthSession(request);
   if (session && session.supabaseUserId === request.supabaseUser?.id) {
     return {
       refreshToken: session.refreshToken,
-      customerId: cleanCustomerId(session.selectedCustomerId)
+      customerId: cleanCustomerId(session.selectedCustomerId),
+      loginCustomerId: cleanCustomerId(session.loginCustomerId)
     };
   }
 
   return {
     refreshToken: '',
-    customerId: ''
+    customerId: '',
+    loginCustomerId: ''
   };
 }
 
@@ -312,7 +409,8 @@ async function fetchGoogleKeywordIdeas({ query, industry, pageUrl, request }) {
 
   const accessToken = await getGoogleAccessToken(auth.refreshToken);
   const customerId = auth.customerId;
-  const loginCustomerId = cleanCustomerId(getEnv('GOOGLE_ADS_LOGIN_CUSTOMER_ID'));
+  const loginCustomerId = auth.loginCustomerId
+    || cleanCustomerId(getEnv('GOOGLE_ADS_LOGIN_CUSTOMER_ID'));
   const apiVersion = getEnv('GOOGLE_ADS_API_VERSION', 'v25');
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -513,22 +611,20 @@ app.get('/api/auth/google/callback', async (request, response) => {
       return redirectToApp('error', 'refresh_token_missing');
     }
 
-    const customerIds = await listAccessibleGoogleAdsCustomers(tokens.access_token);
+    const accounts = await listSelectableGoogleAdsAccounts(tokens.access_token);
     const configuredCustomerId = cleanCustomerId(getEnv('GOOGLE_ADS_CUSTOMER_ID'));
-    const selectedCustomerId = customerIds.includes(configuredCustomerId)
-      ? configuredCustomerId
-      : customerIds.length === 1
-        ? customerIds[0]
-        : '';
+    const selectedAccount = accounts.find((account) => account.id === configuredCustomerId)
+      || (accounts.length === 1 ? accounts[0] : null);
 
     saveOAuthSession(request, response, {
       refreshToken: tokens.refresh_token,
-      selectedCustomerId,
+      selectedCustomerId: selectedAccount?.id || '',
+      loginCustomerId: selectedAccount?.loginCustomerId || '',
       supabaseUserId: storedState.supabaseUserId,
       connectedAt: new Date().toISOString()
     });
 
-    return redirectToApp(selectedCustomerId ? 'connected' : 'select_account');
+    return redirectToApp(selectedAccount ? 'connected' : 'select_account');
   } catch (error) {
     console.error('[google-ads-oauth]', error instanceof Error ? error.message : error);
     return redirectToApp('error', 'connection_failed');
@@ -548,16 +644,24 @@ app.get('/api/auth/google/status', requireSupabaseUser, async (request, response
 
   try {
     const accessToken = await getGoogleAccessToken(session.refreshToken);
-    const customerIds = await listAccessibleGoogleAdsCustomers(accessToken);
+    const accounts = await listSelectableGoogleAdsAccounts(accessToken);
+    const selectedAccount = accounts.find(
+      (account) => account.id === cleanCustomerId(session.selectedCustomerId)
+    );
+    if (
+      selectedAccount
+      && cleanCustomerId(session.loginCustomerId) !== selectedAccount.loginCustomerId
+    ) {
+      saveOAuthSession(request, response, {
+        ...session,
+        selectedCustomerId: selectedAccount.id,
+        loginCustomerId: selectedAccount.loginCustomerId
+      });
+    }
     return response.json({
       connected: true,
-      selectedCustomerId: customerIds.includes(cleanCustomerId(session.selectedCustomerId))
-        ? cleanCustomerId(session.selectedCustomerId)
-        : '',
-      accounts: customerIds.map((id) => ({
-        id,
-        label: `${id.slice(0, 3)}-${id.slice(3, 6)}-${id.slice(6)}`
-      }))
+      selectedCustomerId: selectedAccount?.id || '',
+      accounts
     });
   } catch (error) {
     clearOAuthCookie(request, response, oauthSessionCookie);
@@ -587,14 +691,16 @@ app.post('/api/auth/google/select-account', requireSupabaseUser, async (request,
 
   try {
     const accessToken = await getGoogleAccessToken(session.refreshToken);
-    const customerIds = await listAccessibleGoogleAdsCustomers(accessToken);
-    if (!customerIds.includes(customerId)) {
+    const accounts = await listSelectableGoogleAdsAccounts(accessToken);
+    const selectedAccount = accounts.find((account) => account.id === customerId);
+    if (!selectedAccount) {
       return response.status(403).json({ error: 'Tài khoản Google này không có quyền với Customer ID đã chọn.' });
     }
 
     saveOAuthSession(request, response, {
       ...session,
-      selectedCustomerId: customerId
+      selectedCustomerId: customerId,
+      loginCustomerId: selectedAccount.loginCustomerId
     });
     return response.json({ ok: true, selectedCustomerId: customerId });
   } catch (error) {
