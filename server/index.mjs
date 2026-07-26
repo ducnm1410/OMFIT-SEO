@@ -1976,6 +1976,10 @@ app.post('/api/wordpress/sync-index', requireSupabaseUser, async (request, respo
 
 app.get('/api/health', (_request, response) => {
   const missing = requiredGoogleAdsEnv.filter((name) => !getEnv(name));
+  const sanitizerReady = getHtmlSanitizer()(
+    '<p>ok</p><script>bad</script>',
+    { allowedTags: ['p'], allowedAttributes: {} }
+  ) === '<p>ok</p>';
   const contentRequired = [
     'GEMINI_API_KEY',
     'LEONARDO_API_KEY',
@@ -1986,6 +1990,7 @@ app.get('/api/health', (_request, response) => {
   const contentMissing = contentRequired.filter((name) => !getEnv(name));
   response.json({
     ok: true,
+    sanitizerReady,
     googleAdsConfigured: missing.length === 0,
     modelConfigured: Boolean(getEnv('GEMINI_API_KEY')),
     contentPlatformConfigured: contentMissing.length === 0,
