@@ -72,31 +72,42 @@ const DEFAULT_BRAND_PROFILE: BrandProfile = {
   }
 };
 
+function hasBrokenVietnameseText(value: unknown) {
+  const serialized = typeof value === 'string'
+    ? value
+    : JSON.stringify(value ?? '');
+  return /(?:^|[\s"'])\?{1,2}[\p{L}]|[\p{L}]\?[\p{L}]/u.test(serialized);
+}
+
+function useCleanBrandValue<T>(value: T, fallback: T): T {
+  return value == null || hasBrokenVietnameseText(value) ? fallback : value;
+}
+
 function mapBrandProfile(row: any): BrandProfile {
   return {
     id: row.id,
     name: row.name,
     version: row.version,
-    mission: row.mission,
-    positioning: row.positioning,
-    audience: row.audience || [],
-    voice: row.voice || {},
+    mission: useCleanBrandValue(row.mission, DEFAULT_BRAND_PROFILE.mission),
+    positioning: useCleanBrandValue(row.positioning, DEFAULT_BRAND_PROFILE.positioning),
+    audience: useCleanBrandValue(row.audience, DEFAULT_BRAND_PROFILE.audience),
+    voice: useCleanBrandValue(row.voice, DEFAULT_BRAND_PROFILE.voice),
     colors: row.colors || {},
     typography: row.typography || {},
-    visualRules: row.visual_rules || {},
-    prohibitedElements: row.prohibited_elements || [],
-    approvedClaims: row.approved_claims || [],
+    visualRules: useCleanBrandValue(row.visual_rules, DEFAULT_BRAND_PROFILE.visualRules),
+    prohibitedElements: useCleanBrandValue(row.prohibited_elements, DEFAULT_BRAND_PROFILE.prohibitedElements),
+    approvedClaims: useCleanBrandValue(row.approved_claims, DEFAULT_BRAND_PROFILE.approvedClaims),
     promptTemplate: row.prompt_template || '',
     negativePrompt: row.negative_prompt || '',
-    guidelineNotes: row.guideline_notes || '',
+    guidelineNotes: useCleanBrandValue(row.guideline_notes, DEFAULT_BRAND_PROFILE.guidelineNotes),
     companyInfo: {
       ...DEFAULT_BRAND_PROFILE.companyInfo,
-      ...(row.company_info || {})
+      ...useCleanBrandValue(row.company_info, DEFAULT_BRAND_PROFILE.companyInfo)
     },
     branches: Array.isArray(row.branches) ? row.branches : [],
     footerSettings: {
       ...DEFAULT_BRAND_PROFILE.footerSettings,
-      ...(row.footer_settings || {})
+      ...useCleanBrandValue(row.footer_settings, DEFAULT_BRAND_PROFILE.footerSettings)
     }
   };
 }

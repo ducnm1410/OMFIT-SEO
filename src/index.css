@@ -25,6 +25,13 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  .font-vietnamese {
+    font-family: 'Be Vietnam Pro', 'Segoe UI', Arial, sans-serif;
+    font-kerning: normal;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
   button,
   input,
   select,

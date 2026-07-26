@@ -20,7 +20,7 @@ interface BrandSettingsProps {
   onAssetUploaded: (asset: BrandAsset) => void;
 }
 
-const inputClass = 'mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-3 py-2.5 text-sm text-[#071827] outline-none transition focus:border-[#0879D9] focus:ring-2 focus:ring-[#0879D9]/10';
+const inputClass = 'mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-3 py-2.5 text-base leading-6 text-[#071827] outline-none transition placeholder:text-slate-400 focus:border-[#0879D9] focus:ring-2 focus:ring-[#0879D9]/10';
 
 function createBranch(): BrandBranch {
   return {
@@ -122,7 +122,7 @@ export const BrandSettings: React.FC<BrandSettingsProps> = ({
   const guidelines = assets.filter((asset) => asset.assetType === 'guideline');
 
   return (
-    <div className="space-y-6">
+    <div className="font-vietnamese space-y-6">
       <header className="rounded-3xl border border-[#0879D9]/15 bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
