@@ -454,7 +454,10 @@ app.get('/api/auth/google/start', requireSupabaseUser, (request, response) => {
     scope: googleAdsScope,
     access_type: 'offline',
     include_granted_scopes: 'true',
-    prompt: 'consent',
+    // Always let the user choose the Google account that actually owns or
+    // manages the Ads account. This also avoids Google silently reusing a
+    // different signed-in account that is not allowed by the OAuth audience.
+    prompt: 'select_account consent',
     state
   });
   return response.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
