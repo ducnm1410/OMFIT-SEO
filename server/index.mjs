@@ -1,10 +1,21 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 import { createClient } from '@supabase/supabase-js';
-import sanitizeHtml from 'sanitize-html';
 
 dotenv.config({ override: true, quiet: true });
+
+const requireServerPackage = createRequire(import.meta.url);
+let sanitizeHtmlPackage;
+
+function getHtmlSanitizer() {
+  if (!sanitizeHtmlPackage) {
+    const loadedPackage = requireServerPackage('sanitize-html');
+    sanitizeHtmlPackage = loadedPackage?.default || loadedPackage;
+  }
+  return sanitizeHtmlPackage;
+}
 
 const app = express();
 const port = Number(process.env.API_PORT || 8787);
@@ -930,7 +941,7 @@ function cleanGeneratedHtml(content) {
     .replace(/<(script|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
     .replace(/\son\w+="[^"]*"/gi, '')
     .trim();
-  const sanitized = sanitizeHtml(cleaned, {
+  const sanitized = getHtmlSanitizer()(cleaned, {
     allowedTags: [
       'a', 'article', 'aside', 'b', 'blockquote', 'br', 'caption', 'code', 'col',
       'colgroup', 'div', 'em', 'figcaption', 'figure', 'footer', 'h2', 'h3', 'hr', 'i', 'img',
