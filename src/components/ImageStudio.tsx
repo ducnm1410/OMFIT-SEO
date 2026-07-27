@@ -131,11 +131,11 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-3xl border border-[#0879D9]/15 bg-white p-5 sm:p-6">
+    <div className="ui-page space-y-6">
+      <header className="ui-page-header p-5 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="flex items-center gap-2 text-xl font-extrabold text-[#071827]">
+            <h2 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">
               <ImageIcon className="h-5 w-5 text-[#0879D9]" /> Image Studio
             </h2>
             <p className="mt-1 text-sm font-medium leading-6 text-slate-500">

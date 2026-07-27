@@ -326,14 +326,14 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page space-y-6">
       {/* Top Banner Actions */}
-      <div className="glass-panel p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-[#0879D9]/15 bg-white">
+      <div className="ui-page-header flex flex-col items-start justify-between gap-4 p-5 sm:p-6 md:flex-row md:items-center">
         <div>
           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30 flex items-center gap-1 inline-flex">
             <Activity className="w-3 h-3" /> OMFIT PUBLISHER READY
           </span>
-          <h2 className="text-xl font-extrabold text-[#071827] mt-1">Xem Trực Quan & Thao Tác Chỉnh Sửa Trực Tiếp</h2>
+          <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">Biên tập và xuất bản bài viết</h2>
           <p className="text-xs text-slate-500 font-medium">
             Xem bài viết hiển thị như trên omfit.com.vn và tùy chỉnh trực tiếp trước khi ấn đăng bài qua MCP.
           </p>

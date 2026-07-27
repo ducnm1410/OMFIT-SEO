@@ -56,12 +56,12 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page space-y-6">
       {/* Header Banner */}
-      <div className="glass-panel p-6 rounded-3xl space-y-3 border border-[#0879D9]/15 bg-white">
+      <div className="ui-page-header space-y-4 p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">
               <FilePenLine className="w-5 h-5 text-[#0879D9]" /> Soạn bài viết SEO thương hiệu OMFIT
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -77,27 +77,27 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
         <div className="flex flex-wrap items-center gap-3 sm:gap-4 pt-3 border-t border-slate-100">
           <div className={`flex items-center gap-2 text-xs font-bold ${step === 'input' ? 'text-[#0879D9]' : 'text-slate-400'}`}>
             <span className="w-5 h-5 rounded-full bg-[#0879D9] text-white text-[11px] flex items-center justify-center">1</span>
-            Từ Khóa & Giọng Văn OMFIT
+            Từ khóa và giọng văn
           </div>
           <div className="w-8 h-[1px] bg-slate-200" />
           <div className={`flex items-center gap-2 text-xs font-bold ${step === 'outline' ? 'text-[#0879D9]' : 'text-slate-400'}`}>
             <span className="w-5 h-5 rounded-full bg-[#0879D9] text-white text-[11px] flex items-center justify-center">2</span>
-            Duyệt Dàn Ý H2/H3
+            Duyệt dàn ý H2/H3
           </div>
           <div className="w-8 h-[1px] bg-slate-200" />
           <div className={`flex items-center gap-2 text-xs font-bold ${step === 'generating' ? 'text-[#0879D9]' : 'text-slate-400'}`}>
             <span className="w-5 h-5 rounded-full bg-[#0879D9] text-white text-[11px] flex items-center justify-center">3</span>
-            Hoàn Tất Bài Viết
+            Hoàn tất bài viết
           </div>
         </div>
       </div>
 
       {step === 'input' && (
-        <div className="glass-panel p-6 rounded-3xl space-y-6 border border-[#0879D9]/15 bg-white">
+        <div className="ui-panel space-y-6 p-5 sm:p-6">
           <form onSubmit={handleGenerateOutline} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Từ Khóa Chính Để SEO (Focus Keyword)
+                Từ khóa chính (Focus keyword)
               </label>
               <input
                 type="text"
@@ -111,7 +111,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Giọng Văn OMFIT (Voice & Tone)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Giọng văn OMFIT</label>
                 <select
                   value={tone}
                   onChange={(e) => setTone(e.target.value)}
@@ -126,7 +126,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Số Từ Mục Tiêu (Word Count Target)
+                  Số từ mục tiêu
                 </label>
                 <select
                   value={wordCount}
@@ -164,7 +164,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
       )}
 
       {step === 'outline' && outline && (
-        <div className="glass-panel p-6 rounded-3xl space-y-6 border border-[#0879D9]/15 bg-white">
+        <div className="ui-panel space-y-6 p-5 sm:p-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9]">
@@ -179,7 +179,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
           <div className="p-4 rounded-xl bg-[#F0F9FF] border border-[#0879D9]/20 space-y-2">
             <h4 className="text-xs font-bold text-[#0879D9] flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4" /> Đánh Giá Thẻ Meta SEO Trên Google Search
+              <ShieldCheck className="w-4 h-4" /> Xem trước thẻ meta trên Google Search
             </h4>
             <div className="space-y-1">
               <p className="text-sm font-bold text-[#0879D9] hover:underline cursor-pointer">
@@ -192,7 +192,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-              <List className="w-4 h-4 text-[#0879D9]" /> Cấu Trúc Các Tiêu Đề (H2 & H3)
+              <List className="w-4 h-4 text-[#0879D9]" /> Cấu trúc tiêu đề H2 và H3
             </h4>
             <div className="space-y-2">
               {outline.headings.map((h, i) => (
@@ -230,7 +230,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
       )}
 
       {step === 'generating' && (
-        <div className="glass-panel p-12 rounded-3xl text-center space-y-4 border border-[#0879D9]/15 bg-white">
+        <div className="ui-panel space-y-4 p-10 text-center sm:p-12">
           <div className="w-12 h-12 border-4 border-[#0879D9] border-t-transparent rounded-full animate-spin mx-auto" />
           <h3 className="text-lg font-bold text-[#071827]">Đang soạn bài viết theo chuẩn OMFIT...</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">

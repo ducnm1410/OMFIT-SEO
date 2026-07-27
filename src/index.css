@@ -2,25 +2,29 @@
 
 @layer base {
   :root {
-    /* Official OMFIT Light Theme - Blue & White (Xanh - Trắng) */
-    --omfit-bg-main: #F8FAFC;        /* Clean Crisp Light Background */
-    --omfit-card-bg: #FFFFFF;        /* Pure White Card Surfaces */
-    --omfit-card-hover: #F1F5F9;     /* Soft Light Hover */
-    --omfit-active-blue: #0879D9;    /* Action / Primary Blue CTA */
-    --omfit-electric-sky: #0284C7;   /* Electric Sky Accent */
-    --omfit-light-sky: #E0F2FE;      /* Soft Light Blue Backgrounds */
-    --omfit-midnight-text: #071827;  /* High Contrast Deep Navy Text */
-    --omfit-navy-subtext: #1E293B;   /* Subtitle Text */
-    --omfit-border: rgba(8, 121, 217, 0.15);
+    --omfit-bg-main: #F6F6F5;
+    --omfit-card-bg: #FFFFFF;
+    --omfit-card-hover: #FAFAF9;
+    --omfit-active-blue: #0879D9;
+    --omfit-electric-sky: #026BBF;
+    --omfit-light-sky: #EEF7FE;
+    --omfit-midnight-text: #17191D;
+    --omfit-navy-subtext: #475467;
+    --omfit-border: #E2E4E8;
+    --ui-border-strong: #D5D8DE;
+    --ui-muted: #667085;
+    --ui-radius-panel: 14px;
+    --ui-radius-control: 8px;
+    --ui-shadow-panel: 0 1px 2px rgba(16, 24, 40, 0.035);
   }
 
   body {
     background-color: var(--omfit-bg-main);
-    color: #071827;
+    color: var(--omfit-midnight-text);
     font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, -apple-system, sans-serif;
     overflow-x: hidden;
-    font-size: 16px;
-    line-height: 1.6;
+    font-size: 15px;
+    line-height: 1.55;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
   }
@@ -37,6 +41,7 @@
   select,
   textarea {
     font: inherit;
+    max-width: 100%;
   }
 
   button,
@@ -55,7 +60,7 @@
   }
 
   :focus-visible {
-    outline: 3px solid rgba(8, 121, 217, 0.35);
+    outline: 3px solid rgba(8, 121, 217, 0.25);
     outline-offset: 2px;
   }
 
@@ -65,46 +70,187 @@
   }
 }
 
-/* Glassmorphism & Light Blue Panels */
 .glass-panel {
-  background: #FFFFFF;
-  border: 1px solid rgba(8, 121, 217, 0.15);
-  box-shadow: 0 4px 20px -2px rgba(8, 121, 217, 0.06);
+  background: var(--omfit-card-bg);
+  border: 1px solid var(--omfit-border);
+  box-shadow: var(--ui-shadow-panel);
 }
 
 .glass-panel-glow {
-  background: linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 100%);
-  border: 1px solid rgba(8, 121, 217, 0.25);
-  box-shadow: 0 10px 30px -5px rgba(8, 121, 217, 0.12);
+  background: linear-gradient(135deg, #FFFFFF 0%, #FBFCFD 100%);
+  border: 1px solid var(--omfit-border);
+  box-shadow: var(--ui-shadow-panel);
 }
 
 .gradient-text-omfit {
-  background: linear-gradient(135deg, #071827 0%, #0879D9 60%, #0284C7 100%);
+  background: linear-gradient(135deg, #17191D 0%, #0879D9 85%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .gradient-bg-omfit-btn {
-  background: linear-gradient(135deg, #0879D9 0%, #0284C7 100%);
+  background: #076FBD;
   color: #FFFFFF;
-  font-weight: 700;
-  transition: all 0.25s ease-in-out;
+  font-weight: 600;
+  border: 1px solid #076FBD;
+  box-shadow: 0 1px 2px rgba(8, 121, 217, 0.18);
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .gradient-bg-omfit-btn:hover {
-  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
-  box-shadow: 0 4px 20px rgba(8, 121, 217, 0.35);
-  transform: translateY(-1px);
+  background: #065E9F;
+  border-color: #065E9F;
+  box-shadow: 0 2px 5px rgba(8, 121, 217, 0.2);
 }
 
 .gradient-bg-omfit-btn:active {
-  transform: translateY(0);
+  background: #075EA8;
+}
+
+.ui-app-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 210px),
+    var(--omfit-bg-main);
+}
+
+.ui-sidebar {
+  background: #FBFBFA;
+  border-right: 1px solid var(--omfit-border);
+  box-shadow: 1px 0 0 rgba(16, 24, 40, 0.015);
+}
+
+.ui-topbar {
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid var(--omfit-border);
+  box-shadow: 0 1px 1px rgba(16, 24, 40, 0.02);
+  backdrop-filter: blur(14px);
+}
+
+.ui-login-shell {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(8, 121, 217, 0.08), transparent 28%),
+    radial-gradient(circle at 88% 82%, rgba(15, 23, 42, 0.05), transparent 26%),
+    #F6F6F5;
 }
 
 .app-main {
   width: 100%;
-  max-width: 1600px;
+  max-width: 1520px;
   margin-inline: auto;
+}
+
+.ui-page {
+  animation: ui-page-enter 180ms ease-out both;
+}
+
+.ui-page-header,
+.ui-panel,
+.ui-metric-card {
+  background: #FFFFFF;
+  border: 1px solid var(--omfit-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.ui-page-header {
+  background:
+    linear-gradient(90deg, rgba(8, 121, 217, 0.035), transparent 38%),
+    #FFFFFF;
+}
+
+.ui-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #0879D9;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 650;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.ui-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #344054;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 650;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.ui-page :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea) {
+  border-color: #DDE0E5;
+  border-radius: var(--ui-radius-control);
+  background-color: #FFFFFF;
+  box-shadow: inset 0 1px 1px rgba(16, 24, 40, 0.025);
+}
+
+.ui-page :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea):focus {
+  border-color: #0879D9;
+  box-shadow: 0 0 0 3px rgba(8, 121, 217, 0.1);
+}
+
+.ui-page .rounded-3xl {
+  border-radius: var(--ui-radius-panel);
+}
+
+.ui-page .rounded-2xl {
+  border-radius: 10px;
+}
+
+.ui-page .rounded-xl {
+  border-radius: var(--ui-radius-control);
+}
+
+.ui-page [class~="border-[#0879D9]/15"],
+.ui-page [class~="border-[#0879D9]/20"] {
+  border-color: var(--omfit-border);
+}
+
+.ui-page [class~="text-[#0879D9]"] {
+  color: #076FBD;
+}
+
+.ui-page :is(.shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.ui-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ui-table thead {
+  background: #FAFAF9;
+}
+
+.ui-table th {
+  color: #667085;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.ui-table tbody tr {
+  transition: background-color 140ms ease;
+}
+
+.ui-table tbody tr:hover {
+  background: #F8FAFC;
+}
+
+@keyframes ui-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 767px) {
@@ -123,6 +269,12 @@
 
   .prose-custom h3 {
     font-size: 1.125rem;
+  }
+
+  .ui-page-header,
+  .ui-panel,
+  .ui-metric-card {
+    border-radius: 12px;
   }
 }
 

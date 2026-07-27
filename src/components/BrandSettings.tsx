@@ -159,12 +159,12 @@ export const BrandSettings: React.FC<BrandSettingsProps> = ({
   const guidelines = assets.filter((asset) => asset.assetType === 'guideline');
 
   return (
-    <div className="font-vietnamese space-y-6">
-      <header className="rounded-3xl border border-[#0879D9]/15 bg-white p-5 sm:p-6">
+    <div className="ui-page font-vietnamese space-y-6">
+      <header className="ui-page-header p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-wider text-[#0879D9]">Nguồn dữ liệu thương hiệu</p>
-            <h2 className="mt-1 text-xl font-medium text-[#071827]">Cài đặt thương hiệu OMFIT</h2>
+            <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">Cài đặt thương hiệu OMFIT</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
               Thông tin tại đây được dùng cho nội dung bài viết, footer và ngữ cảnh tạo ảnh trước khi đăng WordPress.
             </p>

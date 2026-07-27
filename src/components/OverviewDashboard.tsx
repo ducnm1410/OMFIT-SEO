@@ -38,36 +38,34 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     : null;
 
   return (
-    <div className="space-y-6">
-      <div className="glass-panel-glow p-5 sm:p-8 rounded-3xl relative overflow-hidden">
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#E0F2FE] border border-[#0879D9]/30 text-[#0879D9] text-xs font-extrabold shadow-sm">
-            <Activity className="w-3.5 h-3.5" /> OMFIT • BALANCE IN MOTION
+    <div className="ui-page space-y-6">
+      <div className="ui-page-header p-5 sm:p-7">
+        <div className="max-w-3xl">
+          <div className="ui-eyebrow">
+            <Activity className="h-3.5 w-3.5" /> OMFIT Content Workspace
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#071827] leading-tight">
-            Hệ thống quản lý nội dung SEO <span className="gradient-text-omfit">omfit.com.vn</span>
+          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#17191D] sm:text-[30px] sm:leading-9">
+            Quản lý nội dung SEO cho <span className="text-[#0879D9]">omfit.com.vn</span>
           </h1>
-          <p className="text-slate-600 text-sm leading-relaxed max-w-2xl font-medium">
+          <p className="mt-2 max-w-2xl text-sm font-normal leading-6 text-slate-600">
             Nghiên cứu keyword từ Google Ads, soạn nội dung, quản lý hình ảnh và đăng bài WordPress.
-            Dashboard chỉ hiển thị dữ liệu được tạo hoặc lấy thật trong phiên làm việc.
+            Tất cả dữ liệu trên dashboard đều đến từ quy trình làm việc thực tế.
           </p>
-          <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
             <button
               onClick={() => setActiveTab('keywords')}
-              className="gradient-bg-omfit-btn px-5 py-2.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20"
+              className="gradient-bg-omfit-btn flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white"
             >
               <Search className="w-4 h-4" /> Phân tích keyword
             </button>
             <button
               onClick={() => setActiveTab('generator')}
-              className="px-4 py-2.5 rounded-2xl text-sm font-bold text-[#071827] bg-white border border-[#0879D9]/30 hover:border-[#0879D9] hover:bg-[#F0F9FF] transition flex items-center justify-center gap-2"
+              className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#17191D] transition hover:border-slate-300 hover:bg-slate-50"
             >
               <FilePenLine className="w-4 h-4 text-[#0879D9]" /> Soạn bài viết SEO
             </button>
           </div>
         </div>
-        <div className="absolute right-[-40px] top-[-40px] w-96 h-96 border border-[#0879D9]/15 rounded-full pointer-events-none" />
-        <div className="absolute right-[-10px] top-[-10px] w-72 h-72 border border-[#0879D9]/25 rounded-full pointer-events-none" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -99,23 +97,23 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <section className="lg:col-span-7 glass-panel p-4 sm:p-6 rounded-3xl border border-[#0879D9]/15 space-y-4 bg-white">
-          <h3 className="text-xs font-extrabold text-[#0879D9] uppercase tracking-wider flex items-center gap-2">
+        <section className="ui-panel lg:col-span-7 p-4 sm:p-5 space-y-4">
+          <h3 className="ui-section-title">
             <Activity className="w-4 h-4" /> Bài viết và điểm SEO theo ngày
           </h3>
           <SeoPerformanceChart articles={articles} />
         </section>
 
-        <section className="lg:col-span-5 glass-panel p-4 sm:p-6 rounded-3xl border border-[#0879D9]/15 space-y-4 bg-white">
-          <h3 className="text-xs font-extrabold text-[#0879D9] uppercase tracking-wider flex items-center gap-2">
+        <section className="ui-panel lg:col-span-5 p-4 sm:p-5 space-y-4">
+          <h3 className="ui-section-title">
             <PieChartIcon className="w-4 h-4" /> Phân bổ chuyên mục thực tế
           </h3>
           <CategoryPieChart articles={articles} />
         </section>
       </div>
 
-      <section className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
-        <h3 className="text-xs font-extrabold text-[#0879D9] uppercase tracking-wider flex items-center gap-2">
+      <section className="ui-panel p-5 space-y-4">
+        <h3 className="ui-section-title">
           <FilePenLine className="w-4 h-4" /> Quy trình tạo bài SEO
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -126,14 +124,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
       </section>
 
-      <section className="glass-panel p-4 sm:p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
+      <section className="ui-panel p-4 sm:p-5 space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-2">
+          <h3 className="ui-section-title">
             <FileText className="w-4 h-4 text-[#0879D9]" /> Bài viết đã tạo
           </h3>
           <button
             onClick={() => setActiveTab('history')}
-            className="text-xs text-[#0879D9] hover:underline flex items-center gap-1 font-bold"
+              className="flex items-center gap-1 text-xs font-semibold text-[#0879D9] hover:underline"
           >
             Xem lịch sử <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -147,7 +145,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="ui-table w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] text-slate-700 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-3">Tiêu đề</th>
@@ -204,13 +202,13 @@ interface MetricCardProps {
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ label, value, note, icon, positive }) => (
-  <div className="glass-panel p-5 rounded-2xl space-y-2 border border-[#0879D9]/15 bg-white">
+  <div className="ui-metric-card p-4 sm:p-5">
     <div className="flex items-center justify-between text-slate-500">
-      <span className="text-xs font-semibold">{label}</span>
-      <div className="p-2.5 rounded-xl bg-[#E0F2FE] text-[#0879D9]">{icon}</div>
+      <span className="text-xs font-medium">{label}</span>
+      <div className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-[#0879D9]">{icon}</div>
     </div>
-    <p className={`text-2xl font-black ${positive ? 'text-emerald-600' : 'text-[#071827]'}`}>{value}</p>
-    <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+    <p className={`mt-4 text-2xl font-semibold tracking-[-0.025em] ${positive ? 'text-emerald-700' : 'text-[#17191D]'}`}>{value}</p>
+    <p className="mt-1 flex items-center gap-1 text-[11px] font-normal text-slate-500">
       {positive && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
       {note}
     </p>
@@ -229,10 +227,10 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ step, label, description, i
   <button
     type="button"
     onClick={onClick}
-    className="p-4 text-left rounded-2xl bg-[#F8FAFC] border border-slate-200 hover:border-[#0879D9] transition group"
+    className="group p-4 text-left rounded-xl bg-[#FAFAF9] border border-slate-200 hover:border-slate-300 hover:bg-white transition"
   >
     <div className="flex items-center justify-between mb-2">
-      <span className="w-6 h-6 rounded-full bg-[#0879D9] text-white font-black text-xs flex items-center justify-center">{step}</span>
+      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#17191D] text-xs font-semibold text-white">{step}</span>
       {React.cloneElement(icon, { className: 'w-4 h-4 text-slate-400 group-hover:text-[#0879D9] transition' })}
     </div>
     <h4 className="font-bold text-xs text-[#071827] group-hover:text-[#0879D9] transition">{label}</h4>

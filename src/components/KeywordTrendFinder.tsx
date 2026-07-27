@@ -151,12 +151,12 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="ui-page space-y-6">
       {/* Header */}
-      <div className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
+      <div className="ui-page-header p-5 sm:p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">
               <Search className="w-5 h-5 text-[#0879D9]" /> Phân tích keyword và xu hướng SEO
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -242,7 +242,7 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
         <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
           <div className="md:col-span-6">
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Từ Khóa Main Target
+              Từ khóa chính
             </label>
             <input
               type="text"
@@ -255,7 +255,7 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
           </div>
 
           <div className="md:col-span-4">
-            <label className="block text-xs font-bold text-slate-700 mb-1">Kiến Trúc Thương Hiệu</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Nhóm dịch vụ OMFIT</label>
             <select
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
@@ -330,7 +330,7 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
           {trends.map((item, index) => (
             <div
               key={`${item.keyword}-${index}`}
-              className="glass-panel p-5 rounded-3xl space-y-4 border border-[#0879D9]/15 hover:border-[#0879D9] transition group relative overflow-hidden bg-white"
+              className="ui-panel group relative space-y-4 overflow-hidden p-5 transition hover:border-slate-300"
             >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="min-w-0">

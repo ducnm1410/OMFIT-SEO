@@ -14,17 +14,17 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
   setActiveTab
 }) => {
   return (
-    <div className="space-y-6">
-      <div className="glass-panel p-6 rounded-3xl space-y-2 border border-[#0879D9]/15 bg-white">
-        <h2 className="text-xl font-extrabold text-[#071827] flex items-center gap-2">
-          <History className="w-5 h-5 text-[#0879D9]" /> Lịch Sử Bài Viết OMFIT Đã Tạo & Xuất Bản
+    <div className="ui-page space-y-6">
+      <div className="ui-page-header space-y-2 p-5 sm:p-6">
+        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">
+          <History className="w-5 h-5 text-[#0879D9]" /> Lịch sử bài viết OMFIT
         </h2>
         <p className="text-xs text-slate-500 font-medium">
           Danh sách bài viết đã tạo và đăng qua WordPress trên omfit.com.vn.
         </p>
       </div>
 
-      <div className="glass-panel p-6 rounded-3xl space-y-4 border border-[#0879D9]/15 bg-white">
+      <div className="ui-panel space-y-4 p-4 sm:p-5">
         {articles.length === 0 ? (
           <div className="text-center py-16 bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200 space-y-3">
             <FileText className="w-12 h-12 text-[#0879D9]/30 mx-auto" />
@@ -32,7 +32,7 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="ui-table w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] text-slate-700 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-3.5">Tiêu đề bài viết</th>

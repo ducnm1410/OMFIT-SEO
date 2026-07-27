@@ -326,7 +326,7 @@ export function App() {
   );
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-[#071827] flex">
+    <div className="ui-app-shell min-h-dvh text-[#17191D] flex">
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -337,6 +337,7 @@ export function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header
+          activeTab={activeTab}
           settings={settings}
           userLabel={userLabel}
           onLogout={() => void handleLogout()}
@@ -344,7 +345,7 @@ export function App() {
           onMenuToggle={() => setIsSidebarOpen((open) => !open)}
         />
 
-        <main className="app-main p-4 sm:p-6 xl:p-8 flex-1">
+        <main className="app-main flex-1 px-4 py-5 sm:px-6 sm:py-6 xl:px-10 xl:py-8">
           {activeTab === 'overview' && (
             <OverviewDashboard
               articles={articles}
