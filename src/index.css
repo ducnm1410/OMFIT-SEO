@@ -211,17 +211,18 @@
 /* Article preview mirrors the dark WordPress single-post theme. */
 .article-preview.prose-custom {
   padding: 1.5rem;
+  background-color: #233968;
   font-family: "Be Vietnam Pro", Arial, sans-serif;
   font-size: 1rem;
-  line-height: 1.72;
+  line-height: 1.75;
   color: #e5e7eb;
 }
 
 .article-preview.prose-custom > h1 {
   margin: 0 0 1.5rem;
   color: #f8fafc;
-  font-size: 1.75rem;
-  line-height: 1.25;
+  font-size: 2rem;
+  line-height: 1.3;
   font-weight: 800;
   letter-spacing: -0.02em;
 }

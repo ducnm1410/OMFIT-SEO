@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OMFIT SEO Bridge
  * Description: Technical SEO, Vietnamese article typography, metadata, schema, redirects and sitemaps for OMFIT.
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: OMFIT
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 
 define('OMFIT_SEO_CANONICAL_HOST', 'omfit.com.vn');
 define('OMFIT_SEO_SITE_NAME', 'OMFIT Fitness & Wellness');
-define('OMFIT_SEO_BRIDGE_VERSION', '1.0.6');
+define('OMFIT_SEO_BRIDGE_VERSION', '1.0.7');
 
 function omfit_seo_canonical_url($url) {
     $url = preg_replace('#^http://#i', 'https://', (string) $url);
@@ -565,6 +565,15 @@ function omfit_seo_print_single_post_typography() {
             text-rendering: optimizeLegibility;
         }
 
+        /*
+         * Keep the article surface paired with the enforced light typography.
+         * This matches the current OMFIT single-post theme and prevents light
+         * text from becoming unreadable if an Elementor wrapper turns white.
+         */
+        body.single-post .omfit-article-content {
+            background-color: #233968 !important;
+        }
+
         body.single-post .omfit-article-content p,
         body.single-post .omfit-article-content li,
         body.single-post .omfit-article-content blockquote,
@@ -672,6 +681,7 @@ function omfit_seo_print_single_post_typography() {
 
         body.single-post .omfit-article-content a {
             color: #67c1ff !important;
+            text-decoration-line: underline;
             text-decoration-thickness: 1px;
             text-underline-offset: 3px;
         }

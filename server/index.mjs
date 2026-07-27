@@ -1976,6 +1976,7 @@ function getWordpressConfig() {
 
 const wordpressMediaMaxBytes = 10 * 1024 * 1024;
 const wordpressMediaUploadsInFlight = new Map();
+const wordpressMediaSyncBatchSize = 3;
 // Vercel gives the whole invocation 60s. Authentication can consume up to 10s
 // before this handler starts, so keep the handler budget at 45s with margin for
 // the final database response and runtime cleanup.
@@ -2227,7 +2228,7 @@ async function resolveOwnedMediaAsset(ownerId, image, config) {
   };
 }
 
-async function getOwnedPublishMediaState(ownerId, article, config, deadline) {
+async function getOwnedPublishMediaState(ownerId, article, config) {
   const featuredImage = article?.featuredImage || null;
   const inlineImages = Array.isArray(article?.articleImages) ? article.articleImages : [];
   const suppliedImages = [
@@ -2273,30 +2274,6 @@ async function getOwnedPublishMediaState(ownerId, article, config, deadline) {
       ])
       .filter(([, sourceUrl]) => sourceUrl)
   );
-  const contentUsesWordpressMedia = (String(article?.contentHtml || '').match(/<img\b[^>]*>/gi) || [])
-    .some((tag) => normalizeTrustedWordpressMediaUrl(config.siteUrl, readHtmlAttribute(tag, 'src')));
-  if (contentUsesWordpressMedia) {
-    const recoverableAssets = (data || [])
-      .filter((asset) => asset.status !== 'failed')
-      .filter((asset) => !mappingByMediaId.has(String(asset.id)))
-      .filter((asset) => buildOwnedPublicStorageUrl(ownerId, asset.bucket, asset.storage_path));
-    for (let offset = 0; offset < recoverableAssets.length; offset += 3) {
-      const batch = recoverableAssets.slice(offset, offset + 3);
-      const recovered = await Promise.all(batch.map(async (asset) => {
-        const identity = buildWordpressMediaIdentity(asset);
-        const media = await findWordpressMediaBySlug(config, identity.slug, deadline);
-        const sourceUrl = media && String(media.slug || '') === identity.slug
-          ? normalizeTrustedWordpressMediaUrl(config.siteUrl, media.source_url)
-          : '';
-        if (!sourceUrl) return null;
-        await persistWordpressMediaMapping(asset, ownerId, config, media, identity.slug);
-        return [String(asset.id), sourceUrl];
-      }));
-      recovered.filter(Boolean).forEach(([mediaId, sourceUrl]) => {
-        mappingByMediaId.set(mediaId, sourceUrl);
-      });
-    }
-  }
   const assetUrls = new Map();
   (data || []).forEach((asset) => {
     if (asset.status === 'failed') return;
@@ -2320,7 +2297,13 @@ async function getOwnedPublishMediaState(ownerId, article, config, deadline) {
       return false;
     }
   };
-  const approvedInlineImages = inlineImages.filter(isApprovedDescriptor);
+  const withWordpressSource = (image) => ({
+    ...image,
+    wordpressUrl: mappingByMediaId.get(String(image?.id || '').trim()) || ''
+  });
+  const approvedInlineImages = inlineImages
+    .filter(isApprovedDescriptor)
+    .map(withWordpressSource);
   const approvedAssetIds = new Set([
     ...(featuredImage && isApprovedDescriptor(featuredImage) ? [String(featuredImage.id)] : []),
     ...approvedInlineImages.map((image) => String(image.id))
@@ -2330,8 +2313,39 @@ async function getOwnedPublishMediaState(ownerId, article, config, deadline) {
 
   return {
     approvedImageUrls,
-    featuredImage: featuredImage && isApprovedDescriptor(featuredImage) ? featuredImage : null,
+    featuredImage: featuredImage && isApprovedDescriptor(featuredImage)
+      ? withWordpressSource(featuredImage)
+      : null,
     inlineImages: approvedInlineImages
+  };
+}
+
+function buildWordpressMediaSyncPlan({
+  featuredImage,
+  inlineImages = [],
+  cursor = 0,
+  batchSize = wordpressMediaSyncBatchSize
+} = {}) {
+  const uniqueMedia = [];
+  const seenIds = new Set();
+  for (const image of [featuredImage, ...(Array.isArray(inlineImages) ? inlineImages : [])]) {
+    const mediaId = String(image?.id || '').trim();
+    if (!isUuid(mediaId) || seenIds.has(mediaId)) continue;
+    seenIds.add(mediaId);
+    uniqueMedia.push(image);
+  }
+  const normalizedBatchSize = Math.max(1, Math.floor(Number(batchSize) || wordpressMediaSyncBatchSize));
+  const normalizedCursor = Math.min(
+    uniqueMedia.length,
+    Math.max(0, Math.floor(Number(cursor) || 0))
+  );
+  const batch = uniqueMedia.slice(normalizedCursor, normalizedCursor + normalizedBatchSize);
+  const nextCursor = normalizedCursor + batch.length;
+  return {
+    batch,
+    nextCursor,
+    pendingCount: Math.max(0, uniqueMedia.length - normalizedCursor),
+    remainingCount: Math.max(0, uniqueMedia.length - nextCursor)
   };
 }
 
@@ -2817,12 +2831,16 @@ function readHtmlAttribute(tag, name) {
 }
 
 function contentReferencesImage(contentHtml, image) {
-  const sourceUrl = String(image?.url || '').trim();
-  if (!sourceUrl) return false;
+  const sourceUrls = [image?.url, image?.wordpressUrl]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (!sourceUrls.length) return false;
   return (String(contentHtml).match(/<img\b[^>]*>/gi) || []).some((tag) => {
     const currentSource = readHtmlAttribute(tag, 'src');
-    return currentSource === sourceUrl
-      || currentSource === escapeWordpressHtml(sourceUrl);
+    return sourceUrls.some((sourceUrl) => (
+      currentSource === sourceUrl
+      || currentSource === escapeWordpressHtml(sourceUrl)
+    ));
   });
 }
 
@@ -2843,14 +2861,18 @@ function buildWordpressSrcSet(media) {
 }
 
 function replaceWordpressImageMarkup(contentHtml, image, media) {
-  const originalUrl = String(image?.url || '').trim();
-  if (!originalUrl || !media?.source_url) return contentHtml;
+  const originalUrls = [image?.url, image?.wordpressUrl]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (!originalUrls.length || !media?.source_url) return contentHtml;
   const width = Number(media?.media_details?.width) || 1200;
   const height = Number(media?.media_details?.height) || 896;
   const srcSet = buildWordpressSrcSet(media);
   let updatedHtml = String(contentHtml).replace(/<img\b[^>]*>/gi, (tag) => {
     const currentSource = readHtmlAttribute(tag, 'src');
-    if (currentSource !== originalUrl && !tag.includes(originalUrl)) return tag;
+    if (!originalUrls.some((sourceUrl) => (
+      currentSource === sourceUrl || tag.includes(sourceUrl)
+    ))) return tag;
     let nextTag = setHtmlAttribute(tag, 'src', media.source_url);
     nextTag = setHtmlAttribute(nextTag, 'alt', image.altText || 'Hình ảnh OMFIT');
     nextTag = setHtmlAttribute(nextTag, 'width', width);
@@ -2915,6 +2937,7 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
   try {
     const article = request.body?.article;
     const status = request.body?.status === 'draft' ? 'draft' : 'publish';
+    const syncMediaOnly = request.body?.syncMediaOnly === true;
     if (!article?.id || !article?.title || !article?.contentHtml) {
       return response.status(400).json({ error: 'Bài viết không hợp lệ.' });
     }
@@ -2947,11 +2970,68 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
     const logs = ['Bắt đầu đồng bộ nội dung và hình ảnh với WordPress.'];
     const postTitle = normalizeWordpressPostTitle(article);
     const reviewerConfirmed = request.body?.reviewerConfirmed === true;
+    if (syncMediaOnly) {
+      const publishMedia = await getOwnedPublishMediaState(
+        request.supabaseUser.id,
+        article,
+        config
+      );
+      if (publishMedia.inlineImages.length > 10) {
+        throw new ApiError(
+          400,
+          'Mỗi bài viết được liên kết tối đa 10 ảnh nội dung.',
+          'wordpress_media_limit'
+        );
+      }
+      const usedAltTexts = new Set();
+      const usedCaptions = new Set();
+      const syncInlineImages = publishMedia.inlineImages.map((image, position) => ({
+        ...image,
+        altText: normalizeUniqueImageText(
+          image.altText,
+          `${article.focusKeyword || postTitle} tại OMFIT`,
+          usedAltTexts,
+          position
+        ),
+        caption: normalizeUniqueImageText(
+          image.caption,
+          `Hình minh họa cho ${article.focusKeyword || postTitle}`,
+          usedCaptions,
+          position
+        )
+      }));
+      const syncPlan = buildWordpressMediaSyncPlan({
+        featuredImage: publishMedia.featuredImage,
+        inlineImages: syncInlineImages,
+        cursor: request.body?.mediaSyncCursor
+      });
+      if (syncPlan.batch.length) {
+        await Promise.all(syncPlan.batch.map((image) => (
+          uploadWordpressMedia(
+            config,
+            image,
+            request.supabaseUser.id,
+            wordpressDeadline
+          )
+        )));
+        logs.push(`Đã chuẩn bị ${syncPlan.batch.length} ảnh cho lần đăng bài này.`);
+      } else {
+        logs.push('Tất cả hình ảnh đã sẵn sàng trên WordPress.');
+      }
+      return response.json({
+        mediaSyncComplete: syncPlan.remainingCount === 0,
+        syncedMediaCount: syncPlan.batch.length,
+        remainingMediaCount: syncPlan.remainingCount,
+        pendingMediaCount: syncPlan.pendingCount,
+        nextMediaSyncCursor: syncPlan.nextCursor,
+        logs
+      });
+    }
     const brand = await getActiveBrandProfile(request.supabaseUser.id);
     const [approvedSources, suggestedLinks, publishMedia] = await Promise.all([
       getOwnedArticleSources(request.supabaseUser.id, article.id, true),
       getSuggestedInternalLinksForPublish(request.supabaseUser.id, article),
-      getOwnedPublishMediaState(request.supabaseUser.id, article, config, wordpressDeadline)
+      getOwnedPublishMediaState(request.supabaseUser.id, article, config)
     ]);
     const brandLogo = await getActiveBrandLogo(request.supabaseUser.id, brand?.id);
     const approvedPublishImageUrls = [
@@ -3000,15 +3080,17 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
         rejectedImageCount: filteredContent.removedCount
       }
     );
-    await persistServerSeoAudit(
-      request.supabaseUser.id,
-      auditArticle,
-      audit,
-      {
-        title: postTitle,
-        contentHtml: storedContentHtml
-      }
-    );
+    if (!syncMediaOnly || audit.blocking) {
+      await persistServerSeoAudit(
+        request.supabaseUser.id,
+        auditArticle,
+        audit,
+        {
+          title: postTitle,
+          contentHtml: storedContentHtml
+        }
+      );
+    }
     if (audit.blocking) {
       throw new ApiError(
         422,
@@ -3037,17 +3119,6 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
       logs.push(`Đã loại ${filteredContent.removedCount} ảnh không thuộc kho OMFIT hoặc chưa được cấp quyền.`);
     }
 
-    let featuredMediaId;
-    if (publishMedia.featuredImage) {
-      const media = await uploadWordpressMedia(
-        config,
-        publishMedia.featuredImage,
-        request.supabaseUser.id,
-        wordpressDeadline
-      );
-      featuredMediaId = media?.id;
-      logs.push('Đã đồng bộ featured image.');
-    }
     const usedAltTexts = new Set();
     const usedCaptions = new Set();
     const suppliedInlineImages = publishMedia.inlineImages;
@@ -3087,6 +3158,18 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
           position
         )
       }));
+
+    let featuredMediaId;
+    if (publishMedia.featuredImage) {
+      const media = await uploadWordpressMedia(
+        config,
+        publishMedia.featuredImage,
+        request.supabaseUser.id,
+        wordpressDeadline
+      );
+      featuredMediaId = media?.id;
+      logs.push('Đã đồng bộ featured image.');
+    }
     for (let offset = 0; offset < preparedInlineImages.length; offset += 3) {
       const batch = preparedInlineImages.slice(offset, offset + 3);
       const uploadedBatch = await Promise.all(batch.map((preparedImage) => (
@@ -3410,5 +3493,12 @@ if (!process.env.VERCEL) {
   });
 }
 
-export { buildWordpressEditorialMeta, sanitizeGeneratedHtml, sendWordpressPost };
+export {
+  buildWordpressEditorialMeta,
+  buildWordpressMediaSyncPlan,
+  contentReferencesImage,
+  replaceWordpressImageMarkup,
+  sanitizeGeneratedHtml,
+  sendWordpressPost
+};
 export default app;

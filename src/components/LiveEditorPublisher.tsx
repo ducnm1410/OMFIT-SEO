@@ -252,7 +252,10 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
 
     try {
       const result = await wpService.publishArticleWithMcp(currentArticleState, postStatus, {
-        reviewerConfirmed
+        reviewerConfirmed,
+        onProgress: (message) => {
+          setPublishLogs((currentLogs) => [...currentLogs, message]);
+        }
       });
       setPublishLogs(result.logs);
       setPublishedUrl(result.postUrl);
@@ -663,7 +666,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           </div>
 
           {activeView === 'visual' ? (
-            <div className="article-preview bg-[#110E10] rounded-2xl border border-[#2A3340] min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
+            <div className="article-preview bg-[#233968] rounded-2xl border border-[#40558A] min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
               <h1>{title}</h1>
               {article.featuredImage && (
                 <figure className="mb-6 text-center">
