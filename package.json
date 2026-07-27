@@ -10,7 +10,10 @@
     "test": "node --test",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "wordpress:mcp": "node scripts/wordpress-mcp.mjs",
+    "wordpress:optimize-home": "node scripts/optimize-wordpress-home.mjs",
+    "wordpress:deploy-agentic": "node scripts/deploy-wordpress-agentic.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
@@ -25,6 +28,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@colbymchenry/codegraph": "^1.5.0",
     "@tailwindcss/vite": "^4.0.7",
     "@types/canvas-confetti": "^1.9.0",
     "@types/react": "^19.0.8",
