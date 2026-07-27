@@ -13,6 +13,9 @@ import type { BrandAsset, BrandProfile, GeneratedImage } from '../types';
 import { LeonardoService } from '../services/leonardoService';
 import { uploadBrandAsset, uploadMediaFile } from '../services/contentRepository';
 
+const noLogoSelection = '__no_logo__';
+const logoSelectionStorageKey = 'omfit-image-studio-logo-selection';
+
 interface ImageStudioProps {
   leonardoService: LeonardoService;
   currentKeyword: string;
@@ -42,7 +45,13 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
     'Hình ảnh phòng tập Pilates Reformer cao cấp OMFIT, không gian sáng tự nhiên, máy Reformer nhập khẩu, bố cục hiện đại và chuyên nghiệp'
   );
   const [style, setStyle] = useState('Photorealistic 4K');
-  const [selectedLogoId, setSelectedLogoId] = useState('');
+  const [selectedLogoId, setSelectedLogoId] = useState(() => {
+    try {
+      return window.localStorage.getItem(logoSelectionStorageKey) || '';
+    } catch {
+      return '';
+    }
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -53,9 +62,19 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
   const logoUploadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (selectedLogoId === noLogoSelection) return;
     if (selectedLogoId && logos.some((logo) => logo.id === selectedLogoId)) return;
-    setSelectedLogoId(logos[0]?.id || '');
+    if (logos.length > 0) setSelectedLogoId(logos[0].id);
   }, [logos, selectedLogoId]);
+
+  useEffect(() => {
+    if (!selectedLogoId) return;
+    try {
+      window.localStorage.setItem(logoSelectionStorageKey, selectedLogoId);
+    } catch {
+      // Logo selection remains active for the current session.
+    }
+  }, [selectedLogoId]);
 
   const handleDirectCustomUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -107,6 +126,10 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
     }
     setIsGenerating(true);
     setMessage('');
+    const logoAssetId = selectedLogoId !== noLogoSelection
+      && logos.some((logo) => logo.id === selectedLogoId)
+      ? selectedLogoId
+      : undefined;
     try {
       const newImage = await leonardoService.generateImage(
         prompt.trim(),
@@ -115,14 +138,14 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
         currentKeyword || 'omfit-seo',
         'nano-banana-2',
         articleId,
-        selectedLogoId || undefined
+        logoAssetId
       );
       setGeneratedImages((previous) => [newImage, ...previous]);
       setSelectedImage(newImage);
       onImageGenerated(newImage);
-      setMessage(selectedLogoId
+      setMessage(logoAssetId
         ? 'Đã tạo ảnh với logo được chọn làm ngữ cảnh thương hiệu.'
-        : 'Đã tạo ảnh theo cài đặt thương hiệu.');
+        : 'Đã tạo ảnh không dùng logo tham chiếu.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Không thể tạo hình ảnh.');
     } finally {
@@ -190,11 +213,20 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <button
                     type="button"
-                    aria-pressed={!selectedLogoId}
-                    onClick={() => setSelectedLogoId('')}
-                    className={`relative min-h-24 rounded-2xl border p-3 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0879D9] ${!selectedLogoId ? 'border-[#0879D9] bg-[#F0F9FF] ring-2 ring-[#0879D9]/10' : 'border-slate-200 bg-white hover:border-[#0879D9]/50'}`}
+                    aria-pressed={selectedLogoId === noLogoSelection || (!selectedLogoId && logos.length === 0)}
+                    onClick={() => {
+                      setSelectedLogoId(noLogoSelection);
+                      setMessage('Đã chọn tạo ảnh không dùng logo tham chiếu.');
+                    }}
+                    className={`relative min-h-24 rounded-2xl border p-3 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0879D9] ${
+                      selectedLogoId === noLogoSelection || (!selectedLogoId && logos.length === 0)
+                        ? 'border-[#0879D9] bg-[#F0F9FF] ring-2 ring-[#0879D9]/10'
+                        : 'border-slate-200 bg-white hover:border-[#0879D9]/50'
+                    }`}
                   >
-                    {!selectedLogoId && <Check className="absolute right-2 top-2 h-4 w-4 text-[#0879D9]" />}
+                    {(selectedLogoId === noLogoSelection || (!selectedLogoId && logos.length === 0)) && (
+                      <Check className="absolute right-2 top-2 h-4 w-4 text-[#0879D9]" />
+                    )}
                     <ImageIcon className="mx-auto h-7 w-7 text-slate-400" />
                     <span className="mt-2 block text-xs font-bold text-slate-700">Không dùng logo</span>
                   </button>
@@ -205,7 +237,10 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                         key={logo.id}
                         type="button"
                         aria-pressed={selected}
-                        onClick={() => setSelectedLogoId(logo.id)}
+                        onClick={() => {
+                          setSelectedLogoId(logo.id);
+                          setMessage(`Đã chọn logo “${logo.name}” làm ảnh tham chiếu.`);
+                        }}
                         className={`relative min-h-24 overflow-hidden rounded-2xl border p-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0879D9] ${selected ? 'border-[#0879D9] bg-[#F0F9FF] ring-2 ring-[#0879D9]/10' : 'border-slate-200 bg-white hover:border-[#0879D9]/50'}`}
                       >
                         {selected && <Check className="absolute right-2 top-2 z-10 h-4 w-4 rounded-full bg-white text-[#0879D9]" />}

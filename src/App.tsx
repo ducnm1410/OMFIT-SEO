@@ -46,6 +46,7 @@ import {
 } from './utils/articleImageMarkup';
 
 const workflowStorageKey = 'omfit-seo-workflow-v1';
+const sidebarCollapsedStorageKey = 'omfit-seo-sidebar-collapsed';
 
 const defaultContentBrief: ContentBrief = {
   keyword: '',
@@ -86,6 +87,21 @@ export function App() {
       : 'overview';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(sidebarCollapsedStorageKey, String(isSidebarCollapsed));
+    } catch {
+      // Sidebar collapse remains available for the current session.
+    }
+  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -470,6 +486,8 @@ export function App() {
         setActiveTab={navigateToTab}
         wpConnected={settings.wpMcpConnected}
         isOpen={isSidebarOpen}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapsed={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
         onClose={() => setIsSidebarOpen(false)}
       />
 

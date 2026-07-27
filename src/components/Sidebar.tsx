@@ -10,7 +10,9 @@ import {
   CheckCircle2,
   Activity,
   Settings2,
-  X
+  X,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import type { ActiveTab } from '../types';
 
@@ -19,6 +21,8 @@ interface SidebarProps {
   setActiveTab: (tab: ActiveTab) => void;
   wpConnected: boolean;
   isOpen: boolean;
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
   onClose: () => void;
 }
 
@@ -27,6 +31,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   wpConnected,
   isOpen,
+  isCollapsed,
+  onToggleCollapsed,
   onClose
 }) => {
   const menuGroups = [
@@ -69,15 +75,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
           aria-label="Đóng trình đơn"
         />
       )}
-      <aside className={`ui-sidebar w-[280px] md:w-[264px] flex flex-col justify-between h-dvh fixed md:sticky top-0 z-50 md:z-30 transition-transform duration-200 ${
+      <aside className={`ui-sidebar relative flex h-dvh w-[280px] flex-col justify-between fixed md:sticky top-0 z-50 md:z-30 transition-[width,transform] duration-200 ${
+        isCollapsed ? 'md:w-[76px]' : 'md:w-[264px]'
+      } ${
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}>
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        className="absolute -right-3 top-[18px] z-10 hidden h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-[#0879D9]/40 hover:text-[#0879D9] md:grid"
+        aria-label={isCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+        title={isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+      >
+        {isCollapsed
+          ? <ChevronsRight className="h-3.5 w-3.5" />
+          : <ChevronsLeft className="h-3.5 w-3.5" />}
+      </button>
       <div>
-        <div className="flex min-h-16 items-center gap-3 border-b border-slate-200 px-4">
+        <div className={`flex min-h-16 items-center gap-3 border-b border-slate-200 px-4 ${
+          isCollapsed ? 'md:justify-center md:px-2' : ''
+        }`}>
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#17191D] text-white">
             <Activity className="h-[18px] w-[18px]" />
           </div>
-          <div className="min-w-0">
+          <div className={`min-w-0 ${isCollapsed ? 'md:hidden' : ''}`}>
             <h1 className="text-[15px] font-bold leading-none tracking-tight text-[#17191D]">OMFIT SEO</h1>
             <p className="mt-1 text-[10px] font-medium text-slate-500">Content workspace</p>
           </div>
@@ -91,10 +112,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        <nav className="space-y-5 px-3 py-5" aria-label="Điều hướng chính">
+        <nav className={`space-y-5 px-3 py-5 ${isCollapsed ? 'md:px-2' : ''}`} aria-label="Điều hướng chính">
           {menuGroups.map((group) => (
             <div key={group.label}>
-              <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              <p className={`mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 ${
+                isCollapsed ? 'md:sr-only' : ''
+              }`}>
                 {group.label}
               </p>
               <div className="space-y-1">
@@ -110,7 +133,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         setActiveTab(item.id as ActiveTab);
                         onClose();
                       }}
+                      title={isCollapsed ? item.label : undefined}
                       className={`group w-full min-h-10 flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-[13px] leading-5 transition-colors ${
+                        isCollapsed ? 'md:justify-center md:px-2' : ''
+                      } ${
                         isActive
                           ? 'bg-[#E9EAEC] text-[#17191D] font-semibold'
                           : 'text-slate-600 font-medium hover:text-[#17191D] hover:bg-[#F0F1F2]'
@@ -118,10 +144,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <span className="min-w-0 flex items-center gap-2.5">
                         <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-[#0879D9]' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                        <span className="truncate">{item.label}</span>
+                        <span className={`truncate ${isCollapsed ? 'md:hidden' : ''}`}>{item.label}</span>
                       </span>
                       {item.badge && (
                         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold ${
+                          isCollapsed ? 'md:hidden' : ''
+                        } ${
                           item.badge === 'Live'
                             ? 'bg-emerald-50 text-emerald-700'
                             : 'bg-[#FFF1E8] text-[#C2410C]'
@@ -138,14 +166,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      <div className="border-t border-slate-200 p-3">
-        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3">
+      <div className={`border-t border-slate-200 p-3 ${isCollapsed ? 'md:p-2' : ''}`}>
+        <div
+          className={`flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 ${
+            isCollapsed ? 'md:justify-center md:p-2' : ''
+          }`}
+          title={isCollapsed ? (wpConnected ? 'WordPress đã kết nối' : 'WordPress chưa kết nối') : undefined}
+        >
           <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
             wpConnected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
           }`}>
             <Globe className="h-4 w-4" />
           </span>
-          <div className="min-w-0 flex-1">
+          <div className={`min-w-0 flex-1 ${isCollapsed ? 'md:hidden' : ''}`}>
             <p className="truncate text-xs font-semibold text-[#17191D]">omfit.com.vn</p>
             <p className={`mt-0.5 flex items-center gap-1 text-[10px] font-medium ${
               wpConnected ? 'text-emerald-700' : 'text-amber-700'
