@@ -212,9 +212,14 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
       </div>
 
       {summary && (
-        <p className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-3 text-sm font-normal leading-6 text-slate-700">
-          {summary}
-        </p>
+        <details className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-3">
+          <summary className="cursor-pointer text-sm font-normal text-slate-700">
+            Xem nhận định cần kiểm chứng
+          </summary>
+          <p className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap pr-2 text-sm font-normal leading-6 text-slate-700">
+            {summary}
+          </p>
+        </details>
       )}
 
       {searchQueries.length > 0 && (
@@ -297,9 +302,14 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
                     {source.publisher || source.domain || href}
                   </p>
                   {source.claimText && (
-                    <p className="mt-2 text-sm font-normal leading-6 text-slate-700">
-                      {source.claimText}
-                    </p>
+                    <details className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
+                      <summary className="cursor-pointer text-xs font-normal text-slate-600">
+                        Xem nhận định liên quan
+                      </summary>
+                      <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap pr-2 text-sm font-normal leading-6 text-slate-700">
+                        {source.claimText}
+                      </p>
+                    </details>
                   )}
                 </div>
               </div>
