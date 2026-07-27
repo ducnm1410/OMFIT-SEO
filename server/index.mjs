@@ -16,6 +16,7 @@ import {
   classifySourceDomain,
   dedupeSourcesByUpsertUrl,
   extractGroundedSources,
+  isAbortOrTimeoutError,
   verifyPublicSourceUrl
 } from './grounding.mjs';
 import {
@@ -842,28 +843,52 @@ async function generateGeminiContent(prompt, responseMimeType = 'text/plain') {
   return String(text).trim();
 }
 
-async function generateGroundedGeminiContent(prompt) {
+async function generateGroundedGeminiContent(prompt, { timeoutMs = 32_000 } = {}) {
   const apiKey = getEnv('GEMINI_API_KEY');
   const model = getEnv('GEMINI_RESEARCH_MODEL') || getEnv('GEMINI_MODEL', 'gemini-2.5-flash');
   if (!apiKey) throw new ApiError(503, 'Chưa cấu hình Gemini API trên máy chủ.', 'gemini_missing');
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify(buildGroundedGenerateRequest(prompt)),
-      signal: AbortSignal.timeout(22_000)
+  let response;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify(buildGroundedGenerateRequest(prompt)),
+        signal: AbortSignal.timeout(timeoutMs)
+      }
+    );
+  } catch (error) {
+    if (isAbortOrTimeoutError(error)) {
+      throw new ApiError(
+        504,
+        'Google Search Grounding đang phản hồi chậm. Vui lòng thử lại sau ít phút.',
+        'gemini_grounding_timeout',
+        { retryable: true, releaseRateLimit: true }
+      );
     }
-  );
+    throw new ApiError(
+      503,
+      'Không thể kết nối Google Search Grounding lúc này. Vui lòng thử lại sau.',
+      'gemini_grounding_unavailable',
+      { retryable: true, releaseRateLimit: true }
+    );
+  }
   if (!response.ok) {
     const detail = await response.text();
+    const retryable = response.status === 429 || response.status >= 500;
     throw new ApiError(
-      502,
+      retryable ? 503 : 502,
       `Gemini Grounding trả về lỗi ${response.status}: ${detail.slice(0, 300)}`,
-      'gemini_grounding_failed'
+      'gemini_grounding_failed',
+      {
+        upstreamStatus: response.status,
+        retryable,
+        releaseRateLimit: retryable
+      }
     );
   }
   const payload = await response.json();
@@ -1004,6 +1029,16 @@ function enforceResearchRateLimit(ownerId) {
       if (!timestamps.some((timestamp) => now - timestamp < windowMs)) researchRateLimits.delete(key);
     }
   }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const current = researchRateLimits.get(ownerId) || [];
+    const reservationIndex = current.indexOf(now);
+    if (reservationIndex >= 0) current.splice(reservationIndex, 1);
+    if (current.length > 0) researchRateLimits.set(ownerId, current);
+    else researchRateLimits.delete(ownerId);
+  };
 }
 
 function isUuid(value = '') {
@@ -1529,11 +1564,15 @@ app.get('/api/research/sources', requireSupabaseUser, async (request, response) 
 });
 
 app.post('/api/research/sources', requireSupabaseUser, async (request, response) => {
+  const researchStartedAt = Date.now();
+  let researchStage = 'validate_request';
+  let releaseResearchRateLimit = null;
   try {
     const articleId = String(request.body?.articleId || '').trim();
     if (!isUuid(articleId)) {
       throw new ApiError(400, 'Mã bài viết không hợp lệ.', 'article_id_invalid');
     }
+    researchStage = 'load_article';
     const ownedArticle = await getOwnedArticlePublishState(request.supabaseUser.id, articleId);
     const title = repairGeneratedText(request.body?.title || ownedArticle.title || '')
       .replace(/\s+/g, ' ')
@@ -1546,12 +1585,13 @@ app.post('/api/research/sources', requireSupabaseUser, async (request, response)
       .trim()
       .slice(0, 120);
     const contentText = stripHtml(request.body?.contentHtml || ownedArticle.content_html || '')
-      .slice(0, 6_000);
+      .slice(0, 4_000);
     if (title.length < 3 || focusKeyword.length < 2) {
       throw new ApiError(400, 'Bài viết cần có tiêu đề và từ khóa trước khi tìm nguồn.', 'research_input_invalid');
     }
-    enforceResearchRateLimit(request.supabaseUser.id);
+    releaseResearchRateLimit = enforceResearchRateLimit(request.supabaseUser.id);
 
+    researchStage = 'google_grounding';
     const { payload, text } = await generateGroundedGeminiContent(
       `Bạn là biên tập viên nghiên cứu nguồn cho một bài viết tiếng Việt về fitness và wellness.
 
@@ -1574,7 +1614,9 @@ Trả lời ngắn gọn bằng tiếng Việt: liệt kê những nhận địn
         'grounding_missing'
       );
     }
+    researchStage = 'verify_source_urls';
     const checkedSources = await verifyGroundedSources(grounded);
+    researchStage = 'load_existing_sources';
     const existingSources = await getOwnedArticleSources(request.supabaseUser.id, articleId);
     const existingByUrl = new Map(existingSources.map((source) => [source.url, source]));
     const rows = checkedSources.map((source) => {
@@ -1597,6 +1639,7 @@ Trả lời ngắn gọn bằng tiếng Việt: liệt kê những nhận địn
         status: staysApproved ? 'approved' : source.status
       };
     });
+    researchStage = 'save_sources';
     const { error: upsertError } = await getSupabaseAdmin()
       .from('article_sources')
       .upsert(rows, { onConflict: 'article_id,url' });
@@ -1607,6 +1650,7 @@ Trả lời ngắn gọn bằng tiếng Việt: liệt kê những nhận địn
         'article_sources_save_failed'
       );
     }
+    researchStage = 'load_saved_sources';
     const sources = await getOwnedArticleSources(request.supabaseUser.id, articleId);
     const metadata = payload?.candidates?.[0]?.groundingMetadata || {};
     return response.json({
@@ -1620,9 +1664,19 @@ Trả lời ngắn gọn bằng tiếng Việt: liệt kê những nhận địn
         : ''
     });
   } catch (error) {
+    if (error instanceof ApiError && error.details?.releaseRateLimit) {
+      releaseResearchRateLimit?.();
+    }
+    console.error('[source-research]', JSON.stringify({
+      stage: researchStage,
+      code: error instanceof ApiError ? error.code : 'source_research_failed',
+      statusCode: error instanceof ApiError ? error.statusCode : 502,
+      durationMs: Date.now() - researchStartedAt
+    }));
     return response.status(error instanceof ApiError ? error.statusCode : 502).json({
       error: error instanceof Error ? error.message : 'Không thể nghiên cứu nguồn tham khảo.',
-      code: error instanceof ApiError ? error.code : 'source_research_failed'
+      code: error instanceof ApiError ? error.code : 'source_research_failed',
+      retryable: Boolean(error instanceof ApiError && error.details?.retryable)
     });
   }
 });

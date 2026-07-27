@@ -110,13 +110,23 @@ export function classifySourceDomain(hostname = '') {
   return matched?.type || 'web';
 }
 
+export function isAbortOrTimeoutError(error) {
+  const name = String(error?.name || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return name === 'aborterror'
+    || name === 'timeouterror'
+    || message.includes('aborted due to timeout')
+    || message.includes('operation was aborted')
+    || message.includes('timed out');
+}
+
 export function buildGroundedGenerateRequest(prompt) {
   return {
     contents: [{ parts: [{ text: String(prompt || '') }] }],
     tools: [{ google_search: {} }],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 4096
+      maxOutputTokens: 2048
     }
   };
 }

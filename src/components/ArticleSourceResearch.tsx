@@ -247,7 +247,18 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
       {error && (
         <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-normal text-rose-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => void handleResearch()}
+              disabled={isResearching || isApplying || !title.trim()}
+              className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-rose-300 bg-white px-3 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
+            >
+              {isResearching && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+              {isResearching ? 'Đang thử lại...' : 'Thử lại'}
+            </button>
+          </div>
         </div>
       )}
       {message && (

@@ -4,6 +4,7 @@ import {
   buildGroundedGenerateRequest,
   dedupeSourcesByUpsertUrl,
   extractGroundedSources,
+  isAbortOrTimeoutError,
   isUnsafeHostname,
   normalizeGroundedUrl,
   verifyPublicSourceUrl
@@ -13,6 +14,17 @@ test('request Gemini REST dùng đúng Google Search Grounding tool', () => {
   const request = buildGroundedGenerateRequest('Nghiên cứu Pilates');
   assert.deepEqual(request.tools, [{ google_search: {} }]);
   assert.equal(request.contents[0].parts[0].text, 'Nghiên cứu Pilates');
+  assert.equal(request.generationConfig.maxOutputTokens, 2048);
+});
+
+test('nhận diện lỗi abort và timeout của các Node runtime', () => {
+  assert.equal(isAbortOrTimeoutError({ name: 'TimeoutError' }), true);
+  assert.equal(isAbortOrTimeoutError({ name: 'AbortError' }), true);
+  assert.equal(
+    isAbortOrTimeoutError({ message: 'The operation was aborted due to timeout' }),
+    true
+  );
+  assert.equal(isAbortOrTimeoutError(new Error('HTTP 500')), false);
 });
 
 test('chỉ lấy URL từ groundingChunks và bỏ URL model tự viết', () => {
