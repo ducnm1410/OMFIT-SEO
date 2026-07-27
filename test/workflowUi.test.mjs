@@ -21,6 +21,9 @@ test('xóa bài chỉ áp dụng cho bản nháp thuộc đúng người dùng',
   );
   assert.match(history, /<ConfirmDialog/);
   assert.match(history, /article\.status === 'draft'/);
+  assert.match(history, /navigator\.clipboard\.writeText\(article\.title\)/);
+  assert.match(history, /line-clamp-2/);
+  assert.match(history, /aria-label=\{`Xem và chỉnh sửa/);
   assert.doesNotMatch(history, /window\.confirm|window\.alert/);
 });
 

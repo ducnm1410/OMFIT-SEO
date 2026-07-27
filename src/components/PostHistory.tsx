@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { History, FileText, Calendar, Edit3, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Calendar, Check, Copy, Edit3, FileText, History, Trash2 } from 'lucide-react';
 import type { GeneratedArticle, ActiveTab } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -19,6 +19,12 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
   const [pendingDelete, setPendingDelete] = useState<GeneratedArticle | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [copiedArticleId, setCopiedArticleId] = useState('');
+  const copyResetTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (copyResetTimerRef.current) window.clearTimeout(copyResetTimerRef.current);
+  }, []);
 
   const handleDeleteDraft = async () => {
     if (!pendingDelete || pendingDelete.status !== 'draft') return;
@@ -33,6 +39,75 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
       setIsDeleting(false);
     }
   };
+
+  const handleCopyTitle = async (article: GeneratedArticle) => {
+    try {
+      await navigator.clipboard.writeText(article.title);
+      setCopiedArticleId(article.id);
+      if (copyResetTimerRef.current) window.clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = window.setTimeout(() => setCopiedArticleId(''), 1_800);
+    } catch {
+      setCopiedArticleId('');
+    }
+  };
+
+  const renderTitle = (article: GeneratedArticle) => {
+    const copied = copiedArticleId === article.id;
+    return (
+      <div className="flex min-w-0 items-start gap-2">
+        <p
+          className="line-clamp-2 min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#071827]"
+          title={article.title}
+        >
+          {article.title}
+        </p>
+        <button
+          type="button"
+          onClick={() => void handleCopyTitle(article)}
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition ${
+            copied
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-slate-200 bg-white text-slate-400 hover:border-[#0879D9]/40 hover:text-[#0879D9]'
+          }`}
+          aria-label={copied ? 'Đã sao chép tiêu đề' : 'Sao chép đầy đủ tiêu đề'}
+          title={copied ? 'Đã sao chép' : 'Sao chép đầy đủ tiêu đề'}
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    );
+  };
+
+  const renderActions = (article: GeneratedArticle) => (
+    <div className="inline-flex items-center justify-end gap-1.5">
+      <button
+        type="button"
+        onClick={() => {
+          onSelectArticleForEdit(article);
+          setActiveTab('editor');
+        }}
+        className="grid h-9 w-9 place-items-center rounded-lg border border-[#0879D9]/25 bg-[#F0F9FF] text-[#0879D9] transition hover:bg-[#0879D9] hover:text-white"
+        aria-label={`Xem và chỉnh sửa ${article.title}`}
+        title="Xem và chỉnh sửa"
+      >
+        <Edit3 className="h-4 w-4" />
+      </button>
+      {article.status === 'draft' && (
+        <button
+          type="button"
+          onClick={() => {
+            setDeleteError('');
+            setPendingDelete(article);
+          }}
+          className="grid h-9 w-9 place-items-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-600 hover:text-white"
+          aria-label={`Xóa bản nháp ${article.title}`}
+          title="Xóa bản nháp"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="ui-page space-y-6">
@@ -66,78 +141,90 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
             <p className="text-sm font-semibold text-slate-500">Chưa có lịch sử bài viết.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="ui-table w-full text-left text-xs">
-              <thead className="bg-[#F8FAFC] text-slate-700 font-bold border-b border-slate-200">
-                <tr>
-                  <th className="p-3.5">Tiêu đề bài viết</th>
-                  <th className="p-3.5">Từ khóa SEO</th>
-                  <th className="p-3.5">Số từ</th>
-                  <th className="p-3.5">SEO Score</th>
-                  <th className="p-3.5">Ngày tạo</th>
-                  <th className="p-3.5">Trạng thái</th>
-                  <th className="p-3.5 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {articles.map((article) => (
-                  <tr key={article.id} className="hover:bg-[#F0F9FF] transition">
-                    <td className="p-3.5 font-semibold text-[#071827] max-w-sm truncate">
-                      {article.title}
+          <>
+            <div className="space-y-3 md:hidden">
+              {articles.map((article) => (
+                <article key={article.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  {renderTitle(article)}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${
+                      article.status === 'published'
+                        ? 'border-[#0879D9]/30 bg-[#0879D9]/10 text-[#0879D9]'
+                        : 'border-amber-300 bg-amber-50 text-amber-700'
+                    }`}>
+                      {article.status === 'published' ? 'Đã đăng' : 'Bản nháp'}
+                    </span>
+                    <span className="rounded-lg bg-[#F0F9FF] px-2 py-1 text-[10px] font-bold text-[#0879D9]">
+                      SEO {article.seoScore}/100
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(article.createdAt).toLocaleDateString('vi-VN')}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <p className="min-w-0 truncate font-mono text-[10px] font-semibold text-slate-500" title={article.focusKeyword}>
+                      {article.focusKeyword}
+                    </p>
+                    {renderActions(article)}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="ui-table w-full table-fixed text-left text-xs">
+                <thead className="bg-[#F8FAFC] text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                  <th className="w-[34%] p-3.5 xl:w-[28%]">Tiêu đề bài viết</th>
+                  <th className="hidden w-[18%] p-3.5 xl:table-cell">Từ khóa SEO</th>
+                  <th className="hidden w-[8%] p-3.5 text-center xl:table-cell">Số từ</th>
+                  <th className="w-[13%] p-3.5 text-center xl:w-[9%]">SEO</th>
+                  <th className="hidden w-[12%] p-3.5 lg:table-cell">Ngày tạo</th>
+                  <th className="w-[20%] p-3.5 xl:w-[17%]">Trạng thái</th>
+                  <th className="w-[92px] p-3.5 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {articles.map((article) => (
+                    <tr key={article.id} className="hover:bg-[#F0F9FF] transition">
+                    <td className="p-3.5 align-top">
+                      {renderTitle(article)}
                     </td>
-                    <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9] font-mono text-[11px] border border-[#0879D9]/20 font-bold">
+                    <td className="hidden min-w-0 p-3.5 align-middle xl:table-cell">
+                      <span className="block truncate rounded border border-[#0879D9]/20 bg-[#E0F2FE] px-2 py-1 font-mono text-[10px] font-bold text-[#0879D9]" title={article.focusKeyword}>
                         {article.focusKeyword}
                       </span>
                     </td>
-                    <td className="p-3.5 text-slate-700 font-medium">{article.wordCount} từ</td>
-                    <td className="p-3.5 font-bold text-[#0879D9]">{article.seoScore}/100</td>
-                    <td className="p-3.5 text-slate-500 flex items-center gap-1 font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-[#0879D9]" />
-                      {new Date(article.createdAt).toLocaleDateString('vi-VN')}
-                    </td>
-                    <td className="p-3.5">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          article.status === 'published'
-                            ? 'bg-[#0879D9]/15 text-[#0879D9] border border-[#0879D9]/30'
-                            : 'bg-amber-100 text-amber-700 border border-amber-300'
-                        }`}
-                      >
-                        {article.status === 'published' ? 'Đã đăng trên omfit.com.vn' : 'Bản nháp'}
+                    <td className="hidden p-3.5 text-center font-medium text-slate-700 xl:table-cell">{article.wordCount}</td>
+                    <td className="p-3.5 text-center align-middle font-bold text-[#0879D9]">{article.seoScore}</td>
+                    <td className="hidden p-3.5 align-middle text-slate-500 lg:table-cell">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap font-medium">
+                        <Calendar className="h-3.5 w-3.5 text-[#0879D9]" />
+                        {new Date(article.createdAt).toLocaleDateString('vi-VN')}
                       </span>
                     </td>
-                    <td className="p-3.5 text-right">
-                      <div className="inline-flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectArticleForEdit(article);
-                            setActiveTab('editor');
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-[#F0F9FF] text-[#0879D9] border border-[#0879D9]/30 hover:bg-[#0879D9] hover:text-white transition font-bold text-[11px] inline-flex items-center gap-1"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" /> Xem lại
-                        </button>
-                        {article.status === 'draft' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeleteError('');
-                              setPendingDelete(article);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] font-bold text-rose-700 transition hover:bg-rose-600 hover:text-white"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Xóa
-                          </button>
-                        )}
-                      </div>
+                    <td className="p-3.5 align-middle">
+                      <span
+                        className={`inline-flex max-w-full items-center truncate rounded-full border px-2.5 py-1 text-[10px] font-bold ${
+                          article.status === 'published'
+                            ? 'border-[#0879D9]/30 bg-[#0879D9]/10 text-[#0879D9]'
+                            : 'border-amber-300 bg-amber-50 text-amber-700'
+                        }`}
+                        title={article.status === 'published' ? 'Đã đăng trên omfit.com.vn' : 'Bản nháp'}
+                      >
+                        {article.status === 'published' ? 'Đã đăng' : 'Bản nháp'}
+                      </span>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    <td className="p-3.5 text-right align-middle">
+                      {renderActions(article)}
+                    </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
