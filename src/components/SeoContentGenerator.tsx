@@ -110,8 +110,11 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
     try {
       const article = await geminiService.generateFullArticle(outline, wordCount, controller.signal);
       setGenerationStage('saving');
-      await onArticleGenerated(article);
+      const savePromise = onArticleGenerated(article);
       setActiveTab('editor');
+      void savePromise.catch((error) => {
+        console.error('Không thể hoàn tất lưu bài viết mới:', error);
+      });
     } catch (err) {
       console.error('Error generating article:', err);
       setGenerationError(err instanceof Error ? err.message : 'Không thể tạo bài viết. Vui lòng thử lại.');

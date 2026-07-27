@@ -449,6 +449,22 @@ export async function loadArticles(): Promise<GeneratedArticle[]> {
   return (data || []).map(mapArticle);
 }
 
+export async function deleteDraftArticle(articleId: string) {
+  const ownerId = await requireUserId();
+  const { data, error } = await supabase
+    .from('articles')
+    .delete()
+    .eq('id', articleId)
+    .eq('owner_id', ownerId)
+    .eq('status', 'draft')
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    throw new Error('Không tìm thấy bản nháp hoặc bài viết đã được xuất bản nên không thể xóa.');
+  }
+}
+
 export async function saveArticle(article: GeneratedArticle, audit?: SeoAuditResult) {
   const ownerId = await requireUserId();
   const now = new Date().toISOString();
@@ -551,7 +567,14 @@ export async function saveArticle(article: GeneratedArticle, audit?: SeoAuditRes
 
 export async function uploadMediaFile(file: File, articleId?: string): Promise<GeneratedImage> {
   const ownerId = await requireUserId();
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const extensionByMimeType: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp'
+  };
+  const extension = extensionByMimeType[file.type];
+  if (!extension) throw new Error('Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP.');
+  if (file.size > 10 * 1024 * 1024) throw new Error('Ảnh vượt quá giới hạn 10 MB.');
   const safeName = file.name
     .replace(/\.[^/.]+$/, '')
     .toLowerCase()
@@ -559,7 +582,7 @@ export async function uploadMediaFile(file: File, articleId?: string): Promise<G
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replace(/^-|-$/g, '') || 'omfit-image';
   const storagePath = `${ownerId}/${articleId || 'library'}/${Date.now()}-${safeName}.${extension}`;
   const { error: uploadError } = await supabase.storage
     .from('omfit-public-assets')

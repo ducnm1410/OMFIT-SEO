@@ -30,6 +30,7 @@ import { disconnectGoogleAds } from './services/keywordResearchService';
 import { supabase } from './lib/supabase';
 import {
   ensureBrandProfile,
+  deleteDraftArticle,
   loadBrandAssets,
   loadArticles,
   saveArticle,
@@ -244,6 +245,20 @@ export function App() {
     setActiveTab('keywords');
   };
 
+  const handleDeleteDraftArticle = async (article: GeneratedArticle) => {
+    if (article.status !== 'draft') {
+      throw new Error('Chỉ có thể xóa bài viết đang ở trạng thái bản nháp.');
+    }
+    await deleteDraftArticle(article.id);
+    setArticles((previous) => previous.filter((item) => item.id !== article.id));
+    if (selectedArticle?.id === article.id) {
+      setSelectedArticle(null);
+      setWorkflowStep(1);
+      setSaveStatus('idle');
+      setLastSavedAt('');
+    }
+  };
+
   const prepareArticle = (
     article: GeneratedArticle,
     profileOverride: BrandProfile | null = brandProfile
@@ -276,6 +291,14 @@ export function App() {
   };
 
   const handleArticleGenerated = async (newArticle: GeneratedArticle) => {
+    const provisional = prepareArticle(newArticle);
+    setArticles((previous) => [
+      provisional.article,
+      ...previous.filter((item) => item.id !== provisional.article.id)
+    ]);
+    setSelectedArticle(provisional.article);
+    setWorkflowStep(3);
+
     const brand = await ensureBrandProfile();
     setBrandProfile(brand);
     const suggestedLinks = await suggestInternalLinks(newArticle.focusKeyword).catch(() => []);
@@ -293,7 +316,6 @@ export function App() {
     await persistArticle(prepared.article, prepared.audit);
     setArticles((previous) => [prepared.article, ...previous.filter((item) => item.id !== prepared.article.id)]);
     setSelectedArticle(prepared.article);
-    setWorkflowStep(3);
 
     void (async () => {
       const document = new DOMParser().parseFromString(
@@ -585,6 +607,7 @@ export function App() {
                 setWorkflowStep(article.status === 'published' ? 4 : 3);
                 setActiveTab('editor');
               }}
+              onDeleteDraft={handleDeleteDraftArticle}
               setActiveTab={navigateToTab}
             />
           )}

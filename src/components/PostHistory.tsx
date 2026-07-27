@@ -1,20 +1,55 @@
-import React from 'react';
-import { History, FileText, Calendar, Edit3, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { History, FileText, Calendar, Edit3, Trash2 } from 'lucide-react';
 import type { GeneratedArticle, ActiveTab } from '../types';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface PostHistoryProps {
   articles: GeneratedArticle[];
   onSelectArticleForEdit: (article: GeneratedArticle) => void;
+  onDeleteDraft: (article: GeneratedArticle) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
 }
 
 export const PostHistory: React.FC<PostHistoryProps> = ({
   articles,
   onSelectArticleForEdit,
+  onDeleteDraft,
   setActiveTab
 }) => {
+  const [pendingDelete, setPendingDelete] = useState<GeneratedArticle | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleDeleteDraft = async () => {
+    if (!pendingDelete || pendingDelete.status !== 'draft') return;
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      await onDeleteDraft(pendingDelete);
+      setPendingDelete(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Không thể xóa bản nháp.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="ui-page space-y-6">
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Xóa bản nháp này?"
+        message={`Bản nháp “${pendingDelete?.title || ''}” sẽ bị xóa khỏi kho bài viết. Thao tác này không ảnh hưởng bài đã đăng trên WordPress.`}
+        confirmLabel="Xóa bản nháp"
+        isBusy={isDeleting}
+        error={deleteError}
+        onCancel={() => {
+          if (isDeleting) return;
+          setPendingDelete(null);
+          setDeleteError('');
+        }}
+        onConfirm={() => void handleDeleteDraft()}
+      />
       <div className="ui-page-header space-y-2 p-5 sm:p-6">
         <h2 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">
           <History className="w-5 h-5 text-[#0879D9]" /> Lịch sử bài viết OMFIT
@@ -73,15 +108,30 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
                       </span>
                     </td>
                     <td className="p-3.5 text-right">
-                      <button
-                        onClick={() => {
-                          onSelectArticleForEdit(article);
-                          setActiveTab('editor');
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-[#F0F9FF] text-[#0879D9] border border-[#0879D9]/30 hover:bg-[#0879D9] hover:text-white transition font-bold text-[11px] inline-flex items-center gap-1"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" /> Xem lại
-                      </button>
+                      <div className="inline-flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectArticleForEdit(article);
+                            setActiveTab('editor');
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[#F0F9FF] text-[#0879D9] border border-[#0879D9]/30 hover:bg-[#0879D9] hover:text-white transition font-bold text-[11px] inline-flex items-center gap-1"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" /> Xem lại
+                        </button>
+                        {article.status === 'draft' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteError('');
+                              setPendingDelete(article);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] font-bold text-rose-700 transition hover:bg-rose-600 hover:text-white"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Xóa
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

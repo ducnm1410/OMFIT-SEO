@@ -1,13 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   FileImage,
   Image as ImageIcon,
   Layers3,
-  PlusCircle
+  PlusCircle,
+  Trash2,
+  Upload
 } from 'lucide-react';
 import type { GeneratedArticle, GeneratedImage } from '../types';
 import { LeonardoService } from '../services/leonardoService';
+import { uploadMediaFile } from '../services/contentRepository';
 import {
   articleContainsImage,
   buildArticleImageMarkup,
@@ -28,6 +31,10 @@ interface ArticleSection {
   title: string;
   hasImage: boolean;
 }
+
+type UploadTarget =
+  | { type: 'featured' }
+  | { type: 'section'; section: ArticleSection };
 
 function parseContent(contentHtml: string) {
   return new DOMParser().parseFromString(`<main>${contentHtml}</main>`, 'text/html');
@@ -102,6 +109,8 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
   const sections = useMemo(() => getSections(contentHtml), [contentHtml]);
   const [generatingKey, setGeneratingKey] = useState('');
   const [message, setMessage] = useState('');
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const uploadTargetRef = useRef<UploadTarget | null>(null);
 
   const createImage = (description: string) => leonardoService.generateImage(
     description,
@@ -132,6 +141,33 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
     }
   };
 
+  const applySectionImage = (
+    section: ArticleSection,
+    image: GeneratedImage,
+    successMessage: string
+  ) => {
+    const inlineImage = { ...image, role: 'inline' as const, caption: section.title };
+    const insertion = insertSectionImage(
+      contentHtml,
+      section.index,
+      inlineImage,
+      section.title,
+      article,
+      section.hasImage
+    );
+    if (!insertion.inserted) {
+      setMessage('Ảnh này đã được chèn trước đó nên hệ thống không tạo bản trùng.');
+      return false;
+    }
+    onApplyArticle({
+      ...article,
+      contentHtml: insertion.contentHtml,
+      articleImages: mergeUniqueArticleImages(article.articleImages, [insertion.image])
+    });
+    setMessage(successMessage);
+    return true;
+  };
+
   const generateSection = async (section: ArticleSection) => {
     setGeneratingKey(`section-${section.index}`);
     setMessage('');
@@ -139,25 +175,7 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
       const image = await createImage(
         `Ảnh minh họa cho mục "${section.title}" trong bài "${article.title}". Bám sát chủ đề "${article.focusKeyword}", bối cảnh OMFIT fitness và wellness chân thực, chuyển động an toàn, không có chữ trong ảnh.`
       );
-      const inlineImage = { ...image, role: 'inline' as const, caption: section.title };
-      const insertion = insertSectionImage(
-        contentHtml,
-        section.index,
-        inlineImage,
-        section.title,
-        article,
-        section.hasImage
-      );
-      if (!insertion.inserted) {
-        setMessage(`Ảnh này đã được chèn trước đó nên hệ thống không tạo bản trùng.`);
-        return;
-      }
-      onApplyArticle({
-        ...article,
-        contentHtml: insertion.contentHtml,
-        articleImages: mergeUniqueArticleImages(article.articleImages, [insertion.image])
-      });
-      setMessage(section.hasImage
+      applySectionImage(section, image, section.hasImage
         ? `Đã chèn thêm một ảnh vào mục “${section.title}”.`
         : `Đã chèn ảnh ngay sau mục “${section.title}”.`);
     } catch (error) {
@@ -165,6 +183,85 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
     } finally {
       setGeneratingKey('');
     }
+  };
+
+  const selectUpload = (target: UploadTarget) => {
+    uploadTargetRef.current = target;
+    uploadInputRef.current?.click();
+  };
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const target = uploadTargetRef.current;
+    if (!file || !target) return;
+    const key = target.type === 'featured'
+      ? 'upload-featured'
+      : `upload-section-${target.section.index}`;
+    setGeneratingKey(key);
+    setMessage('');
+    try {
+      const image = await uploadMediaFile(file, article.id);
+      if (target.type === 'featured') {
+        onApplyArticle({
+          ...article,
+          contentHtml,
+          featuredImage: {
+            ...image,
+            role: 'featured',
+            altText: image.altText || article.title,
+            caption: article.title
+          }
+        });
+        setMessage('Đã tải lên và đặt ảnh đại diện cho bài viết.');
+      } else {
+        applySectionImage(
+          target.section,
+          image,
+          `Đã tải ảnh lên và chèn vào mục “${target.section.title}”.`
+        );
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Không thể tải ảnh lên.');
+    } finally {
+      setGeneratingKey('');
+      uploadTargetRef.current = null;
+      event.target.value = '';
+    }
+  };
+
+  const removeInlineImage = (image: GeneratedImage) => {
+    const document = parseContent(contentHtml);
+    const main = document.querySelector('main');
+    if (!main) return;
+
+    [...main.querySelectorAll<HTMLElement>('figure[data-omfit-section-image]')]
+      .filter((figure) => figure.dataset.omfitSectionImage === image.id)
+      .forEach((figure) => figure.remove());
+    [...main.querySelectorAll<HTMLImageElement>('img')]
+      .filter((element) => element.getAttribute('src') === image.url)
+      .forEach((element) => {
+        const figure = element.closest('figure');
+        if (figure) figure.remove();
+        else element.remove();
+      });
+
+    onApplyArticle({
+      ...article,
+      contentHtml: main.innerHTML.trim(),
+      articleImages: article.articleImages.filter((item) => (
+        item.id !== image.id && (!image.url || item.url !== image.url)
+      ))
+    });
+    setMessage('Đã xóa ảnh khỏi nội dung bài viết. Ảnh gốc vẫn được giữ trong kho OMFIT.');
+  };
+
+  const removeFeaturedImage = () => {
+    onApplyArticle({
+      ...article,
+      contentHtml,
+      featuredImage: undefined
+    });
+    setMessage('Đã xóa ảnh đại diện khỏi bài viết.');
   };
 
   const generateMissingPackage = async () => {
@@ -217,12 +314,19 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
 
   return (
     <section className="rounded-3xl border border-[#0879D9]/15 bg-white p-5 sm:p-6">
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        onChange={(event) => void handleUpload(event)}
+        className="hidden"
+      />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-wider text-[#0879D9]">Gói hình ảnh theo bài</p>
           <h3 className="mt-1 text-lg font-extrabold text-[#071827]">{article.title}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600">
-            Hệ thống đọc cấu trúc H2 và tạo ảnh đúng ngữ cảnh, sau đó chèn trực tiếp vào nội dung đang biên tập.
+            Chọn tạo ảnh AI hoặc tải ảnh từ máy cho ảnh đại diện và từng mục H2; ảnh sẽ được chèn trực tiếp vào nội dung đang biên tập.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
@@ -232,10 +336,14 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <button type="button" onClick={() => void generateFeatured()} disabled={Boolean(generatingKey)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#0879D9]/30 bg-[#F0F9FF] px-4 text-sm font-bold text-[#0879D9] disabled:opacity-50">
           {generatingKey === 'featured' ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <FileImage className="h-4 w-4" />}
-          Tạo ảnh đại diện
+          Tạo ảnh đại diện AI
+        </button>
+        <button type="button" onClick={() => selectUpload({ type: 'featured' })} disabled={Boolean(generatingKey)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-[#0879D9]/40 hover:text-[#0879D9] disabled:opacity-50">
+          {generatingKey === 'upload-featured' ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <Upload className="h-4 w-4" />}
+          Upload ảnh đại diện
         </button>
         <button type="button" onClick={() => void generateMissingPackage()} disabled={Boolean(generatingKey)} className="gradient-bg-omfit-btn inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-white disabled:opacity-50">
           {generatingKey === 'package' ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Layers3 className="h-4 w-4" />}
@@ -260,13 +368,63 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
                 <p className="text-xs text-slate-500">{section.hasImage ? 'Đã có ảnh trong mục này' : 'Chưa có ảnh minh họa'}</p>
               </div>
             </div>
-            <button type="button" onClick={() => void generateSection(section)} disabled={Boolean(generatingKey)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF] disabled:opacity-50">
-              {generatingKey === `section-${section.index}` ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <PlusCircle className="h-4 w-4" />}
-              {section.hasImage ? 'Tạo thêm ảnh' : 'Tạo và chèn ảnh'}
-            </button>
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+              <button type="button" onClick={() => void generateSection(section)} disabled={Boolean(generatingKey)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF] disabled:opacity-50">
+                {generatingKey === `section-${section.index}` ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <PlusCircle className="h-4 w-4" />}
+                {section.hasImage ? 'Tạo thêm bằng AI' : 'Tạo ảnh bằng AI'}
+              </button>
+              <button type="button" onClick={() => selectUpload({ type: 'section', section })} disabled={Boolean(generatingKey)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:border-[#0879D9]/40 hover:text-[#0879D9] disabled:opacity-50">
+                {generatingKey === `upload-section-${section.index}` ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <Upload className="h-4 w-4" />}
+                Tải ảnh lên
+              </button>
+            </div>
           </div>
         ))}
       </div>
+
+      {(article.featuredImage || article.articleImages.length > 0) && (
+        <div className="mt-6 border-t border-slate-100 pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-bold text-[#071827]">Ảnh đang dùng trong bài</h4>
+              <p className="mt-0.5 text-xs text-slate-500">Bạn có thể xóa từng ảnh khỏi bài mà không xóa file gốc trong kho OMFIT.</p>
+            </div>
+            <span className="rounded-full bg-[#F0F9FF] px-2.5 py-1 text-[10px] font-bold text-[#0879D9]">
+              {(article.featuredImage ? 1 : 0) + article.articleImages.length} ảnh
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {article.featuredImage && (
+              <article className="overflow-hidden rounded-xl border border-slate-200 bg-[#F8FAFC]">
+                <img src={article.featuredImage.url} alt={article.featuredImage.altText} className="h-32 w-full object-cover" loading="lazy" />
+                <div className="flex items-center justify-between gap-2 p-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#0879D9]">Ảnh đại diện</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-600">{article.featuredImage.altText || article.title}</p>
+                  </div>
+                  <button type="button" onClick={removeFeaturedImage} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50" aria-label="Xóa ảnh đại diện khỏi bài">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </article>
+            )}
+            {article.articleImages.map((image) => (
+              <article key={image.id || image.url} className="overflow-hidden rounded-xl border border-slate-200 bg-[#F8FAFC]">
+                <img src={image.url} alt={image.altText} className="h-32 w-full object-cover" loading="lazy" />
+                <div className="flex items-center justify-between gap-2 p-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ảnh trong nội dung</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-600">{image.caption || image.altText || image.fileName}</p>
+                  </div>
+                  <button type="button" onClick={() => removeInlineImage(image)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50" aria-label="Xóa ảnh khỏi nội dung bài">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
 
       {message && <p aria-live="polite" className="mt-4 rounded-xl bg-[#F0F9FF] p-3 text-sm font-semibold text-[#075EA8]">{message}</p>}
     </section>
