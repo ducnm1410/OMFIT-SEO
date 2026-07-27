@@ -159,7 +159,7 @@ async function deployRuntimeSnippet() {
 
   const payload = {
     name: snippetName,
-    desc: 'Removes the blocking theme loader, trims unused home assets, fixes font loading, exposes structured organization data, llms.txt, and a public knowledge API.',
+    desc: 'Optimizes mobile rendering, fixes the accessibility tree, and exposes structured organization and article data through llms.txt and a public knowledge API.',
     code,
     scope: 'global',
     priority: 10,
@@ -329,13 +329,20 @@ async function verifyProduction() {
     homeStatus: home.status,
     loaderHidden: homeHtml.includes('omfit-critical-loader-css'),
     heroPreloaded: homeHtml.includes('fetchpriority="high"'),
+    mobileLcpPreloaded: homeHtml.includes('omfit-home-wellness-background-768x377.webp'),
+    accessibilityRuntimePresent: homeHtml.includes('omfit-home-runtime-js'),
     schemaPresent: homeHtml.includes('omfit-agentic-schema'),
     discoveryLinkPresent: homeHtml.includes(officialPageUrl),
     llmsStatus: llms.status,
     llmsContentType: llms.headers.get('content-type'),
     llmsValid: llmsText.startsWith('# OMFIT Fitness & Wellness'),
+    llmsArticlesPresent: llmsText.includes('## Bài viết mới nhất'),
     knowledgeStatus: knowledge.status,
     knowledgeOrganization: knowledgeJson?.organization?.name || '',
+    knowledgeArticleCount: Array.isArray(knowledgeJson?.latestArticles)
+      ? knowledgeJson.latestArticles.length
+      : 0,
+    knowledgeLastModified: knowledgeJson?.lastModified || '',
     staticCacheControl: staticAsset.headers.get('cache-control'),
   };
 }
