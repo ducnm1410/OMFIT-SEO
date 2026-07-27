@@ -1977,6 +1977,7 @@ function getWordpressConfig() {
 const wordpressMediaMaxBytes = 10 * 1024 * 1024;
 const wordpressMediaUploadsInFlight = new Map();
 const wordpressMediaSyncBatchSize = 3;
+const wordpressPublishLeaseMs = 90_000;
 // Vercel gives the whole invocation 60s. Authentication can consume up to 10s
 // before this handler starts, so keep the handler budget at 45s with margin for
 // the final database response and runtime cleanup.
@@ -2606,6 +2607,44 @@ async function getOwnedArticlePublishState(ownerId, articleId) {
   return data;
 }
 
+async function acquireWordpressPublishLease(ownerId, articleId) {
+  const leaseToken = crypto.randomUUID();
+  const { data, error } = await getSupabaseAdmin().rpc(
+    'claim_wordpress_publish_lease',
+    {
+      p_article_id: articleId,
+      p_owner_id: ownerId,
+      p_lease_token: leaseToken,
+      p_lease_expires_at: new Date(Date.now() + wordpressPublishLeaseMs).toISOString()
+    }
+  );
+  if (error) {
+    throw new ApiError(
+      502,
+      'Không thể khóa phiên đăng bài WordPress an toàn.',
+      'wordpress_publish_lease_failed'
+    );
+  }
+  if (data !== true) {
+    throw new ApiError(
+      409,
+      'Bài viết này đang được đồng bộ ở một cửa sổ khác. Vui lòng chờ phiên đó hoàn tất.',
+      'wordpress_publish_in_progress'
+    );
+  }
+  return { articleId, leaseToken };
+}
+
+async function releaseWordpressPublishLease(ownerId, lease) {
+  if (!lease?.articleId || !lease?.leaseToken) return;
+  await getSupabaseAdmin()
+    .from('wordpress_publish_leases')
+    .delete()
+    .eq('article_id', lease.articleId)
+    .eq('owner_id', ownerId)
+    .eq('lease_token', lease.leaseToken);
+}
+
 async function ensureArticleSlugAvailable(
   ownerId,
   articleId,
@@ -2934,6 +2973,7 @@ async function findOrCreateWordpressTerm(config, type, name, deadline) {
 
 app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response) => {
   const wordpressDeadline = createWordpressRouteDeadline();
+  let publishLease = null;
   try {
     const article = request.body?.article;
     const status = request.body?.status === 'draft' ? 'draft' : 'publish';
@@ -3027,6 +3067,10 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
         logs
       });
     }
+    publishLease = await acquireWordpressPublishLease(
+      request.supabaseUser.id,
+      article.id
+    );
     const brand = await getActiveBrandProfile(request.supabaseUser.id);
     const [approvedSources, suggestedLinks, publishMedia] = await Promise.all([
       getOwnedArticleSources(request.supabaseUser.id, article.id, true),
@@ -3286,6 +3330,11 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
       code: error instanceof ApiError ? error.code : 'wordpress_publish_failed',
       ...(error instanceof ApiError && error.details ? error.details : {})
     });
+  } finally {
+    if (publishLease) {
+      await releaseWordpressPublishLease(request.supabaseUser.id, publishLease)
+        .catch(() => {});
+    }
   }
 });
 

@@ -67,6 +67,19 @@ test('migration khóa mutation media_assets và giữ WordPress mapping ở serv
   assert.match(sql, /grant all privileges on public\.wordpress_media_mappings to service_role/i);
 });
 
+test('publish lease chỉ dành cho service role và claim theo article duy nhất', async () => {
+  const sql = await readFile(
+    new URL('../supabase/migrations/202607270004_wordpress_publish_leases.sql', import.meta.url),
+    'utf8'
+  );
+  assert.match(sql, /article_id uuid primary key references public\.articles/i);
+  assert.match(sql, /on conflict \(article_id\) do update/i);
+  assert.match(sql, /lease_expires_at <= now\(\)/i);
+  assert.match(sql, /revoke all privileges on public\.wordpress_publish_leases from public, anon, authenticated/i);
+  assert.match(sql, /grant all privileges on public\.wordpress_publish_leases to service_role/i);
+  assert.match(sql, /grant execute on function public\.claim_wordpress_publish_lease[\s\S]*to service_role/i);
+});
+
 test('upload UI đăng ký metadata qua server thay vì insert media_assets trực tiếp', async () => {
   const source = await readFile(
     new URL('../src/services/contentRepository.ts', import.meta.url),
