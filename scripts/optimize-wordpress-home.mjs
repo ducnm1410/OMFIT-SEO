@@ -56,6 +56,7 @@ const trainerImages = [
 const carouselElementIds = ['9a3d11e', 'd830a07'];
 const heroSectionId = '0e87d67';
 const wellnessSectionId = 'e88dfc0';
+const reviewsSectionId = '5465c6d';
 const bmiModelElementId = '7953166';
 const heroAsset = {
   id: 9873,
@@ -64,6 +65,10 @@ const heroAsset = {
 const wellnessBackgroundAsset = {
   id: 9874,
   url: `${siteUrl}/wp-content/uploads/2026/07/omfit-home-wellness-background.webp`
+};
+const reviewsBackgroundAsset = {
+  id: 9878,
+  url: `${siteUrl}/wp-content/uploads/2026/07/omfit-home-reviews-background.webp`
 };
 const bmiModelAsset = {
   id: 9875,
@@ -250,6 +255,7 @@ async function main() {
   const updateSummary = [];
   let heroUpdate = null;
   let wellnessBackgroundUpdate = null;
+  let reviewsBackgroundUpdate = null;
   let bmiModelUpdate = null;
   if (shouldApply) {
     const sessionId = await openMcpSession();
@@ -359,6 +365,38 @@ async function main() {
       };
     }
 
+    const reviewsSection = await mcpCall(sessionId, 'wsp_elementor_get_element', {
+      post_id: homePageId,
+      element_id: reviewsSectionId
+    });
+    if (
+      Number(reviewsSection.settings?.background_image?.id) !== reviewsBackgroundAsset.id
+      || Number(reviewsSection.settings?.pxl_overlay_img?.id) !== reviewsBackgroundAsset.id
+    ) {
+      const reviewsImage = {
+        id: reviewsBackgroundAsset.id,
+        url: reviewsBackgroundAsset.url,
+        size: 'full',
+        alt: 'Nền khu vực đánh giá hội viên OMFIT',
+        source: 'library'
+      };
+      reviewsSection.settings.background_background = 'classic';
+      reviewsSection.settings.background_image = { ...reviewsImage };
+      reviewsSection.settings.pxl_overlay_img = { ...reviewsImage };
+      const result = await mcpCall(sessionId, 'wsp_elementor_update_element', {
+        post_id: homePageId,
+        element_id: reviewsSectionId,
+        settings: reviewsSection.settings
+      });
+      if (result.success !== true) {
+        throw new Error(`Elementor rejected reviews background update: ${JSON.stringify(result)}`);
+      }
+      reviewsBackgroundUpdate = {
+        elementId: reviewsSectionId,
+        image: reviewsBackgroundAsset.url
+      };
+    }
+
     const bmiModel = await mcpCall(sessionId, 'wsp_elementor_get_element', {
       post_id: homePageId,
       element_id: bmiModelElementId
@@ -395,6 +433,7 @@ async function main() {
     elementorUpdates: updateSummary,
     heroUpdate,
     wellnessBackgroundUpdate,
+    reviewsBackgroundUpdate,
     bmiModelUpdate
   }, null, 2));
 }

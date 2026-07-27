@@ -96,6 +96,8 @@ if (!function_exists('omfit_agentic_is_home')) {
 
         $hero = 'https://omfit.com.vn/wp-content/uploads/2026/07/omfit-home-hero-can-bang-toan-dien.webp';
         $mobile_wellness = 'https://omfit.com.vn/wp-content/uploads/2026/07/omfit-home-wellness-background-768x377.webp';
+        $theme_styles = 'https://omfit.com.vn/wp-content/themes/hadkaur/assets/css/style.css?ver=1.0.0';
+        echo '<link rel="preload" as="style" href="' . esc_url($theme_styles) . '" />' . "\n";
         echo '<link rel="preload" as="image" href="' . esc_url($hero) . '" fetchpriority="high" />' . "\n";
         echo '<link rel="preload" as="image" href="' . esc_url($mobile_wellness) . '" fetchpriority="high" media="(max-width: 767px)" />' . "\n";
         ?>
@@ -145,8 +147,39 @@ if (!function_exists('omfit_agentic_is_home')) {
     }
     add_filter('style_loader_tag', 'omfit_agentic_async_home_styles', 20, 4);
 
+    function omfit_agentic_inline_home_jquery($tag, $handle, $src) {
+        if (!omfit_agentic_is_home()) {
+            return $tag;
+        }
+
+        $paths = array(
+            'jquery-core' => ABSPATH . WPINC . '/js/jquery/jquery.min.js',
+            'jquery-migrate' => ABSPATH . WPINC . '/js/jquery/jquery-migrate.min.js',
+        );
+
+        if (!isset($paths[$handle]) || !is_readable($paths[$handle])) {
+            return $tag;
+        }
+
+        $contents = file_get_contents($paths[$handle]);
+        if ($contents === false || $contents === '') {
+            return $tag;
+        }
+
+        // Preserve WordPress' execution order while removing two parser-blocking
+        // round trips from the mobile critical path.
+        $contents = str_ireplace('</script', '<\/script', $contents);
+        return '<script id="' . esc_attr($handle) . '-js">' . $contents . '</script>' . "\n";
+    }
+    add_filter('script_loader_tag', 'omfit_agentic_inline_home_jquery', 20, 3);
+
     function omfit_agentic_filter_home_markup($html) {
         $html = str_replace('http://omfit.com.vn/', 'https://omfit.com.vn/', (string) $html);
+        $html = str_replace(
+            'https://omfit.com.vn/wp-content/uploads/2025/03/476558850_122103530234761386_5564187386758449618_n-2.jpg',
+            'https://omfit.com.vn/wp-content/uploads/2025/03/476558850_122103530234761386_5564187386758449618_n-2-96x96.jpg',
+            $html
+        );
         $html = str_replace(
             'content="width=device-width, initial-scale=1, maximum-scale=1"',
             'content="width=device-width, initial-scale=1"',
@@ -158,6 +191,21 @@ if (!function_exists('omfit_agentic_is_home')) {
                 . "\n" . '<script id="omfit-delayed-gtm" type="application/x-omfit-delayed">',
             $html,
             1
+        );
+
+        $html = preg_replace_callback(
+            '/<img\b[^>]*Thiet-ke-chua-co-ten-15\.png[^>]*>/i',
+            function ($matches) {
+                $tag = $matches[0];
+                if (stripos($tag, ' width=') === false) {
+                    $tag = preg_replace('/<img\b/i', '<img width="271"', $tag, 1);
+                }
+                if (stripos($tag, ' height=') === false) {
+                    $tag = preg_replace('/<img\b/i', '<img height="63"', $tag, 1);
+                }
+                return $tag;
+            },
+            $html
         );
 
         $html = preg_replace_callback(
@@ -231,9 +279,19 @@ if (!function_exists('omfit_agentic_is_home')) {
                     if(!link.hasAttribute('aria-label')){link.setAttribute('aria-label','Trang chủ OMFIT');}
                 });
                 nodes(root,'.pxl-icon1>a').forEach(function(link){
+                    var href=cleanText(link.getAttribute('href'));
+                    if(!href||href==='#'){
+                        link.removeAttribute('aria-label');
+                        link.setAttribute('aria-hidden','true');
+                        link.setAttribute('tabindex','-1');
+                        return;
+                    }
+                    link.removeAttribute('aria-hidden');
+                    link.removeAttribute('tabindex');
                     if(!link.hasAttribute('aria-label')){link.setAttribute('aria-label',socialLabel(link));}
                 });
                 nodes(root,'a[href]:not([aria-label])').forEach(function(link){
+                    if(link.getAttribute('aria-hidden')==='true'){return;}
                     var text=cleanText(link.textContent);
                     var image=link.querySelector('img[alt]');
                     if(!text&&(!image||!cleanText(image.alt))){
@@ -316,6 +374,12 @@ if (!function_exists('omfit_agentic_is_home')) {
         <style id="omfit-font-display-css">
         @font-face{font-family:"gilroy";font-style:normal;font-weight:400;font-display:swap;src:url("https://omfit.com.vn/wp-content/uploads/useanyfont/9455Gilroy.woff2") format("woff2")}
         @font-face{font-family:"Plateia Bold";font-style:normal;font-weight:400;font-display:swap;src:url("https://omfit.com.vn/wp-content/themes/hadkaur/assets/fonts/font-custom/Plateia%20Bold.ttf") format("truetype")}
+        @font-face{font-family:"Font Awesome 5 Brands";font-style:normal;font-weight:400;font-display:swap;src:url("https://omfit.com.vn/wp-content/plugins/bravis-addons/assets/libs/font-awesome-pro/webfonts/fa-brands-400.woff2") format("woff2")}
+        @font-face{font-family:"Font Awesome 5 Pro";font-style:normal;font-weight:300;font-display:swap;src:url("https://omfit.com.vn/wp-content/plugins/bravis-addons/assets/libs/font-awesome-pro/webfonts/fa-light-300.woff2") format("woff2")}
+        @font-face{font-family:"Font Awesome 5 Pro";font-style:normal;font-weight:400;font-display:swap;src:url("https://omfit.com.vn/wp-content/plugins/bravis-addons/assets/libs/font-awesome-pro/webfonts/fa-regular-400.woff2") format("woff2")}
+        @font-face{font-family:"Font Awesome 5 Pro";font-style:normal;font-weight:900;font-display:swap;src:url("https://omfit.com.vn/wp-content/plugins/bravis-addons/assets/libs/font-awesome-pro/webfonts/fa-solid-900.woff2") format("woff2")}
+        @font-face{font-family:"Flaticon";font-style:normal;font-weight:400;font-display:swap;src:url("https://omfit.com.vn/wp-content/themes/hadkaur/assets/fonts/flaticon/fonts/flaticon.woff2") format("woff2")}
+        @font-face{font-family:"Caseicon";font-style:normal;font-weight:400;font-display:swap;src:url("https://omfit.com.vn/wp-content/themes/hadkaur/assets/fonts/caseicon/caseicon.woff2") format("woff2")}
         </style>
         <?php
     }
