@@ -107,6 +107,15 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
   onApplyArticle
 }) => {
   const sections = useMemo(() => getSections(contentHtml), [contentHtml]);
+  const inlineImageUsage = useMemo(() => {
+    const document = parseContent(contentHtml);
+    const main = document.querySelector('main');
+    return new Set(
+      article.articleImages
+        .filter((image) => main && articleContainsImage(main, image))
+        .map((image) => image.id || image.url)
+    );
+  }, [article.articleImages, contentHtml]);
   const [generatingKey, setGeneratingKey] = useState('');
   const [message, setMessage] = useState('');
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -264,6 +273,19 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
     setMessage('Đã xóa ảnh đại diện khỏi bài viết.');
   };
 
+  const insertTrackedImage = (image: GeneratedImage) => {
+    const targetSection = sections.find((section) => !section.hasImage) || sections[0];
+    if (!targetSection) {
+      setMessage('Bài viết chưa có mục H2 để chèn ảnh. Hãy bổ sung ít nhất một H2 rồi thử lại.');
+      return;
+    }
+    applySectionImage(
+      targetSection,
+      image,
+      `Đã chèn ảnh vào mục “${targetSection.title}”.`
+    );
+  };
+
   const generateMissingPackage = async () => {
     const targets = sections.filter((section) => !section.hasImage).slice(0, 3);
     if (targets.length === 0) {
@@ -386,11 +408,11 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
         <div className="mt-6 border-t border-slate-100 pt-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h4 className="text-sm font-bold text-[#071827]">Ảnh đang dùng trong bài</h4>
-              <p className="mt-0.5 text-xs text-slate-500">Bạn có thể xóa từng ảnh khỏi bài mà không xóa file gốc trong kho OMFIT.</p>
+              <h4 className="text-sm font-bold text-[#071827]">Ảnh của bài viết</h4>
+              <p className="mt-0.5 text-xs text-slate-500">Ảnh chưa chèn có thể đưa vào nội dung bằng nút dấu cộng; xóa khỏi bài không xóa file gốc trong kho OMFIT.</p>
             </div>
             <span className="rounded-full bg-[#F0F9FF] px-2.5 py-1 text-[10px] font-bold text-[#0879D9]">
-              {(article.featuredImage ? 1 : 0) + article.articleImages.length} ảnh
+              {(article.featuredImage ? 1 : 0) + inlineImageUsage.size}/{(article.featuredImage ? 1 : 0) + article.articleImages.length} đang dùng
             </span>
           </div>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -408,20 +430,36 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
                 </div>
               </article>
             )}
-            {article.articleImages.map((image) => (
-              <article key={image.id || image.url} className="overflow-hidden rounded-xl border border-slate-200 bg-[#F8FAFC]">
+            {article.articleImages.map((image) => {
+              const isInserted = inlineImageUsage.has(image.id || image.url);
+              return (
+              <article key={image.id || image.url} className={`overflow-hidden rounded-xl border bg-[#F8FAFC] ${
+                isInserted ? 'border-emerald-200' : 'border-amber-200'
+              }`}>
                 <img src={image.url} alt={image.altText} className="h-32 w-full object-cover" loading="lazy" />
                 <div className="flex items-center justify-between gap-2 p-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ảnh trong nội dung</p>
+                    <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isInserted ? 'text-emerald-700' : 'text-amber-700'
+                    }`}>
+                      {isInserted ? 'Đang dùng trong nội dung' : 'Chưa chèn vào nội dung'}
+                    </p>
                     <p className="mt-0.5 truncate text-xs text-slate-600">{image.caption || image.altText || image.fileName}</p>
                   </div>
-                  <button type="button" onClick={() => removeInlineImage(image)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50" aria-label="Xóa ảnh khỏi nội dung bài">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {!isInserted && (
+                      <button type="button" onClick={() => insertTrackedImage(image)} className="grid h-9 w-9 place-items-center rounded-lg text-[#0879D9] transition hover:bg-[#F0F9FF]" aria-label="Chèn ảnh vào nội dung bài" title="Chèn vào bài">
+                        <PlusCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button type="button" onClick={() => removeInlineImage(image)} className="grid h-9 w-9 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50" aria-label="Xóa ảnh khỏi nội dung bài" title="Xóa khỏi bài">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

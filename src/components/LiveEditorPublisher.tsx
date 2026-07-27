@@ -20,7 +20,6 @@ import {
   ArrowRight,
   AlertTriangle
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import DOMPurify from 'dompurify';
 import type {
   ActiveTab,
@@ -401,12 +400,6 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
       setContentHtml(nextContentHtml);
       setSlug(nextSlug);
       setTitle(nextTitle);
-
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
 
       onSaveArticle({
         ...currentArticleState,

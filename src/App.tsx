@@ -46,7 +46,7 @@ import {
   sectionHasImage
 } from './utils/articleImageMarkup';
 
-const workflowStorageKey = 'omfit-seo-workflow-v1';
+const workflowStorageKey = 'omfit-seo-workflow-v2';
 const sidebarCollapsedStorageKey = 'omfit-seo-sidebar-collapsed';
 
 const defaultContentBrief: ContentBrief = {
@@ -170,7 +170,9 @@ export function App() {
         setBrandProfile(brand);
         setBrandAssets(assets);
         setSelectedArticle((current) => {
-          const preferredArticleId = current?.id || initialWorkflow.articleId;
+          const restoresArticle = initialWorkflow.activeTab === 'editor'
+            || initialWorkflow.activeTab === 'imagestudio';
+          const preferredArticleId = current?.id || (restoresArticle ? initialWorkflow.articleId : undefined);
           return preferredArticleId
             ? storedArticles.find((article) => article.id === preferredArticleId) || null
             : null;
@@ -202,9 +204,21 @@ export function App() {
     }
   };
 
+  const resetToNewBrief = () => {
+    setSelectedArticle(null);
+    setSelectedKeyword('');
+    setContentBrief(defaultContentBrief);
+    setWorkflowStep(1);
+    setSaveStatus('idle');
+    setLastSavedAt('');
+  };
+
   const navigateToTab = (tab: ActiveTab) => {
     setActiveTab(tab);
-    if (tab === 'keywords') setWorkflowStep(1);
+    if (tab === 'keywords') {
+      resetToNewBrief();
+      return;
+    }
     if (tab === 'generator') setWorkflowStep(2);
     if (tab === 'imagestudio') setWorkflowStep(3);
     if (tab === 'editor') {
@@ -213,13 +227,17 @@ export function App() {
   };
 
   const navigateToWorkflowStep = (step: SeoWorkflowStep) => {
+    if (step === 1) {
+      resetToNewBrief();
+      setActiveTab('keywords');
+      return;
+    }
     if (step >= 3 && !selectedArticle) {
       setWorkflowStep(2);
       setActiveTab('generator');
       return;
     }
     setWorkflowStep(step);
-    if (step === 1) setActiveTab('keywords');
     if (step === 2) setActiveTab('generator');
     if (step === 3 || step === 4) setActiveTab('editor');
   };
@@ -227,21 +245,25 @@ export function App() {
   const handleBriefChange = (brief: ContentBrief) => {
     setContentBrief(brief);
     setSelectedKeyword(brief.keyword);
+    setWorkflowStep(2);
+    if (selectedArticle) {
+      setSelectedArticle(null);
+      setSaveStatus('idle');
+      setLastSavedAt('');
+    }
   };
 
   const handleKeywordSelected = (keyword: string) => {
+    setSelectedArticle(null);
     setSelectedKeyword(keyword);
     setContentBrief((current) => ({ ...current, keyword }));
     setWorkflowStep(2);
+    setSaveStatus('idle');
+    setLastSavedAt('');
   };
 
   const handleStartNewArticle = () => {
-    setSelectedArticle(null);
-    setSelectedKeyword('');
-    setContentBrief(defaultContentBrief);
-    setWorkflowStep(1);
-    setSaveStatus('idle');
-    setLastSavedAt('');
+    resetToNewBrief();
     setActiveTab('keywords');
   };
 
@@ -316,62 +338,6 @@ export function App() {
     await persistArticle(prepared.article, prepared.audit);
     setArticles((previous) => [prepared.article, ...previous.filter((item) => item.id !== prepared.article.id)]);
     setSelectedArticle(prepared.article);
-
-    void (async () => {
-      const document = new DOMParser().parseFromString(
-        `<main>${prepared.article.contentHtml}</main>`,
-        'text/html'
-      );
-      const main = document.querySelector('main');
-      const headings = [...document.querySelectorAll('main h2')]
-        .filter((heading) => !heading.closest('.omfit-related-content, .omfit-article-cta, .omfit-article-footer'))
-        .filter((heading) => !sectionHasImage(heading))
-        .slice(0, 2);
-      const generatedImages: GeneratedImage[] = [];
-      for (const heading of headings) {
-        try {
-          const sectionTitle = heading.textContent?.trim() || prepared.article.focusKeyword;
-          const image = await leonardoService.generateImage(
-            `Minh họa cho chủ đề "${sectionTitle}" trong bài viết "${prepared.article.title}". Hình ảnh thực tế tại không gian fitness và wellness cao cấp, chuyển động an toàn, không có chữ trong ảnh.`,
-            'Photorealistic 4K',
-            undefined,
-            prepared.article.focusKeyword,
-            'nano-banana-2',
-            prepared.article.id
-          );
-          if (!main || articleContainsImage(main, image)) continue;
-          const markup = buildArticleImageMarkup({
-            image,
-            caption: sectionTitle,
-            sectionTitle,
-            articleTitle: prepared.article.title,
-            focusKeyword: prepared.article.focusKeyword,
-            existingAltTexts: collectArticleAltTexts(main)
-          });
-          generatedImages.push({
-            ...image,
-            role: 'inline' as const,
-            altText: markup.altText,
-            caption: markup.caption
-          });
-          heading.insertAdjacentHTML('afterend', markup.html);
-        } catch (error) {
-          console.error('Không thể tự động tạo ảnh cho section:', error);
-        }
-      }
-      if (generatedImages.length > 0) {
-        const withImages = prepareArticle({
-          ...prepared.article,
-          contentHtml: main?.innerHTML || prepared.article.contentHtml,
-          articleImages: mergeUniqueArticleImages(prepared.article.articleImages, generatedImages)
-        }, brand);
-        await persistArticle(withImages.article, withImages.audit);
-        setArticles((previous) => previous.map((item) => (
-          item.id === withImages.article.id ? withImages.article : item
-        )));
-        setSelectedArticle(withImages.article);
-      }
-    })().catch((error) => console.error('Không thể tự động bổ sung ảnh cho bài viết:', error));
   };
 
   const handleSaveArticle = (

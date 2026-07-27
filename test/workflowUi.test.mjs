@@ -38,6 +38,9 @@ test('quản lý ảnh bài viết hỗ trợ cả tạo AI, upload và xóa kh�
   assert.match(source, /removeInlineImage/);
   assert.match(source, /data-omfit-section-image/);
   assert.match(source, /articleImages:\s*article\.articleImages\.filter/);
+  assert.match(source, /insertTrackedImage/);
+  assert.match(source, /Chưa chèn vào nội dung/);
+  assert.match(source, /aria-label="Chèn ảnh vào nội dung bài"/);
 });
 
 test('sau khi Gemini trả bài, UI chuyển editor trước khi chờ lưu nền hoàn tất', async () => {
@@ -66,4 +69,46 @@ test('sau khi Gemini trả bài, UI chuyển editor trước khi chờ lưu nề
     finalize.indexOf('setSelectedArticle(provisional.article)')
       < finalize.indexOf('await ensureBrandProfile()')
   );
+  assert.doesNotMatch(finalize, /generateImage\(/);
+});
+
+test('luồng SEO mới không khôi phục bài cũ và thay brief sẽ xóa lựa chọn cũ', async () => {
+  const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /omfit-seo-workflow-v2/);
+  assert.match(app, /const restoresArticle = initialWorkflow\.activeTab === 'editor'/);
+  assert.match(app, /const resetToNewBrief = \(\) =>/);
+
+  const changeBrief = app.slice(
+    app.indexOf('const handleBriefChange'),
+    app.indexOf('const handleKeywordSelected')
+  );
+  assert.match(changeBrief, /setWorkflowStep\(2\)/);
+  assert.match(changeBrief, /setSelectedArticle\(null\)/);
+});
+
+test('tìm nguồn retry race của bài mới và không dùng HTTP 422 khi Grounding thiếu nguồn', async () => {
+  const component = await readFile(
+    new URL('../src/components/ArticleSourceResearch.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(component, /getArticleSourcesWithRetry/);
+  assert.match(component, /error\.status === 403 \|\| error\.status === 404/);
+
+  const server = await readFile(new URL('../server/index.mjs', import.meta.url), 'utf8');
+  assert.match(server, /google_grounding_retry/);
+  assert.match(server, /reusedExistingSources: existingSources\.length > 0/);
+  assert.doesNotMatch(server, /'grounding_missing'/);
+});
+
+test('đăng bài thành công không tải hoặc chạy hiệu ứng pháo hoa', async () => {
+  const publisher = await readFile(
+    new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url),
+    'utf8'
+  );
+  const packageJson = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8')
+  );
+  assert.doesNotMatch(publisher, /confetti/);
+  assert.equal(packageJson.dependencies?.['canvas-confetti'], undefined);
+  assert.equal(packageJson.devDependencies?.['@types/canvas-confetti'], undefined);
 });

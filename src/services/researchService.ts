@@ -6,6 +6,8 @@ export interface ResearchSourcesResponse {
   summary?: string;
   searchQueries?: string[];
   searchEntryPointHtml?: string;
+  reusedExistingSources?: boolean;
+  retryable?: boolean;
 }
 
 export interface ApplySourcesResponse {

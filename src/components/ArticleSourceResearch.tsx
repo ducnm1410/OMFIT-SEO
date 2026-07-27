@@ -13,6 +13,7 @@ import {
   getArticleSources,
   researchArticleSources
 } from '../services/researchService';
+import { ApiClientError } from '../services/apiClient';
 
 interface ArticleSourceResearchProps {
   articleId: string;
@@ -48,6 +49,23 @@ function approvedIdsFrom(sources: ArticleSource[]) {
   );
 }
 
+async function getArticleSourcesWithRetry(articleId: string) {
+  const delays = [500, 1_000];
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await getArticleSources(articleId);
+    } catch (error) {
+      const isTransientNewArticleRace = (
+        error instanceof ApiClientError
+        && (error.status === 403 || error.status === 404)
+        && attempt < delays.length
+      );
+      if (!isTransientNewArticleRace) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, delays[attempt]));
+    }
+  }
+}
+
 export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
   articleId,
   title,
@@ -81,7 +99,7 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
     setError('');
     setIsLoading(true);
 
-    void getArticleSources(articleId)
+    void getArticleSourcesWithRetry(articleId)
       .then((response) => {
         if (!isCurrent) return;
         const nextSources = response.sources || [];
@@ -131,7 +149,9 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
       setSearchEntryPointHtml(response.searchEntryPointHtml || '');
       onSourcesChange(nextSources);
       setMessage(
-        nextSources.length > 0
+        response.reusedExistingSources
+          ? `Google chưa trả về nguồn mới. Hệ thống đang giữ ${nextSources.length} nguồn đã tìm trước đó; bạn có thể thử lại.`
+          : nextSources.length > 0
           ? `Đã tìm thấy ${nextSources.length} nguồn. Hãy mở từng nguồn để kiểm tra trước khi duyệt.`
           : 'Chưa tìm thấy nguồn phù hợp. Bạn có thể chỉnh từ khóa rồi thử lại.'
       );
