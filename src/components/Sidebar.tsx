@@ -80,28 +80,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
       } ${
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}>
-      <button
-        type="button"
-        onClick={onToggleCollapsed}
-        className="absolute -right-3 top-[18px] z-10 hidden h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-[#0879D9]/40 hover:text-[#0879D9] md:grid"
-        aria-label={isCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
-        title={isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
-      >
-        {isCollapsed
-          ? <ChevronsRight className="h-3.5 w-3.5" />
-          : <ChevronsLeft className="h-3.5 w-3.5" />}
-      </button>
       <div>
         <div className={`flex min-h-16 items-center gap-3 border-b border-slate-200 px-4 ${
           isCollapsed ? 'md:justify-center md:px-2' : ''
         }`}>
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#17191D] text-white">
+          <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#17191D] text-white ${
+            isCollapsed ? 'md:hidden' : ''
+          }`}>
             <Activity className="h-[18px] w-[18px]" />
           </div>
           <div className={`min-w-0 ${isCollapsed ? 'md:hidden' : ''}`}>
             <h1 className="text-[15px] font-bold leading-none tracking-tight text-[#17191D]">OMFIT SEO</h1>
             <p className="mt-1 text-[10px] font-medium text-slate-500">Content workspace</p>
           </div>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className={`hidden h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-[#0879D9] md:grid ${
+              isCollapsed ? '' : 'ml-auto'
+            }`}
+            aria-label={isCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+            title={isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+          >
+            {isCollapsed
+              ? <ChevronsRight className="h-3.5 w-3.5" />
+              : <ChevronsLeft className="h-3.5 w-3.5" />}
+          </button>
           <button
             type="button"
             onClick={onClose}

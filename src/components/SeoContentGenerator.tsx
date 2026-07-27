@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { FilePenLine, ArrowRight, List, ShieldCheck, Activity, Target, UsersRound } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Activity,
+  AlertCircle,
+  ArrowRight,
+  Clock3,
+  FilePenLine,
+  List,
+  ShieldCheck,
+  Target,
+  UsersRound
+} from 'lucide-react';
 import type { SeoOutline, GeneratedArticle, ActiveTab, ContentBrief } from '../types';
 import { GeminiService } from '../services/geminiService';
 
@@ -8,7 +18,7 @@ interface SeoContentGeneratorProps {
   brief: ContentBrief;
   geminiService: GeminiService;
   onBriefChange: (brief: ContentBrief) => void;
-  onArticleGenerated: (article: GeneratedArticle) => void;
+  onArticleGenerated: (article: GeneratedArticle) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
 }
 
@@ -31,6 +41,24 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [isGeneratingArticle, setIsGeneratingArticle] = useState(false);
   const [outline, setOutline] = useState<SeoOutline | null>(null);
+  const [generationError, setGenerationError] = useState('');
+  const [generationSeconds, setGenerationSeconds] = useState(0);
+  const [generationStage, setGenerationStage] = useState<'drafting' | 'saving'>('drafting');
+  const articleRequestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (step !== 'generating') {
+      setGenerationSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setGenerationSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [step]);
+
+  useEffect(() => () => articleRequestRef.current?.abort(), []);
 
   const commitBrief = (overrides: Partial<ContentBrief> = {}) => {
     onBriefChange({
@@ -49,6 +77,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
     e.preventDefault();
     if (!keyword) return;
     commitBrief();
+    setGenerationError('');
     setIsGeneratingOutline(true);
     try {
       const briefContext = [
@@ -63,6 +92,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
       setStep('outline');
     } catch (err) {
       console.error('Error generating outline:', err);
+      setGenerationError(err instanceof Error ? err.message : 'Không thể tạo dàn ý. Vui lòng thử lại.');
     } finally {
       setIsGeneratingOutline(false);
     }
@@ -70,19 +100,39 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
   const handleGenerateFullArticle = async () => {
     if (!outline) return;
+    const controller = new AbortController();
+    articleRequestRef.current?.abort();
+    articleRequestRef.current = controller;
+    setGenerationError('');
+    setGenerationStage('drafting');
     setStep('generating');
     setIsGeneratingArticle(true);
     try {
-      const article = await geminiService.generateFullArticle(outline, wordCount);
-      onArticleGenerated(article);
+      const article = await geminiService.generateFullArticle(outline, wordCount, controller.signal);
+      setGenerationStage('saving');
+      await onArticleGenerated(article);
       setActiveTab('editor');
     } catch (err) {
       console.error('Error generating article:', err);
+      setGenerationError(err instanceof Error ? err.message : 'Không thể tạo bài viết. Vui lòng thử lại.');
       setStep('outline');
     } finally {
+      if (articleRequestRef.current === controller) articleRequestRef.current = null;
       setIsGeneratingArticle(false);
     }
   };
+
+  const handleCancelArticleGeneration = () => {
+    articleRequestRef.current?.abort();
+  };
+
+  const generationMessage = generationStage === 'saving'
+    ? 'Đang kiểm tra SEO và lưu bản nháp an toàn...'
+    : generationSeconds < 15
+      ? 'Đang phân tích dàn ý và chuẩn bị cấu trúc bài...'
+      : generationSeconds < 40
+        ? 'Đang soạn nội dung và tối ưu SEO On-Page...'
+        : 'Đang hoàn thiện nội dung, FAQ và mục lục tự động...';
 
   return (
     <div className="ui-page space-y-6">
@@ -105,6 +155,12 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
       {step === 'input' && (
         <div className="ui-panel space-y-6 p-5 sm:p-6">
+          {generationError && (
+            <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{generationError}</span>
+            </div>
+          )}
           <form onSubmit={handleGenerateOutline} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -257,6 +313,21 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
       {step === 'outline' && outline && (
         <div className="ui-panel space-y-6 p-5 sm:p-6">
+          {generationError && (
+            <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700">
+              <span className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{generationError}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setGenerationError('')}
+                className="shrink-0 font-bold text-rose-700 underline underline-offset-2"
+              >
+                Đóng
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9]">
@@ -338,12 +409,41 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
       )}
 
       {step === 'generating' && (
-        <div className="ui-panel space-y-4 p-10 text-center sm:p-12">
-          <div className="w-12 h-12 border-4 border-[#0879D9] border-t-transparent rounded-full animate-spin mx-auto" />
-          <h3 className="text-lg font-bold text-[#071827]">Đang soạn bài viết theo chuẩn OMFIT...</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
-            Hệ thống đang sinh nội dung HTML, tối ưu SEO On-Page, tạo mục lục tự động và chuẩn bị chuyển sang màn hình **Xem & Chỉnh Sửa Bài Viết (Live Editor)**.
-          </p>
+        <div className="ui-panel p-8 text-center sm:p-12">
+          <div className="mx-auto max-w-xl space-y-5">
+            <div className="relative mx-auto grid h-14 w-14 place-items-center">
+              <div className="absolute inset-0 animate-spin rounded-full border-4 border-[#D9EEFC] border-t-[#0879D9]" />
+              <FilePenLine className="h-5 w-5 text-[#0879D9]" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-[#071827]">Đang tạo bài viết theo chuẩn OMFIT</h3>
+              <p aria-live="polite" className="text-sm font-semibold text-[#0879D9]">{generationMessage}</p>
+              <p className="mx-auto max-w-md text-xs font-medium leading-5 text-slate-500">
+                Bài dài {wordCount.toLocaleString('vi-VN')} từ thường cần 30–60 giây. Khi hoàn tất, hệ thống sẽ tự chuyển sang màn hình chỉnh sửa.
+              </p>
+            </div>
+            <div className="mx-auto h-1.5 max-w-sm overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-[#0879D9] transition-[width] duration-1000"
+                style={{ width: `${generationStage === 'saving' ? 96 : Math.min(88, 16 + generationSeconds * 1.35)}%` }}
+              />
+            </div>
+            <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <Clock3 className="h-3.5 w-3.5" />
+                Đã xử lý {generationSeconds} giây
+              </span>
+              {generationStage === 'drafting' && (
+                <button
+                  type="button"
+                  onClick={handleCancelArticleGeneration}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-rose-200 hover:text-rose-700"
+                >
+                  Dừng và quay lại dàn ý
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

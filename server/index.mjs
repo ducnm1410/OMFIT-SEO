@@ -818,21 +818,33 @@ async function generateGeminiContent(prompt, responseMimeType = 'text/plain') {
   const apiKey = getEnv('GEMINI_API_KEY');
   const model = getEnv('GEMINI_MODEL', 'gemini-2.5-flash');
   if (!apiKey) throw new ApiError(503, 'Chưa cấu hình Gemini API trên máy chủ.', 'gemini_missing');
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType }
-      }),
-      signal: AbortSignal.timeout(55_000)
+  let response;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType }
+        }),
+        signal: AbortSignal.timeout(55_000)
+      }
+    );
+  } catch (error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+      throw new ApiError(
+        504,
+        'Gemini đang phản hồi chậm hơn bình thường. Vui lòng thử lại sau ít phút.',
+        'gemini_timeout'
+      );
     }
-  );
+    throw error;
+  }
   if (!response.ok) {
     const detail = await response.text();
     throw new ApiError(502, `Gemini trả về lỗi ${response.status}: ${detail.slice(0, 300)}`, 'gemini_failed');

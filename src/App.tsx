@@ -275,26 +275,27 @@ export function App() {
     };
   };
 
-  const handleArticleGenerated = (newArticle: GeneratedArticle) => {
+  const handleArticleGenerated = async (newArticle: GeneratedArticle) => {
+    const brand = await ensureBrandProfile();
+    setBrandProfile(brand);
+    const suggestedLinks = await suggestInternalLinks(newArticle.focusKeyword).catch(() => []);
+    const prepared = prepareArticle({
+      ...newArticle,
+      brandProfileId: brand.id,
+      contentHtml: enhanceArticleSeoHtml(
+        newArticle.contentHtml,
+        newArticle.focusKeyword,
+        suggestedLinks,
+        brand,
+        brandAssets.find((asset) => asset.assetType === 'logo')?.url
+      )
+    }, brand);
+    await persistArticle(prepared.article, prepared.audit);
+    setArticles((previous) => [prepared.article, ...previous.filter((item) => item.id !== prepared.article.id)]);
+    setSelectedArticle(prepared.article);
+    setWorkflowStep(3);
+
     void (async () => {
-      const brand = await ensureBrandProfile();
-      setBrandProfile(brand);
-      const suggestedLinks = await suggestInternalLinks(newArticle.focusKeyword).catch(() => []);
-      const prepared = prepareArticle({
-        ...newArticle,
-        brandProfileId: brand.id,
-        contentHtml: enhanceArticleSeoHtml(
-          newArticle.contentHtml,
-          newArticle.focusKeyword,
-          suggestedLinks,
-          brand,
-          brandAssets.find((asset) => asset.assetType === 'logo')?.url
-        )
-      }, brand);
-      await persistArticle(prepared.article, prepared.audit);
-      setArticles((previous) => [prepared.article, ...previous.filter((item) => item.id !== prepared.article.id)]);
-      setSelectedArticle(prepared.article);
-      setWorkflowStep(3);
       const document = new DOMParser().parseFromString(
         `<main>${prepared.article.contentHtml}</main>`,
         'text/html'
@@ -341,14 +342,14 @@ export function App() {
           ...prepared.article,
           contentHtml: main?.innerHTML || prepared.article.contentHtml,
           articleImages: mergeUniqueArticleImages(prepared.article.articleImages, generatedImages)
-        });
+        }, brand);
         await persistArticle(withImages.article, withImages.audit);
         setArticles((previous) => previous.map((item) => (
           item.id === withImages.article.id ? withImages.article : item
         )));
         setSelectedArticle(withImages.article);
       }
-    })().catch((error) => console.error('Không thể lưu bài viết mới:', error));
+    })().catch((error) => console.error('Không thể tự động bổ sung ảnh cho bài viết:', error));
   };
 
   const handleSaveArticle = (
