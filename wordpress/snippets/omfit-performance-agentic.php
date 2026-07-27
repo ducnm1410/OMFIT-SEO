@@ -24,17 +24,6 @@ if (!function_exists('omfit_agentic_is_home')) {
             'contact-form-7',
             'mptt-style',
             'omfit-seo-be-vietnam-pro',
-            'woocommerce-layout',
-            'woocommerce-smallscreen',
-            'woocommerce-general',
-            'brands-styles',
-            'hint',
-            'perfect-scrollbar',
-            'perfect-scrollbar-wpc',
-            'woosc-frontend',
-            'woosw-icons',
-            'woosw-frontend',
-            'wc-blocks-style',
         );
 
         foreach ($styles as $handle) {
@@ -44,19 +33,6 @@ if (!function_exists('omfit_agentic_is_home')) {
         $scripts = array(
             'swv',
             'contact-form-7',
-            'wc-add-to-cart',
-            'woocommerce',
-            'wc-jquery-blockui',
-            'wc-js-cookie',
-            'sourcebuster-js',
-            'wc-order-attribution',
-            'pxl-woocommerce',
-            'wooaa-frontend',
-            'print',
-            'table-head-fixer',
-            'perfect-scrollbar',
-            'woosc-frontend',
-            'woosw-frontend',
             'mptt-functions',
             'mptt-event-object-js',
             'mptt-editor-panel-js',
@@ -175,6 +151,7 @@ if (!function_exists('omfit_agentic_is_home')) {
 
     function omfit_agentic_filter_home_markup($html) {
         $html = str_replace('http://omfit.com.vn/', 'https://omfit.com.vn/', (string) $html);
+        $html = preg_replace('/\swoocommerce-layout-(?:grid|list)\b/', '', $html);
         $html = str_replace(
             'https://omfit.com.vn/wp-content/uploads/2025/03/476558850_122103530234761386_5564187386758449618_n-2.jpg',
             'https://omfit.com.vn/wp-content/uploads/2025/03/476558850_122103530234761386_5564187386758449618_n-2-96x96.jpg',
@@ -259,12 +236,6 @@ if (!function_exists('omfit_agentic_is_home')) {
                 return 'Mạng xã hội OMFIT';
             }
             function fixAccessibility(root){
-                nodes(root,'.woosc-settings-field').forEach(function(input){
-                    if(input.hasAttribute('aria-label')){return;}
-                    var move=input.parentElement?input.parentElement.querySelector('.move'):null;
-                    var field=cleanText(move?move.textContent:'');
-                    input.setAttribute('aria-label',field?'Hiển thị trường '+field+' trong bảng so sánh':'Hiển thị trường trong bảng so sánh');
-                });
                 nodes(root,'a.btn-video').forEach(function(link){
                     if(!link.hasAttribute('aria-label')){link.setAttribute('aria-label','Phát video giới thiệu OMFIT');}
                 });
