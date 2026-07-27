@@ -1,6 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/research/sources",
+      "destination": "/api/content/article?__omfit_route=research-sources"
+    },
+    {
+      "source": "/api/media/register",
+      "destination": "/api/content/article?__omfit_route=media-register"
+    }
+  ],
   "functions": {
     "api/health.mjs": {
       "maxDuration": 15
@@ -29,14 +39,8 @@
     "api/content/article.mjs": {
       "maxDuration": 60
     },
-    "api/research/sources.mjs": {
-      "maxDuration": 60
-    },
     "api/images/generate.mjs": {
       "maxDuration": 60
-    },
-    "api/media/register.mjs": {
-      "maxDuration": 30
     },
     "api/wordpress/publish.mjs": {
       "maxDuration": 60
