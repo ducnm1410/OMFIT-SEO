@@ -34,6 +34,10 @@ import { ApiClientError } from '../services/apiClient';
 import { ArticleImagePackage } from './ArticleImagePackage';
 import { ArticleSourceResearch } from './ArticleSourceResearch';
 import {
+  PublishResultDialog,
+  type PublishDialogResult
+} from './PublishResultDialog';
+import {
   articleContainsImage,
   buildArticleImageMarkup,
   collectArticleAltTexts,
@@ -73,6 +77,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishAudit, setPublishAudit] = useState<SeoAuditResult | null>(null);
   const [reviewerConfirmed, setReviewerConfirmed] = useState(false);
+  const [publishResult, setPublishResult] = useState<PublishDialogResult | null>(null);
 
   useEffect(() => {
     if (!article) return;
@@ -87,6 +92,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     setPublishedUrl(null);
     setPublishAudit(null);
     setReviewerConfirmed(false);
+    setPublishResult(null);
     // Chỉ khởi tạo lại trình soạn thảo khi người dùng chuyển sang bài khác.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article?.id]);
@@ -238,6 +244,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     setPublishLogs([]);
     setPublishedUrl(null);
     setPublishAudit(null);
+    setPublishResult(null);
 
     const currentArticleState: GeneratedArticle = {
       ...article,
@@ -285,11 +292,19 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
         readabilityScore: result.audit?.readabilityScore ?? currentArticleState.readabilityScore,
         seoIssues: result.audit?.issues ?? currentArticleState.seoIssues
       }, { serverAuthoritative: true, audit: result.audit });
-      
-      window.alert('🎉 Đăng bài thành công lên website omfit.com.vn!');
+
+      setPublishResult({
+        variant: 'success',
+        title: postStatus === 'publish' ? 'Đăng bài thành công' : 'Đã lưu bản nháp',
+        message: postStatus === 'publish'
+          ? `Bài viết “${nextTitle}” đã được xuất bản lên omfit.com.vn.`
+          : `Bài viết “${nextTitle}” đã được lưu dưới dạng bản nháp trên WordPress.`,
+        postUrl: result.postUrl
+      });
     } catch (err: unknown) {
       console.error('WordPress Publishing Failed:', err);
       const message = err instanceof Error ? err.message : 'Không thể đăng bài lên WordPress.';
+      let auditFailed = false;
       if (err instanceof ApiClientError) {
         const payload = err.payload as {
           audit?: SeoAuditResult;
@@ -297,6 +312,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           slug?: string;
         };
         if (payload.audit) {
+          auditFailed = !payload.audit.passed;
           setPublishAudit(payload.audit);
           setPublishLogs(
             payload.audit.issues
@@ -319,7 +335,13 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           }, { serverAuthoritative: true, audit: payload.audit });
         }
       }
-      window.alert(`Đăng bài thất bại:\n${message}`);
+      setPublishResult({
+        variant: 'error',
+        title: auditFailed ? 'Bài viết chưa sẵn sàng để đăng' : 'Đăng bài chưa thành công',
+        message: auditFailed
+          ? `${message}\nCác mục cần xử lý đã được hiển thị trong phần kiểm tra SEO bên dưới.`
+          : `${message}\nBạn có thể xem nhật ký xử lý bên dưới rồi thử lại.`
+      });
     } finally {
       setIsPublishing(false);
     }
@@ -327,6 +349,10 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
 
   return (
     <div className="ui-page space-y-6">
+      <PublishResultDialog
+        result={publishResult}
+        onClose={() => setPublishResult(null)}
+      />
       {/* Top Banner Actions */}
       <div className="ui-page-header flex flex-col items-start justify-between gap-4 p-5 sm:p-6 md:flex-row md:items-center">
         <div>
