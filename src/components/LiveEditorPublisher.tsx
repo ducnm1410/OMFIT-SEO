@@ -16,7 +16,9 @@ import {
   RefreshCw,
   PlusCircle,
   Tag,
-  ImageIcon
+  ImageIcon,
+  ArrowRight,
+  AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import DOMPurify from 'dompurify';
@@ -25,12 +27,14 @@ import type {
   ArticleSource,
   GeneratedArticle,
   GeneratedImage,
-  SeoAuditResult
+  SeoAuditResult,
+  SeoWorkflowStep
 } from '../types';
 import { WordpressMcpService } from '../services/wordpressMcpService';
 import { LeonardoService } from '../services/leonardoService';
 import { uploadMediaFile } from '../services/contentRepository';
 import { ApiClientError } from '../services/apiClient';
+import { auditArticle } from '../services/seoAuditService';
 import { ArticleImagePackage } from './ArticleImagePackage';
 import { ArticleSourceResearch } from './ArticleSourceResearch';
 import {
@@ -54,6 +58,8 @@ interface LiveEditorPublisherProps {
     options?: { serverAuthoritative?: boolean; audit?: SeoAuditResult }
   ) => void;
   setActiveTab: (tab: ActiveTab) => void;
+  workflowStep: SeoWorkflowStep;
+  onWorkflowStepChange: (step: SeoWorkflowStep) => void;
 }
 
 export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
@@ -61,7 +67,9 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   wpService,
   leonardoService,
   onSaveArticle,
-  setActiveTab
+  setActiveTab,
+  workflowStep,
+  onWorkflowStepChange
 }) => {
   const [title, setTitle] = useState(article?.title || '');
   const [metaTitle, setMetaTitle] = useState(article?.metaTitle || '');
@@ -78,6 +86,8 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   const [publishAudit, setPublishAudit] = useState<SeoAuditResult | null>(null);
   const [reviewerConfirmed, setReviewerConfirmed] = useState(false);
   const [publishResult, setPublishResult] = useState<PublishDialogResult | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const lastAutosavedPayloadRef = useRef('');
 
   useEffect(() => {
     if (!article) return;
@@ -93,9 +103,53 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     setPublishAudit(null);
     setReviewerConfirmed(false);
     setPublishResult(null);
+    lastAutosavedPayloadRef.current = JSON.stringify({
+      title: article.title,
+      metaTitle: article.metaTitle,
+      metaDescription: article.metaDescription,
+      slug: article.slug,
+      focusKeyword: article.focusKeyword,
+      contentHtml: article.contentHtml,
+      sources: article.sources || []
+    });
     // Chỉ khởi tạo lại trình soạn thảo khi người dùng chuyển sang bài khác.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article?.id]);
+
+  useEffect(() => {
+    if (!article) return;
+    const payload = JSON.stringify({
+      title,
+      metaTitle,
+      metaDescription,
+      slug,
+      focusKeyword,
+      contentHtml,
+      sources
+    });
+    if (payload === lastAutosavedPayloadRef.current) return;
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = window.setTimeout(() => {
+      lastAutosavedPayloadRef.current = payload;
+      onSaveArticle({
+        ...article,
+        title,
+        metaTitle,
+        metaDescription,
+        slug,
+        focusKeyword,
+        contentHtml,
+        sources,
+        status: 'draft'
+      });
+    }, 900);
+    return () => {
+      if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    };
+    // Autosave only follows editable fields. The article object and callback may
+    // change after a successful save without representing a new editor change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article?.id, contentHtml, focusKeyword, metaDescription, metaTitle, slug, sources, title]);
 
   if (!article) {
     return (
@@ -114,6 +168,80 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
       </div>
     );
   }
+
+  const workingArticle: GeneratedArticle = {
+    ...article,
+    title,
+    metaTitle,
+    metaDescription,
+    slug,
+    focusKeyword,
+    contentHtml,
+    sources
+  };
+  const clientAudit = auditArticle(workingArticle);
+  const approvedSourceCount = sources.filter(
+    (source) => source.approved && source.status !== 'broken'
+  ).length;
+  const inlineImageCount = Number(
+    clientAudit.metrics.imageCount
+    || clientAudit.metrics.htmlImageCount
+    || 0
+  );
+  const metadataReady = Boolean(
+    title.trim()
+    && title.trim().length >= 45
+    && title.trim().length <= 60
+    && metaDescription.trim().length >= 140
+    && metaDescription.trim().length <= 160
+    && slug.trim()
+    && focusKeyword.trim()
+  );
+  const contentReady = clientAudit.score >= 80
+    && !clientAudit.issues.some((issue) => issue.level === 'error');
+  const mediaReady = Boolean(
+    article.featuredImage?.altText.trim()
+    && inlineImageCount >= 2
+  );
+  const sourceReady = approvedSourceCount > 0;
+  const readinessItems = [
+    {
+      label: 'Metadata và search intent',
+      description: metadataReady
+        ? 'Tiêu đề, mô tả, slug và focus keyword đã đủ.'
+        : 'Cần tiêu đề 45–60 ký tự, mô tả 140–160 ký tự, slug và focus keyword.',
+      complete: metadataReady
+    },
+    {
+      label: 'Cấu trúc và điểm SEO',
+      description: contentReady
+        ? `Bản kiểm tra sớm đạt ${clientAudit.score}/100.`
+        : `Điểm hiện tại ${clientAudit.score}/100; cần xử lý các cảnh báo quan trọng.`,
+      complete: contentReady
+    },
+    {
+      label: 'Featured image và ảnh trong bài',
+      description: mediaReady
+        ? `Đã có featured image và ${inlineImageCount} ảnh trong nội dung.`
+        : 'Cần featured image có alt text và tối thiểu hai ảnh cho bài dài.',
+      complete: mediaReady
+    },
+    {
+      label: 'Nguồn tham khảo đã duyệt',
+      description: sourceReady
+        ? `Đã duyệt ${approvedSourceCount} nguồn công khai.`
+        : 'Chưa có nguồn được duyệt; nội dung sức khỏe nên bổ sung ít nhất một nguồn.',
+      complete: sourceReady
+    },
+    {
+      label: 'Xác nhận người kiểm duyệt',
+      description: reviewerConfirmed
+        ? 'Đã xác nhận bài được người phụ trách kiểm tra.'
+        : 'Cần xác nhận reviewer trước khi đưa thông tin kiểm duyệt vào WordPress.',
+      complete: reviewerConfirmed
+    }
+  ];
+  const readinessCount = readinessItems.filter((item) => item.complete).length;
 
   const sanitizedPreviewHtml = DOMPurify.sanitize(contentHtml, {
     USE_PROFILES: { html: true },
@@ -357,47 +485,65 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
       <div className="ui-page-header flex flex-col items-start justify-between gap-4 p-5 sm:p-6 md:flex-row md:items-center">
         <div>
           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30 flex items-center gap-1 inline-flex">
-            <Activity className="w-3 h-3" /> OMFIT PUBLISHER READY
+            <Activity className="w-3 h-3" />
+            {workflowStep === 4 ? 'QUALITY GATE' : 'CONTENT WORKSPACE'}
           </span>
-          <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">Biên tập và xuất bản bài viết</h2>
+          <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">
+            {workflowStep === 4 ? 'Kiểm duyệt và xuất bản' : 'Hoàn thiện nội dung và hình ảnh'}
+          </h2>
           <p className="text-xs text-slate-500 font-medium">
-            Xem bài viết hiển thị như trên omfit.com.vn và tùy chỉnh trực tiếp trước khi ấn đăng bài qua MCP.
+            {workflowStep === 4
+              ? 'Rà soát checklist cuối cùng; WordPress sẽ kiểm tra lại toàn bộ quality gate trước khi đăng.'
+              : 'Biên tập nội dung, bổ sung nguồn và hình ảnh trước khi chuyển sang bước kiểm duyệt cuối.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
           <button
             type="button"
             onClick={handleSaveDraft}
-            className="px-4 py-2.5 rounded-xl border border-[#0879D9]/25 bg-white text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF]"
+            className="min-h-11 flex-1 rounded-xl border border-[#0879D9]/25 bg-white px-4 text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF] sm:flex-none"
           >
             Lưu bản nháp
           </button>
-          <select
-            value={postStatus}
-            onChange={(e) => setPostStatus(e.target.value as 'draft' | 'publish')}
-            className="px-3 py-2 rounded-xl bg-[#F8FAFC] border border-slate-200 text-xs text-[#071827] font-bold focus:outline-none"
-          >
-            <option value="publish">Xuất Bản Ngay (Publish)</option>
-            <option value="draft">Lưu Bản Nháp (Draft)</option>
-          </select>
+          {workflowStep === 3 ? (
+            <button
+              type="button"
+              onClick={() => onWorkflowStepChange(4)}
+              className="gradient-bg-omfit-btn inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-5 text-xs font-bold text-white shadow-md shadow-[#0879D9]/20 sm:flex-none"
+            >
+              Sang bước kiểm duyệt <ArrowRight className="h-4 w-4" />
+            </button>
+          ) : (
+            <>
+              <select
+                aria-label="Trạng thái bài trên WordPress"
+                value={postStatus}
+                onChange={(e) => setPostStatus(e.target.value as 'draft' | 'publish')}
+                className="min-h-11 flex-1 rounded-xl border border-slate-200 bg-[#F8FAFC] px-3 text-xs font-bold text-[#071827] focus:outline-none sm:flex-none"
+              >
+                <option value="publish">Xuất bản ngay</option>
+                <option value="draft">Lưu bản nháp WordPress</option>
+              </select>
 
-          <button
-            onClick={handlePublish}
-            disabled={isPublishing}
-            className="gradient-bg-omfit-btn px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20 disabled:opacity-50"
-          >
-            {isPublishing ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Đang Đăng Bài Qua MCP...
-              </>
-            ) : (
-              <>
-                <Globe className="w-4 h-4" /> Đăng Bài
-              </>
-            )}
-          </button>
+              <button
+                onClick={handlePublish}
+                disabled={isPublishing}
+                className="gradient-bg-omfit-btn inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-6 text-xs font-bold text-white shadow-md shadow-[#0879D9]/20 disabled:opacity-50 sm:flex-none"
+              >
+                {isPublishing ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Đang gửi WordPress...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="h-4 w-4" /> Đăng bài
+                  </>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -414,47 +560,96 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
         </span>
       </label>
 
-      <ArticleImagePackage
-        article={article}
-        contentHtml={contentHtml}
-        leonardoService={leonardoService}
-        onApplyArticle={handleImagePackageApply}
-      />
+      <section className="ui-panel overflow-hidden border-[#0879D9]/15 bg-white" aria-labelledby="publish-readiness-title">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-[#0879D9]" />
+              <h3 id="publish-readiness-title" className="text-sm font-semibold text-[#17191D]">
+                Checklist sẵn sàng xuất bản
+              </h3>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Đây là kiểm tra sớm trên trình duyệt. Máy chủ vẫn chạy quality gate chính thức trước khi gửi WordPress.
+            </p>
+          </div>
+          <div className="shrink-0 text-left sm:text-right">
+            <p className="text-lg font-semibold text-[#17191D]">{readinessCount}/5</p>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Mục hoàn tất</p>
+          </div>
+        </div>
+        <div className="h-1.5 bg-slate-100">
+          <div
+            className="h-full bg-[#0879D9] transition-all"
+            style={{ width: `${readinessCount * 20}%` }}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-5">
+          {readinessItems.map((item) => (
+            <div key={item.label} className="flex items-start gap-2.5 bg-white p-4">
+              <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full ${
+                item.complete
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-amber-50 text-amber-700'
+              }`}>
+                {item.complete
+                  ? <CheckCircle2 className="h-3.5 w-3.5" />
+                  : <AlertTriangle className="h-3.5 w-3.5" />}
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-[#17191D]">{item.label}</p>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">{item.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <ArticleSourceResearch
-        articleId={article.id}
-        title={title}
-        focusKeyword={focusKeyword}
-        contentHtml={contentHtml}
-        initialSources={sources}
-        onSourcesChange={(nextSources) => {
-          setSources(nextSources);
-          onSaveArticle({
-            ...article,
-            title,
-            metaTitle,
-            metaDescription,
-            slug,
-            focusKeyword,
-            contentHtml,
-            sources: nextSources
-          });
-        }}
-        onContentApplied={(nextContentHtml, nextSources) => {
-          setContentHtml(nextContentHtml);
-          setSources(nextSources);
-          onSaveArticle({
-            ...article,
-            title,
-            metaTitle,
-            metaDescription,
-            slug,
-            focusKeyword,
-            contentHtml: nextContentHtml,
-            sources: nextSources
-          });
-        }}
-      />
+      <div id="article-images" className="scroll-mt-28">
+        <ArticleImagePackage
+          article={article}
+          contentHtml={contentHtml}
+          leonardoService={leonardoService}
+          onApplyArticle={handleImagePackageApply}
+        />
+      </div>
+
+      <div id="article-sources" className="scroll-mt-28">
+        <ArticleSourceResearch
+          articleId={article.id}
+          title={title}
+          focusKeyword={focusKeyword}
+          contentHtml={contentHtml}
+          initialSources={sources}
+          onSourcesChange={(nextSources) => {
+            setSources(nextSources);
+            onSaveArticle({
+              ...article,
+              title,
+              metaTitle,
+              metaDescription,
+              slug,
+              focusKeyword,
+              contentHtml,
+              sources: nextSources
+            });
+          }}
+          onContentApplied={(nextContentHtml, nextSources) => {
+            setContentHtml(nextContentHtml);
+            setSources(nextSources);
+            onSaveArticle({
+              ...article,
+              title,
+              metaTitle,
+              metaDescription,
+              slug,
+              focusKeyword,
+              contentHtml: nextContentHtml,
+              sources: nextSources
+            });
+          }}
+        />
+      </div>
 
       {publishAudit && !publishAudit.passed && (
         <section role="alert" className="rounded-3xl border border-amber-200 bg-amber-50 p-5 sm:p-6">

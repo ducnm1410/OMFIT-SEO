@@ -61,6 +61,16 @@ export interface SeoOutline {
   }[];
 }
 
+export interface ContentBrief {
+  keyword: string;
+  searchIntent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational';
+  service: string;
+  audience: string;
+  conversionGoal: string;
+  tone: string;
+  wordCount: number;
+}
+
 export interface GeneratedArticle {
   id: string;
   title: string;
@@ -208,3 +218,7 @@ export interface ApiSettings {
 }
 
 export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'editor' | 'history' | 'settings';
+
+export type SeoWorkflowStep = 1 | 2 | 3 | 4;
+
+export type WorkflowSaveStatus = 'idle' | 'saving' | 'saved' | 'error';

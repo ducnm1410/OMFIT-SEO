@@ -11,6 +11,21 @@ Rút gọn quy trình từ nhiều màn hình rời rạc thành một luồng c
 
 Không thay đổi các nguyên tắc hiện có về xác thực người dùng, nguồn tham khảo, SEO gate, media ownership, reviewer confirmation và publish idempotency.
 
+## Trạng thái triển khai
+
+Cập nhật ngày 27/07/2026:
+
+- Đã triển khai workflow 4 bước thống nhất trên các màn hình làm bài.
+- Đã mở rộng Content Brief với search intent, dịch vụ, độc giả, mục tiêu chuyển đổi, giọng văn và số từ.
+- Đã hiển thị bài đang làm và trạng thái tự động lưu.
+- Đã lưu bước hiện tại, brief và bài đang làm để tiếp tục sau khi refresh hoặc đăng nhập lại.
+- Đã tích hợp hình ảnh và nguồn tham khảo trong trình biên tập hiện tại.
+- Đã đưa checklist SEO, media, nguồn và reviewer lên trước thao tác publish.
+- Đã tách rõ giai đoạn hoàn thiện nội dung và giai đoạn kiểm duyệt/xuất bản.
+- Backend publish, SEO gate, media ownership và idempotency được giữ nguyên.
+
+Các hạng mục orchestration dạng background job, retry từng chặng và analytics vận hành vẫn thuộc giai đoạn mở rộng tiếp theo; không được giả lập bằng trạng thái frontend.
+
 ## Luồng hiện tại
 
 1. Phân tích keyword từ Google Ads.

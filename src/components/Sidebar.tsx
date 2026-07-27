@@ -33,16 +33,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       label: 'Không gian làm việc',
       items: [
-        { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard, badge: '' },
-        { id: 'keywords', label: 'Phân tích keyword', icon: Search, badge: 'Mới' },
-        { id: 'generator', label: 'Soạn bài viết SEO', icon: FilePenLine, badge: '' },
-        { id: 'imagestudio', label: 'Thư viện hình ảnh', icon: ImageIcon, badge: '' }
+        { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard, badge: '' }
       ]
     },
     {
-      label: 'Xuất bản',
+      label: 'Quy trình SEO',
       items: [
-        { id: 'editor', label: 'Biên tập & xuất bản', icon: Edit3, badge: 'Live' },
+        { id: 'keywords', label: '1. Content brief', icon: Search, badge: 'Mới' },
+        { id: 'generator', label: '2. Bằng chứng & dàn ý', icon: FilePenLine, badge: '' },
+        { id: 'imagestudio', label: '3. Nội dung & hình ảnh', icon: ImageIcon, badge: '' },
+        { id: 'editor', label: '4. Kiểm duyệt & xuất bản', icon: Edit3, badge: 'Live' }
+      ]
+    },
+    {
+      label: 'Nội dung',
+      items: [
         { id: 'history', label: 'Lịch sử bài viết', icon: History, badge: '' }
       ]
     },

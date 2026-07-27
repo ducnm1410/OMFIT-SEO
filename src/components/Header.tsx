@@ -1,11 +1,23 @@
 import React from 'react';
-import { ChevronRight, FilePlus2, LogOut, Menu, ShieldCheck, UserRound } from 'lucide-react';
-import type { ActiveTab, ApiSettings } from '../types';
+import {
+  ChevronRight,
+  Cloud,
+  CloudOff,
+  FilePlus2,
+  LoaderCircle,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  UserRound
+} from 'lucide-react';
+import type { ActiveTab, ApiSettings, WorkflowSaveStatus } from '../types';
 
 interface HeaderProps {
   activeTab: ActiveTab;
   settings: ApiSettings;
   userLabel: string;
+  currentArticleTitle?: string;
+  saveStatus: WorkflowSaveStatus;
   onLogout: () => void;
   onQuickGenerate: () => void;
   onMenuToggle: () => void;
@@ -15,6 +27,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   settings,
   userLabel,
+  currentArticleTitle,
+  saveStatus,
   onLogout,
   onQuickGenerate,
   onMenuToggle
@@ -40,10 +54,17 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <Menu className="w-5 h-5" />
       </button>
-      <div className="flex min-w-0 items-center gap-1.5 text-sm">
-        <span className="hidden font-medium text-slate-400 sm:inline">Workspace</span>
-        <ChevronRight className="hidden h-3.5 w-3.5 text-slate-300 sm:block" />
-        <h2 className="truncate font-semibold text-[#17191D]">{pageLabels[activeTab]}</h2>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-1.5 text-sm">
+          <span className="hidden font-medium text-slate-400 sm:inline">Workspace</span>
+          <ChevronRight className="hidden h-3.5 w-3.5 text-slate-300 sm:block" />
+          <h2 className="truncate font-semibold text-[#17191D]">{pageLabels[activeTab]}</h2>
+        </div>
+        {currentArticleTitle && (
+          <p className="mt-0.5 max-w-[48vw] truncate text-[10px] font-medium text-slate-500 sm:max-w-xs">
+            Đang làm: <span className="text-slate-700">{currentArticleTitle}</span>
+          </p>
+        )}
       </div>
     </div>
 
@@ -54,6 +75,23 @@ export const Header: React.FC<HeaderProps> = ({
           {settings.wpMcpConnected ? 'WordPress đã kết nối' : 'Chưa kết nối WordPress'}
         </span>
       </div>
+
+      {currentArticleTitle && (
+        <div className={`hidden xl:flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-[11px] font-medium ${
+          saveStatus === 'error'
+            ? 'border-rose-200 bg-rose-50 text-rose-700'
+            : 'border-slate-200 bg-white text-slate-500'
+        }`}>
+          {saveStatus === 'saving' && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[#0879D9]" />}
+          {saveStatus === 'error' && <CloudOff className="h-3.5 w-3.5" />}
+          {(saveStatus === 'idle' || saveStatus === 'saved') && <Cloud className="h-3.5 w-3.5 text-emerald-600" />}
+          {saveStatus === 'saving'
+            ? 'Đang lưu'
+            : saveStatus === 'error'
+              ? 'Lỗi lưu'
+              : 'Đã lưu'}
+        </div>
+      )}
 
       <div className="hidden sm:flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
         <UserRound className="h-4 w-4 shrink-0 text-[#0879D9]" />

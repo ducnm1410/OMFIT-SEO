@@ -1,35 +1,64 @@
 import React, { useState } from 'react';
-import { FilePenLine, FileText, CheckCircle2, ArrowRight, Settings, List, Layers, ShieldCheck, Activity } from 'lucide-react';
-import type { SeoOutline, GeneratedArticle, ActiveTab } from '../types';
+import { FilePenLine, ArrowRight, List, ShieldCheck, Activity, Target, UsersRound } from 'lucide-react';
+import type { SeoOutline, GeneratedArticle, ActiveTab, ContentBrief } from '../types';
 import { GeminiService } from '../services/geminiService';
 
 interface SeoContentGeneratorProps {
   selectedKeyword: string;
+  brief: ContentBrief;
   geminiService: GeminiService;
+  onBriefChange: (brief: ContentBrief) => void;
   onArticleGenerated: (article: GeneratedArticle) => void;
   setActiveTab: (tab: ActiveTab) => void;
 }
 
 export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
   selectedKeyword,
+  brief,
   geminiService,
+  onBriefChange,
   onArticleGenerated,
   setActiveTab
 }) => {
-  const [keyword, setKeyword] = useState(selectedKeyword);
-  const [tone, setTone] = useState('Chuyên nghiệp, truyền cảm hứng, cân bằng');
-  const [wordCount, setWordCount] = useState(1500);
+  const [keyword, setKeyword] = useState(selectedKeyword || brief.keyword);
+  const [searchIntent, setSearchIntent] = useState(brief.searchIntent);
+  const [service, setService] = useState(brief.service);
+  const [audience, setAudience] = useState(brief.audience);
+  const [conversionGoal, setConversionGoal] = useState(brief.conversionGoal);
+  const [tone, setTone] = useState(brief.tone);
+  const [wordCount, setWordCount] = useState(brief.wordCount);
   const [step, setStep] = useState<'input' | 'outline' | 'generating'>('input');
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [isGeneratingArticle, setIsGeneratingArticle] = useState(false);
   const [outline, setOutline] = useState<SeoOutline | null>(null);
 
+  const commitBrief = (overrides: Partial<ContentBrief> = {}) => {
+    onBriefChange({
+      keyword,
+      searchIntent,
+      service,
+      audience,
+      conversionGoal,
+      tone,
+      wordCount,
+      ...overrides
+    });
+  };
+
   const handleGenerateOutline = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword) return;
+    commitBrief();
     setIsGeneratingOutline(true);
     try {
-      const generatedOutline = await geminiService.generateOutline(keyword, tone);
+      const briefContext = [
+        tone,
+        `Search intent: ${searchIntent}`,
+        `Dịch vụ trọng tâm: ${service}`,
+        `Độc giả: ${audience}`,
+        `Mục tiêu chuyển đổi: ${conversionGoal}`
+      ].join('. ');
+      const generatedOutline = await geminiService.generateOutline(keyword, briefContext);
       setOutline(generatedOutline);
       setStep('outline');
     } catch (err) {
@@ -62,33 +91,15 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-[#17191D]">
-              <FilePenLine className="w-5 h-5 text-[#0879D9]" /> Soạn bài viết SEO thương hiệu OMFIT
+              <FilePenLine className="w-5 h-5 text-[#0879D9]" /> Content brief và dàn ý SEO
             </h2>
             <p className="text-xs text-slate-500 mt-1 font-medium">
-              Tự động hóa 100% quy trình viết bài: Dàn ý chuẩn On-Page, văn phong OMFIT (Elevated, Human, Energetic, Restorative), chèn Table of Contents, Callout & FAQ.
+              Chốt mục tiêu nội dung trước khi tạo dàn ý H2/H3, FAQ và metadata theo chuẩn OMFIT.
             </p>
           </div>
           <span className="px-3 py-1 rounded-full bg-[#E0F2FE] border border-[#0879D9]/30 text-[#0879D9] text-xs font-bold flex items-center gap-1">
             <Activity className="w-3.5 h-3.5" /> OMFIT Standard
           </span>
-        </div>
-
-        {/* Step Indicator */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 pt-3 border-t border-slate-100">
-          <div className={`flex items-center gap-2 text-xs font-bold ${step === 'input' ? 'text-[#0879D9]' : 'text-slate-400'}`}>
-            <span className="w-5 h-5 rounded-full bg-[#0879D9] text-white text-[11px] flex items-center justify-center">1</span>
-            Từ khóa và giọng văn
-          </div>
-          <div className="w-8 h-[1px] bg-slate-200" />
-          <div className={`flex items-center gap-2 text-xs font-bold ${step === 'outline' ? 'text-[#0879D9]' : 'text-slate-400'}`}>
-            <span className="w-5 h-5 rounded-full bg-[#0879D9] text-white text-[11px] flex items-center justify-center">2</span>
-            Duyệt dàn ý H2/H3
-          </div>
-          <div className="w-8 h-[1px] bg-slate-200" />
-          <div className={`flex items-center gap-2 text-xs font-bold ${step === 'generating' ? 'text-[#0879D9]' : 'text-slate-400'}`}>
-            <span className="w-5 h-5 rounded-full bg-[#0879D9] text-white text-[11px] flex items-center justify-center">3</span>
-            Hoàn tất bài viết
-          </div>
         </div>
       </div>
 
@@ -102,11 +113,85 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
               <input
                 type="text"
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                onChange={(e) => {
+                  setKeyword(e.target.value);
+                  commitBrief({ keyword: e.target.value });
+                }}
                 placeholder="VD: khóa học pt pilates chuyên nghiệp, tập pilates giảm mỡ bụng..."
                 className="w-full px-4 py-3 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-sm focus:outline-none focus:border-[#0879D9] transition font-medium"
                 required
               />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <Target className="h-3.5 w-3.5 text-[#0879D9]" /> Search intent
+                </label>
+                <select
+                  value={searchIntent}
+                  onChange={(event) => {
+                    const value = event.target.value as ContentBrief['searchIntent'];
+                    setSearchIntent(value);
+                    commitBrief({ searchIntent: value });
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-4 py-2.5 text-xs font-semibold text-[#071827] transition focus:border-[#0879D9] focus:outline-none"
+                >
+                  <option value="Informational">Tìm hiểu thông tin</option>
+                  <option value="Commercial">So sánh và cân nhắc dịch vụ</option>
+                  <option value="Transactional">Đăng ký hoặc mua dịch vụ</option>
+                  <option value="Navigational">Tìm thương hiệu hoặc địa điểm</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-700">Dịch vụ OMFIT liên quan</label>
+                <select
+                  value={service}
+                  onChange={(event) => {
+                    setService(event.target.value);
+                    commitBrief({ service: event.target.value });
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-4 py-2.5 text-xs font-semibold text-[#071827] transition focus:border-[#0879D9] focus:outline-none"
+                >
+                  <option value="OMFIT PILATES">Pilates</option>
+                  <option value="OMFIT FITNESS">Fitness, Gym và Group X</option>
+                  <option value="OMFIT WELLNESS">Yoga, Sauna và Sound Therapy</option>
+                  <option value="Khóa Học Nghề PT Pilates">Khóa học nghề PT Pilates</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <UsersRound className="h-3.5 w-3.5 text-[#0879D9]" /> Đối tượng độc giả
+                </label>
+                <input
+                  type="text"
+                  value={audience}
+                  onChange={(event) => {
+                    setAudience(event.target.value);
+                    commitBrief({ audience: event.target.value });
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-4 py-2.5 text-xs font-medium text-[#071827] transition focus:border-[#0879D9] focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-700">Mục tiêu chuyển đổi</label>
+                <input
+                  type="text"
+                  value={conversionGoal}
+                  onChange={(event) => {
+                    setConversionGoal(event.target.value);
+                    commitBrief({ conversionGoal: event.target.value });
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-4 py-2.5 text-xs font-medium text-[#071827] transition focus:border-[#0879D9] focus:outline-none"
+                  required
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -114,7 +199,10 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
                 <label className="block text-xs font-bold text-slate-700 mb-1">Giọng văn OMFIT</label>
                 <select
                   value={tone}
-                  onChange={(e) => setTone(e.target.value)}
+                  onChange={(e) => {
+                    setTone(e.target.value);
+                    commitBrief({ tone: e.target.value });
+                  }}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-xs focus:outline-none focus:border-[#0879D9] transition font-semibold"
                 >
                   <option value="Chuyên nghiệp, truyền cảm hứng, cân bằng">Khích lệ & Cân bằng (Mặc định OMFIT)</option>
@@ -130,7 +218,11 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
                 </label>
                 <select
                   value={wordCount}
-                  onChange={(e) => setWordCount(Number(e.target.value))}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    setWordCount(value);
+                    commitBrief({ wordCount: value });
+                  }}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-xs focus:outline-none focus:border-[#0879D9] transition font-semibold"
                 >
                   <option value={1000}>1,000 từ (Bài ngắn gọn tiêu chuẩn)</option>
@@ -177,6 +269,21 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
             </button>
           </div>
 
+          <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Search intent</p>
+              <p className="mt-1 text-xs font-semibold text-[#17191D]">{searchIntent}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Dịch vụ</p>
+              <p className="mt-1 text-xs font-semibold text-[#17191D]">{service}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Mục tiêu</p>
+              <p className="mt-1 line-clamp-2 text-xs font-semibold text-[#17191D]">{conversionGoal}</p>
+            </div>
+          </div>
+
           <div className="p-4 rounded-xl bg-[#F0F9FF] border border-[#0879D9]/20 space-y-2">
             <h4 className="text-xs font-bold text-[#0879D9] flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4" /> Xem trước thẻ meta trên Google Search
@@ -215,7 +322,8 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
 
           <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100">
             <div className="text-xs text-slate-500 font-medium">
-              Độ dài dự kiến: <span className="font-bold text-[#071827]">{wordCount} từ</span> | Định dạng OMFIT Brand
+              Độ dài dự kiến: <span className="font-bold text-[#071827]">{wordCount} từ</span>.
+              Nguồn công khai sẽ được kiểm chứng và duyệt trước bước xuất bản.
             </div>
             <button
               onClick={handleGenerateFullArticle}

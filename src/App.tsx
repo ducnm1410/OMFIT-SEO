@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -10,14 +10,18 @@ import { ImageStudio } from './components/ImageStudio';
 import { LiveEditorPublisher } from './components/LiveEditorPublisher';
 import { PostHistory } from './components/PostHistory';
 import { BrandSettings } from './components/BrandSettings';
+import { SeoWorkflowBar } from './components/SeoWorkflowBar';
 import type {
   ActiveTab,
   ApiSettings,
   BrandAsset,
   BrandProfile,
+  ContentBrief,
   GeneratedArticle,
   GeneratedImage,
-  SeoAuditResult
+  SeoAuditResult,
+  SeoWorkflowStep,
+  WorkflowSaveStatus
 } from './types';
 import { GeminiService } from './services/geminiService';
 import { LeonardoService } from './services/leonardoService';
@@ -41,12 +45,45 @@ import {
   sectionHasImage
 } from './utils/articleImageMarkup';
 
+const workflowStorageKey = 'omfit-seo-workflow-v1';
+
+const defaultContentBrief: ContentBrief = {
+  keyword: '',
+  searchIntent: 'Informational',
+  service: 'OMFIT PILATES',
+  audience: 'Người Việt quan tâm đến sức khỏe, vóc dáng và lối sống cân bằng',
+  conversionGoal: 'Đăng ký tư vấn hoặc trải nghiệm dịch vụ OMFIT',
+  tone: 'Chuyên nghiệp, truyền cảm hứng, cân bằng',
+  wordCount: 1500
+};
+
+interface StoredWorkflow {
+  activeTab?: ActiveTab;
+  activeStep?: SeoWorkflowStep;
+  articleId?: string;
+  brief?: Partial<ContentBrief>;
+  lastSavedAt?: string;
+}
+
+function readStoredWorkflow(): StoredWorkflow {
+  try {
+    const raw = window.localStorage.getItem(workflowStorageKey);
+    return raw ? JSON.parse(raw) as StoredWorkflow : {};
+  } catch {
+    return {};
+  }
+}
+
 export function App() {
+  const initialWorkflow = useMemo(() => readStoredWorkflow(), []);
   const [session, setSession] = useState<Session | null>();
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
     const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'editor', 'history', 'settings'];
-    return allowedTabs.includes(requestedTab as ActiveTab) ? requestedTab as ActiveTab : 'overview';
+    if (allowedTabs.includes(requestedTab as ActiveTab)) return requestedTab as ActiveTab;
+    return allowedTabs.includes(initialWorkflow.activeTab as ActiveTab)
+      ? initialWorkflow.activeTab as ActiveTab
+      : 'overview';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -73,9 +110,36 @@ export function App() {
 
   const [articles, setArticles] = useState<GeneratedArticle[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<GeneratedArticle | null>(null);
-  const [selectedKeyword, setSelectedKeyword] = useState('');
+  const [contentBrief, setContentBrief] = useState<ContentBrief>(() => ({
+    ...defaultContentBrief,
+    ...(initialWorkflow.brief || {})
+  }));
+  const [selectedKeyword, setSelectedKeyword] = useState(
+    initialWorkflow.brief?.keyword || ''
+  );
+  const [workflowStep, setWorkflowStep] = useState<SeoWorkflowStep>(
+    initialWorkflow.activeStep || 1
+  );
+  const [saveStatus, setSaveStatus] = useState<WorkflowSaveStatus>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState(initialWorkflow.lastSavedAt || '');
   const [brandProfile, setBrandProfile] = useState<BrandProfile | null>(null);
   const [brandAssets, setBrandAssets] = useState<BrandAsset[]>([]);
+  const saveOperationRef = useRef(0);
+
+  useEffect(() => {
+    const stored: StoredWorkflow = {
+      activeTab,
+      activeStep: workflowStep,
+      articleId: selectedArticle?.id,
+      brief: contentBrief,
+      lastSavedAt
+    };
+    try {
+      window.localStorage.setItem(workflowStorageKey, JSON.stringify(stored));
+    } catch {
+      // The workflow remains usable even when browser storage is unavailable.
+    }
+  }, [activeTab, contentBrief, lastSavedAt, selectedArticle?.id, workflowStep]);
 
   useEffect(() => {
     if (!session) return;
@@ -88,16 +152,81 @@ export function App() {
         setArticles(storedArticles);
         setBrandProfile(brand);
         setBrandAssets(assets);
-        setSelectedArticle((current) => (
-          current ? storedArticles.find((article) => article.id === current.id) || null : null
-        ));
+        setSelectedArticle((current) => {
+          const preferredArticleId = current?.id || initialWorkflow.articleId;
+          return preferredArticleId
+            ? storedArticles.find((article) => article.id === preferredArticleId) || null
+            : null;
+        });
       })
       .catch((error) => console.error('Không thể tải kho bài viết:', error));
     void syncWordpressIndex().catch((error) => console.error('Không thể đồng bộ WordPress index:', error));
     return () => {
       cancelled = true;
     };
-  }, [session?.user.id]);
+  }, [initialWorkflow.articleId, session?.user.id]);
+
+  const persistArticle = async (
+    article: GeneratedArticle,
+    audit?: SeoAuditResult
+  ) => {
+    const operation = ++saveOperationRef.current;
+    setSaveStatus('saving');
+    try {
+      await saveArticle(article, audit);
+      if (operation === saveOperationRef.current) {
+        const savedAt = new Date().toISOString();
+        setSaveStatus('saved');
+        setLastSavedAt(savedAt);
+      }
+    } catch (error) {
+      if (operation === saveOperationRef.current) setSaveStatus('error');
+      throw error;
+    }
+  };
+
+  const navigateToTab = (tab: ActiveTab) => {
+    setActiveTab(tab);
+    if (tab === 'keywords') setWorkflowStep(1);
+    if (tab === 'generator') setWorkflowStep(2);
+    if (tab === 'imagestudio') setWorkflowStep(3);
+    if (tab === 'editor') {
+      setWorkflowStep((current) => (current < 3 ? 3 : current));
+    }
+  };
+
+  const navigateToWorkflowStep = (step: SeoWorkflowStep) => {
+    if (step >= 3 && !selectedArticle) {
+      setWorkflowStep(2);
+      setActiveTab('generator');
+      return;
+    }
+    setWorkflowStep(step);
+    if (step === 1) setActiveTab('keywords');
+    if (step === 2) setActiveTab('generator');
+    if (step === 3 || step === 4) setActiveTab('editor');
+  };
+
+  const handleBriefChange = (brief: ContentBrief) => {
+    setContentBrief(brief);
+    setSelectedKeyword(brief.keyword);
+  };
+
+  const handleKeywordSelected = (keyword: string) => {
+    setSelectedKeyword(keyword);
+    setContentBrief((current) => ({ ...current, keyword }));
+    setWorkflowStep(2);
+  };
+
+  const handleStartNewArticle = () => {
+    setSelectedArticle(null);
+    setSelectedKeyword('');
+    setContentBrief(defaultContentBrief);
+    setWorkflowStep(1);
+    setSaveStatus('idle');
+    setLastSavedAt('');
+    setActiveTab('keywords');
+  };
 
   const prepareArticle = (
     article: GeneratedArticle,
@@ -146,9 +275,10 @@ export function App() {
           brandAssets.find((asset) => asset.assetType === 'logo')?.url
         )
       }, brand);
-      await saveArticle(prepared.article, prepared.audit);
+      await persistArticle(prepared.article, prepared.audit);
       setArticles((previous) => [prepared.article, ...previous.filter((item) => item.id !== prepared.article.id)]);
       setSelectedArticle(prepared.article);
+      setWorkflowStep(3);
       const document = new DOMParser().parseFromString(
         `<main>${prepared.article.contentHtml}</main>`,
         'text/html'
@@ -196,7 +326,7 @@ export function App() {
           contentHtml: main?.innerHTML || prepared.article.contentHtml,
           articleImages: mergeUniqueArticleImages(prepared.article.articleImages, generatedImages)
         });
-        await saveArticle(withImages.article, withImages.audit);
+        await persistArticle(withImages.article, withImages.audit);
         setArticles((previous) => previous.map((item) => (
           item.id === withImages.article.id ? withImages.article : item
         )));
@@ -226,6 +356,9 @@ export function App() {
         article.id === authoritativeArticle.id ? authoritativeArticle : article
       )));
       setSelectedArticle(authoritativeArticle);
+      setSaveStatus('saved');
+      setLastSavedAt(new Date().toISOString());
+      if (authoritativeArticle.status === 'published') setWorkflowStep(4);
       // The publish endpoint has already persisted content, audit and seo_status
       // in one server-owned flow. Writing it again from the browser would let the
       // client-side audit overwrite that authoritative result.
@@ -236,7 +369,7 @@ export function App() {
       article.id === prepared.article.id ? prepared.article : article
     )));
     setSelectedArticle(prepared.article);
-    void saveArticle(prepared.article, prepared.audit)
+    void persistArticle(prepared.article, prepared.audit)
       .catch((error) => console.error('Không thể lưu bài viết:', error));
   };
 
@@ -304,9 +437,14 @@ export function App() {
     setArticles([]);
     setSelectedArticle(null);
     setSelectedKeyword('');
+    setContentBrief(defaultContentBrief);
+    setWorkflowStep(1);
+    setSaveStatus('idle');
+    setLastSavedAt('');
     setBrandProfile(null);
     setBrandAssets([]);
     setActiveTab('overview');
+    window.localStorage.removeItem(workflowStorageKey);
   };
 
   if (session === undefined) {
@@ -329,7 +467,7 @@ export function App() {
     <div className="ui-app-shell min-h-dvh text-[#17191D] flex">
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={navigateToTab}
         wpConnected={settings.wpMcpConnected}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -340,19 +478,35 @@ export function App() {
           activeTab={activeTab}
           settings={settings}
           userLabel={userLabel}
+          currentArticleTitle={selectedArticle?.title}
+          saveStatus={saveStatus}
           onLogout={() => void handleLogout()}
-          onQuickGenerate={() => setActiveTab('generator')}
+          onQuickGenerate={handleStartNewArticle}
           onMenuToggle={() => setIsSidebarOpen((open) => !open)}
         />
 
         <main className="app-main flex-1 px-4 py-5 sm:px-6 sm:py-6 xl:px-10 xl:py-8">
+          {(['keywords', 'generator', 'imagestudio', 'editor'] as ActiveTab[]).includes(activeTab) && (
+            <div className="mb-6">
+              <SeoWorkflowBar
+                activeStep={workflowStep}
+                brief={contentBrief}
+                article={selectedArticle}
+                saveStatus={saveStatus}
+                lastSavedAt={lastSavedAt}
+                onStepChange={navigateToWorkflowStep}
+              />
+            </div>
+          )}
+
           {activeTab === 'overview' && (
             <OverviewDashboard
               articles={articles}
               wpConnected={settings.wpMcpConnected}
-              setActiveTab={setActiveTab}
+              setActiveTab={navigateToTab}
               onSelectArticleForEdit={(article) => {
                 setSelectedArticle(article);
+                setWorkflowStep(article.status === 'published' ? 4 : 3);
                 setActiveTab('editor');
               }}
             />
@@ -360,17 +514,19 @@ export function App() {
 
           {activeTab === 'keywords' && (
             <KeywordTrendFinder
-              onSelectKeywordForArticle={setSelectedKeyword}
-              setActiveTab={setActiveTab}
+              onSelectKeywordForArticle={handleKeywordSelected}
+              setActiveTab={navigateToTab}
             />
           )}
 
           {activeTab === 'generator' && (
             <SeoContentGenerator
               selectedKeyword={selectedKeyword}
+              brief={contentBrief}
               geminiService={geminiService}
+              onBriefChange={handleBriefChange}
               onArticleGenerated={handleArticleGenerated}
-              setActiveTab={setActiveTab}
+              setActiveTab={navigateToTab}
             />
           )}
 
@@ -396,7 +552,9 @@ export function App() {
               wpService={wpService}
               leonardoService={leonardoService}
               onSaveArticle={handleSaveArticle}
-              setActiveTab={setActiveTab}
+              setActiveTab={navigateToTab}
+              workflowStep={workflowStep}
+              onWorkflowStepChange={navigateToWorkflowStep}
             />
           )}
 
@@ -405,9 +563,10 @@ export function App() {
               articles={articles}
               onSelectArticleForEdit={(article) => {
                 setSelectedArticle(article);
+                setWorkflowStep(article.status === 'published' ? 4 : 3);
                 setActiveTab('editor');
               }}
-              setActiveTab={setActiveTab}
+              setActiveTab={navigateToTab}
             />
           )}
 
