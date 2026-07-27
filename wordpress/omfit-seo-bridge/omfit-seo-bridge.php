@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OMFIT SEO Bridge
  * Description: Technical SEO, Vietnamese article typography, metadata, schema, redirects and sitemaps for OMFIT.
- * Version: 1.0.5
+ * Version: 1.0.6
  * Author: OMFIT
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -14,12 +14,220 @@ if (!defined('ABSPATH')) {
 
 define('OMFIT_SEO_CANONICAL_HOST', 'omfit.com.vn');
 define('OMFIT_SEO_SITE_NAME', 'OMFIT Fitness & Wellness');
-define('OMFIT_SEO_BRIDGE_VERSION', '1.0.5');
+define('OMFIT_SEO_BRIDGE_VERSION', '1.0.6');
 
 function omfit_seo_canonical_url($url) {
     $url = preg_replace('#^http://#i', 'https://', (string) $url);
     return preg_replace('#^https://www\.omfit\.com\.vn#i', 'https://omfit.com.vn', $url);
 }
+
+function omfit_seo_sanitize_https_url($url) {
+    $url = omfit_seo_canonical_url(trim((string) $url));
+    $url = esc_url_raw($url, array('https'));
+    if (!$url || strtolower((string) wp_parse_url($url, PHP_URL_SCHEME)) !== 'https') {
+        return '';
+    }
+
+    return omfit_seo_canonical_url($url);
+}
+
+function omfit_seo_normalize_branches($value) {
+    if (is_string($value)) {
+        if (strlen($value) > 50000) {
+            return array();
+        }
+        $decoded = json_decode($value, true);
+        if (!is_array($decoded)) {
+            $decoded = json_decode(wp_unslash($value), true);
+        }
+        $value = is_array($decoded) ? $decoded : array();
+    }
+
+    if (!is_array($value)) {
+        return array();
+    }
+
+    if (isset($value['branches']) && is_array($value['branches'])) {
+        $value = $value['branches'];
+    }
+
+    $branches = array();
+    foreach (array_slice($value, 0, 20) as $branch) {
+        if (!is_array($branch)) {
+            continue;
+        }
+
+        $name = sanitize_text_field((string) ($branch['name'] ?? ''));
+        $address = sanitize_textarea_field((string) ($branch['address'] ?? ''));
+        if ($name === '' || $address === '') {
+            continue;
+        }
+
+        $normalized = array(
+            'name' => $name,
+            'address' => $address,
+        );
+
+        $id = sanitize_key((string) ($branch['id'] ?? ''));
+        $phone = sanitize_text_field((string) ($branch['phone'] ?? ''));
+        $email = sanitize_email((string) ($branch['email'] ?? ''));
+        $cta_url = omfit_seo_sanitize_https_url(
+            (string) ($branch['ctaUrl'] ?? ($branch['cta_url'] ?? ($branch['url'] ?? '')))
+        );
+
+        if ($id !== '') {
+            $normalized['id'] = $id;
+        }
+        if ($phone !== '') {
+            $normalized['phone'] = $phone;
+        }
+        if ($email !== '') {
+            $normalized['email'] = $email;
+        }
+        if ($cta_url !== '') {
+            $normalized['ctaUrl'] = $cta_url;
+        }
+
+        foreach (array('addressLocality', 'addressRegion', 'postalCode', 'addressCountry') as $address_field) {
+            $address_value = sanitize_text_field((string) ($branch[$address_field] ?? ''));
+            if ($address_value !== '') {
+                $normalized[$address_field] = $address_value;
+            }
+        }
+
+        $services = array();
+        foreach (array_slice((array) ($branch['services'] ?? array()), 0, 30) as $service) {
+            $service = sanitize_text_field((string) $service);
+            if ($service !== '') {
+                $services[] = $service;
+            }
+        }
+        if ($services) {
+            $normalized['services'] = array_values(array_unique($services));
+        }
+
+        $branches[] = $normalized;
+    }
+
+    return $branches;
+}
+
+function omfit_seo_sanitize_branches_json($value) {
+    $branches = omfit_seo_normalize_branches($value);
+    return $branches ? wp_json_encode($branches, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '';
+}
+
+function omfit_seo_can_manage_editorial_meta($allowed, $meta_key, $post_id) {
+    $capability = sanitize_key((string) apply_filters(
+        'omfit_seo_editorial_meta_capability',
+        'edit_others_posts',
+        $meta_key,
+        $post_id
+    ));
+    $capability = $capability ?: 'edit_others_posts';
+    return current_user_can('edit_post', (int) $post_id) && current_user_can($capability);
+}
+
+function omfit_seo_can_manage_brand_meta($allowed, $meta_key, $post_id) {
+    $capability = sanitize_key((string) apply_filters(
+        'omfit_seo_brand_meta_capability',
+        'manage_options',
+        $meta_key,
+        $post_id
+    ));
+    $capability = $capability ?: 'manage_options';
+    return current_user_can('edit_post', (int) $post_id) && current_user_can($capability);
+}
+
+function omfit_seo_can_confirm_reviewer($allowed, $meta_key, $post_id) {
+    return current_user_can('edit_post', (int) $post_id);
+}
+
+function omfit_seo_register_editorial_meta() {
+    $author_text_fields = array(
+        'omfit_author_name',
+        'omfit_author_job_title',
+    );
+
+    foreach ($author_text_fields as $meta_key) {
+        register_post_meta('post', $meta_key, array(
+            'type' => 'string',
+            'single' => true,
+            'show_in_rest' => true,
+            'sanitize_callback' => 'sanitize_text_field',
+            'auth_callback' => 'omfit_seo_can_manage_editorial_meta',
+        ));
+    }
+
+    $reviewer_text_fields = array(
+        'omfit_reviewer_name',
+        'omfit_reviewer_credentials',
+    );
+
+    foreach ($reviewer_text_fields as $meta_key) {
+        register_post_meta('post', $meta_key, array(
+            'type' => 'string',
+            'single' => true,
+            'show_in_rest' => true,
+            'sanitize_callback' => 'sanitize_text_field',
+            'auth_callback' => 'omfit_seo_can_manage_editorial_meta',
+        ));
+    }
+
+    register_post_meta('post', 'omfit_author_url', array(
+        'type' => 'string',
+        'single' => true,
+        'show_in_rest' => true,
+        'sanitize_callback' => 'omfit_seo_sanitize_https_url',
+        'auth_callback' => 'omfit_seo_can_manage_editorial_meta',
+    ));
+
+    register_post_meta('post', 'omfit_reviewer_url', array(
+        'type' => 'string',
+        'single' => true,
+        'show_in_rest' => true,
+        'sanitize_callback' => 'omfit_seo_sanitize_https_url',
+        'auth_callback' => 'omfit_seo_can_manage_editorial_meta',
+    ));
+
+    register_post_meta('post', 'omfit_reviewer_confirmed', array(
+        'type' => 'boolean',
+        'single' => true,
+        'default' => false,
+        'show_in_rest' => true,
+        'sanitize_callback' => 'rest_sanitize_boolean',
+        'auth_callback' => 'omfit_seo_can_confirm_reviewer',
+    ));
+
+    foreach (array('omfit_publisher_logo_url') as $meta_key) {
+        register_post_meta('post', $meta_key, array(
+            'type' => 'string',
+            'single' => true,
+            'show_in_rest' => true,
+            'sanitize_callback' => 'omfit_seo_sanitize_https_url',
+            'auth_callback' => 'omfit_seo_can_manage_brand_meta',
+        ));
+    }
+
+    register_post_meta('post', 'omfit_branches_json', array(
+        'type' => 'string',
+        'single' => true,
+        'show_in_rest' => true,
+        'sanitize_callback' => 'omfit_seo_sanitize_branches_json',
+        'auth_callback' => 'omfit_seo_can_manage_brand_meta',
+    ));
+}
+add_action('init', 'omfit_seo_register_editorial_meta');
+
+function omfit_seo_enqueue_frontend_assets() {
+    wp_enqueue_style(
+        'omfit-seo-be-vietnam-pro',
+        'https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap',
+        array(),
+        null
+    );
+}
+add_action('wp_enqueue_scripts', 'omfit_seo_enqueue_frontend_assets');
 
 function omfit_seo_description($post_id = 0) {
     $post = get_post($post_id ?: get_queried_object_id());
@@ -218,6 +426,122 @@ function omfit_seo_normalize_single_post_content($content) {
 }
 add_filter('the_content', 'omfit_seo_normalize_single_post_content', 5);
 
+function omfit_seo_editorial_identity($post_id) {
+    $reviewer_confirmed = rest_sanitize_boolean(
+        get_post_meta($post_id, 'omfit_reviewer_confirmed', true)
+    );
+    return array(
+        'author_name' => sanitize_text_field((string) get_post_meta($post_id, 'omfit_author_name', true)),
+        'author_url' => omfit_seo_sanitize_https_url(get_post_meta($post_id, 'omfit_author_url', true)),
+        'author_job_title' => sanitize_text_field((string) get_post_meta($post_id, 'omfit_author_job_title', true)),
+        'reviewer_name' => $reviewer_confirmed
+            ? sanitize_text_field((string) get_post_meta($post_id, 'omfit_reviewer_name', true))
+            : '',
+        'reviewer_url' => $reviewer_confirmed
+            ? omfit_seo_sanitize_https_url(get_post_meta($post_id, 'omfit_reviewer_url', true))
+            : '',
+        'reviewer_credentials' => $reviewer_confirmed
+            ? sanitize_text_field((string) get_post_meta($post_id, 'omfit_reviewer_credentials', true))
+            : '',
+    );
+}
+
+function omfit_seo_visible_author_post_id($user_id = 0) {
+    if (!is_singular('post')) {
+        return 0;
+    }
+
+    global $post;
+    $queried_post_id = (int) get_queried_object_id();
+    $post_id = $post instanceof WP_Post ? (int) $post->ID : $queried_post_id;
+    if (!$post_id || $post_id !== $queried_post_id || get_post_type($post_id) !== 'post') {
+        return 0;
+    }
+
+    $post_author_id = (int) get_post_field('post_author', $post_id);
+    if ($user_id && $post_author_id !== (int) $user_id) {
+        return 0;
+    }
+
+    return $post_id;
+}
+
+function omfit_seo_filter_visible_author_name($display_name, $user_id = 0) {
+    $post_id = omfit_seo_visible_author_post_id($user_id);
+    if (!$post_id) {
+        return $display_name;
+    }
+
+    $custom_name = sanitize_text_field((string) get_post_meta($post_id, 'omfit_author_name', true));
+    return $custom_name !== '' ? $custom_name : $display_name;
+}
+add_filter('get_the_author_display_name', 'omfit_seo_filter_visible_author_name', 20, 2);
+add_filter('the_author', 'omfit_seo_filter_visible_author_name', 20, 1);
+
+function omfit_seo_filter_visible_author_link($link, $author_id) {
+    $post_id = omfit_seo_visible_author_post_id($author_id);
+    if (!$post_id) {
+        return $link;
+    }
+
+    $custom_name = sanitize_text_field((string) get_post_meta($post_id, 'omfit_author_name', true));
+    $custom_url = omfit_seo_sanitize_https_url(get_post_meta($post_id, 'omfit_author_url', true));
+    return $custom_name !== '' && $custom_url !== '' ? $custom_url : $link;
+}
+add_filter('author_link', 'omfit_seo_filter_visible_author_link', 20, 2);
+
+function omfit_seo_render_editorial_identity($content) {
+    if (!is_singular('post') || !in_the_loop() || !is_main_query()) {
+        return $content;
+    }
+
+    $identity = omfit_seo_editorial_identity(get_queried_object_id());
+    if ($identity['author_name'] === '' && $identity['reviewer_name'] === '') {
+        return $content;
+    }
+
+    $rows = array();
+    if ($identity['author_name'] !== '') {
+        $author = esc_html($identity['author_name']);
+        if ($identity['author_url'] !== '') {
+            $author = '<a href="' . esc_url($identity['author_url']) . '" rel="author">' . $author . '</a>';
+        }
+        if ($identity['author_job_title'] !== '') {
+            $author .= '<span class="omfit-editorial-role"> — ' . esc_html($identity['author_job_title']) . '</span>';
+        }
+        $rows[] = '<p><span class="omfit-editorial-label">Tác giả:</span> ' . $author . '</p>';
+    }
+
+    if ($identity['reviewer_name'] !== '') {
+        $reviewer = esc_html($identity['reviewer_name']);
+        if ($identity['reviewer_url'] !== '') {
+            $reviewer = '<a href="' . esc_url($identity['reviewer_url']) . '">' . $reviewer . '</a>';
+        }
+        if ($identity['reviewer_credentials'] !== '') {
+            $reviewer .= '<span class="omfit-editorial-role"> — ' . esc_html($identity['reviewer_credentials']) . '</span>';
+        }
+        $rows[] = '<p><span class="omfit-editorial-label">Kiểm duyệt chuyên môn:</span> ' . $reviewer . '</p>';
+    }
+
+    $byline = '<aside class="omfit-editorial-identity" aria-label="Thông tin biên tập">'
+        . implode('', $rows)
+        . '</aside>';
+
+    if (preg_match('/<h1\b[^>]*>.*?<\/h1\s*>/is', $content)) {
+        return preg_replace_callback(
+            '/<h1\b[^>]*>.*?<\/h1\s*>/is',
+            function ($matches) use ($byline) {
+                return $matches[0] . $byline;
+            },
+            $content,
+            1
+        );
+    }
+
+    return $byline . $content;
+}
+add_filter('the_content', 'omfit_seo_render_editorial_identity', 6);
+
 function omfit_seo_print_single_post_typography() {
     if (!is_singular('post')) {
         return;
@@ -262,6 +586,38 @@ function omfit_seo_print_single_post_typography() {
 
         body.single-post .omfit-article-content figcaption {
             color: #cbd5e1 !important;
+        }
+
+        body.single-post .omfit-article-content .omfit-editorial-identity {
+            margin: -8px 0 24px;
+            padding: 14px 16px;
+            border-left: 3px solid #67c1ff;
+            border-radius: 0 10px 10px 0;
+            background: #18232e;
+            color: #cbd5e1 !important;
+        }
+
+        body.single-post .omfit-article-content .omfit-editorial-identity p {
+            margin: 0 !important;
+            color: #cbd5e1 !important;
+            font-size: 14px !important;
+            font-weight: 400 !important;
+            line-height: 1.65 !important;
+        }
+
+        body.single-post .omfit-article-content .omfit-editorial-identity p + p {
+            margin-top: 4px !important;
+        }
+
+        body.single-post .omfit-article-content .omfit-editorial-label,
+        body.single-post .omfit-article-content .omfit-editorial-role {
+            color: inherit !important;
+            font-weight: 400 !important;
+        }
+
+        body.single-post .omfit-article-content .omfit-editorial-identity a {
+            color: #67c1ff !important;
+            font-weight: 400 !important;
         }
 
         body.single-post .omfit-article-content blockquote {
@@ -470,6 +826,247 @@ function omfit_seo_echo_meta_tag($attribute, $key, $content) {
     echo '<meta ' . esc_attr($attribute) . '="' . esc_attr($key) . '" content="' . esc_attr($content) . '" />' . "\n";
 }
 
+function omfit_seo_image_object_from_attachment($attachment_id) {
+    $image_data = $attachment_id ? wp_get_attachment_image_src((int) $attachment_id, 'full') : false;
+    if (!$image_data || empty($image_data[0])) {
+        return array();
+    }
+
+    $image = array(
+        '@type' => 'ImageObject',
+        'url' => omfit_seo_canonical_url($image_data[0]),
+    );
+    if (!empty($image_data[1])) {
+        $image['width'] = (int) $image_data[1];
+    }
+    if (!empty($image_data[2])) {
+        $image['height'] = (int) $image_data[2];
+    }
+
+    return $image;
+}
+
+function omfit_seo_image_object_from_url($url) {
+    $url = omfit_seo_sanitize_https_url($url);
+    if ($url === '') {
+        return array();
+    }
+
+    $attachment_id = attachment_url_to_postid($url);
+    if ($attachment_id) {
+        return omfit_seo_image_object_from_attachment($attachment_id);
+    }
+
+    return array(
+        '@type' => 'ImageObject',
+        'url' => $url,
+    );
+}
+
+function omfit_seo_schema_author($post_id) {
+    $identity = omfit_seo_editorial_identity($post_id);
+    if ($identity['author_name'] !== '') {
+        $author = array(
+            '@type' => 'Person',
+            'name' => $identity['author_name'],
+        );
+        if ($identity['author_url'] !== '') {
+            $author['url'] = $identity['author_url'];
+        }
+        if ($identity['author_job_title'] !== '') {
+            $author['jobTitle'] = $identity['author_job_title'];
+        }
+        return $author;
+    }
+
+    $author_id = (int) get_post_field('post_author', $post_id);
+    $author_name = $author_id
+        ? sanitize_text_field((string) get_the_author_meta('display_name', $author_id))
+        : '';
+    if ($author_id && $author_name !== '') {
+        return array(
+            '@type' => 'Person',
+            'name' => $author_name,
+            'url' => omfit_seo_canonical_url(get_author_posts_url($author_id)),
+        );
+    }
+
+    return array(
+        '@type' => 'Organization',
+        'name' => OMFIT_SEO_SITE_NAME,
+        'url' => omfit_seo_canonical_url(home_url('/')),
+    );
+}
+
+function omfit_seo_schema_reviewer($post_id) {
+    $identity = omfit_seo_editorial_identity($post_id);
+    if ($identity['reviewer_name'] === '') {
+        return array();
+    }
+
+    $reviewer = array(
+        '@type' => 'Person',
+        'name' => $identity['reviewer_name'],
+    );
+    if ($identity['reviewer_url'] !== '') {
+        $reviewer['url'] = $identity['reviewer_url'];
+    }
+    if ($identity['reviewer_credentials'] !== '') {
+        $reviewer['description'] = $identity['reviewer_credentials'];
+    }
+
+    return $reviewer;
+}
+
+function omfit_seo_schema_publisher($post_id) {
+    $site_name = sanitize_text_field((string) get_bloginfo('name'));
+    $publisher = array(
+        '@type' => 'Organization',
+        'name' => $site_name !== '' ? $site_name : OMFIT_SEO_SITE_NAME,
+        'url' => omfit_seo_canonical_url(home_url('/')),
+    );
+
+    $logo = omfit_seo_image_object_from_url(get_post_meta($post_id, 'omfit_publisher_logo_url', true));
+    if (!$logo) {
+        $custom_logo_id = (int) get_theme_mod('custom_logo');
+        $logo = omfit_seo_image_object_from_attachment($custom_logo_id);
+    }
+    if ($logo) {
+        $publisher['logo'] = $logo;
+    }
+
+    return $publisher;
+}
+
+function omfit_seo_breadcrumb_schema($canonical, $title) {
+    $posts_page_id = (int) get_option('page_for_posts');
+    if ($posts_page_id && get_post_status($posts_page_id) !== 'publish') {
+        $posts_page_id = 0;
+    }
+    if (!$posts_page_id) {
+        $news_page = get_page_by_path('tin-tuc', OBJECT, 'page');
+        $posts_page_id = $news_page && $news_page->post_status === 'publish'
+            ? (int) $news_page->ID
+            : 0;
+    }
+    if (!$posts_page_id) {
+        return array();
+    }
+
+    $news_url = get_permalink($posts_page_id);
+    if (!$news_url) {
+        return array();
+    }
+    $news_url = omfit_seo_canonical_url($news_url);
+
+    return array(
+        '@context' => 'https://schema.org',
+        '@type' => 'BreadcrumbList',
+        'itemListElement' => array(
+            array(
+                '@type' => 'ListItem',
+                'position' => 1,
+                'name' => 'Trang chủ',
+                'item' => omfit_seo_canonical_url(home_url('/')),
+            ),
+            array(
+                '@type' => 'ListItem',
+                'position' => 2,
+                'name' => 'Tin tức',
+                'item' => $news_url,
+            ),
+            array(
+                '@type' => 'ListItem',
+                'position' => 3,
+                'name' => $title,
+                'item' => $canonical,
+            ),
+        ),
+    );
+}
+
+function omfit_seo_normalized_visible_text($value) {
+    $value = html_entity_decode(
+        wp_strip_all_tags(strip_shortcodes((string) $value)),
+        ENT_QUOTES,
+        'UTF-8'
+    );
+    return trim(preg_replace('/\s+/u', ' ', $value));
+}
+
+function omfit_seo_post_visibly_mentions_branch($post_id, $branch) {
+    $content = omfit_seo_normalized_visible_text(get_post_field('post_content', $post_id));
+    $name = omfit_seo_normalized_visible_text($branch['name']);
+    $address = omfit_seo_normalized_visible_text($branch['address']);
+
+    return $content !== ''
+        && $name !== ''
+        && $address !== ''
+        && mb_stripos($content, $name, 0, 'UTF-8') !== false
+        && mb_stripos($content, $address, 0, 'UTF-8') !== false;
+}
+
+function omfit_seo_healthclub_schemas($post_id, $publisher) {
+    $branches = omfit_seo_normalize_branches(get_post_meta($post_id, 'omfit_branches_json', true));
+    $branches = omfit_seo_normalize_branches(
+        apply_filters('omfit_seo_healthclub_branches', $branches, $post_id)
+    );
+    if (!$branches) {
+        return array();
+    }
+
+    $schemas = array();
+    $seen = array();
+    foreach ($branches as $branch) {
+        if (!omfit_seo_post_visibly_mentions_branch($post_id, $branch)) {
+            continue;
+        }
+
+        $signature = strtolower($branch['name'] . '|' . $branch['address']);
+        if (isset($seen[$signature])) {
+            continue;
+        }
+        $seen[$signature] = true;
+
+        $schema = array(
+            '@context' => 'https://schema.org',
+            '@type' => 'HealthClub',
+            '@id' => $publisher['url'] . '#healthclub-' . substr(md5($signature), 0, 12),
+            'name' => $branch['name'],
+            'address' => array(
+                '@type' => 'PostalAddress',
+                'streetAddress' => $branch['address'],
+            ),
+            'parentOrganization' => array(
+                '@type' => 'Organization',
+                'name' => $publisher['name'],
+                'url' => $publisher['url'],
+            ),
+        );
+        foreach (array('addressLocality', 'addressRegion', 'postalCode', 'addressCountry') as $address_field) {
+            if (!empty($branch[$address_field])) {
+                $schema['address'][$address_field] = $branch[$address_field];
+            }
+        }
+        if (!empty($branch['phone'])) {
+            $schema['telephone'] = $branch['phone'];
+        }
+        if (!empty($branch['email'])) {
+            $schema['email'] = $branch['email'];
+        }
+        if (!empty($branch['ctaUrl'])) {
+            $schema['url'] = $branch['ctaUrl'];
+        }
+        if (!empty($publisher['logo']['url'])) {
+            $schema['logo'] = $publisher['logo']['url'];
+        }
+
+        $schemas[] = $schema;
+    }
+
+    return $schemas;
+}
+
 add_action('wp_head', function () {
     if (omfit_seo_is_thin_archive_request()) {
         $archive_canonical = 'https://' . OMFIT_SEO_CANONICAL_HOST
@@ -515,21 +1112,36 @@ add_action('wp_head', function () {
             omfit_seo_echo_meta_tag('property', 'article:published_time', get_the_date(DATE_W3C, $post_id));
             omfit_seo_echo_meta_tag('property', 'article:modified_time', get_the_modified_date(DATE_W3C, $post_id));
 
+            $publisher = omfit_seo_schema_publisher($post_id);
+            $reviewer = omfit_seo_schema_reviewer($post_id);
+            $main_entity = array('@type' => 'WebPage', '@id' => $canonical);
+            if ($reviewer) {
+                $main_entity['reviewedBy'] = $reviewer;
+            }
             $schema = array(
                 '@context' => 'https://schema.org',
                 '@type' => 'BlogPosting',
                 'headline' => $title,
                 'description' => $description,
-                'mainEntityOfPage' => array('@type' => 'WebPage', '@id' => $canonical),
+                'mainEntityOfPage' => $main_entity,
                 'datePublished' => get_the_date(DATE_W3C, $post_id),
                 'dateModified' => get_the_modified_date(DATE_W3C, $post_id),
-                'author' => array('@type' => 'Organization', 'name' => OMFIT_SEO_SITE_NAME, 'url' => 'https://omfit.com.vn/'),
-                'publisher' => array('@type' => 'Organization', 'name' => OMFIT_SEO_SITE_NAME, 'url' => 'https://omfit.com.vn/'),
+                'author' => omfit_seo_schema_author($post_id),
+                'publisher' => $publisher,
             );
             if ($image) {
                 $schema['image'] = array($image);
             }
             echo '<script type="application/ld+json">' . wp_json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";
+
+            $breadcrumb_schema = omfit_seo_breadcrumb_schema($canonical, $title);
+            if ($breadcrumb_schema) {
+                echo '<script type="application/ld+json">' . wp_json_encode($breadcrumb_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";
+            }
+
+            foreach (omfit_seo_healthclub_schemas($post_id, $publisher) as $healthclub_schema) {
+                echo '<script type="application/ld+json">' . wp_json_encode($healthclub_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' . "\n";
+            }
         }
     }
 

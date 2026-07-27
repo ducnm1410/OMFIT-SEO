@@ -8,7 +8,8 @@ import {
   Plus,
   Save,
   Trash2,
-  Upload
+  Upload,
+  UserRoundCheck
 } from 'lucide-react';
 import type { BrandAsset, BrandBranch, BrandProfile } from '../types';
 import { saveBrandProfile, uploadBrandAsset } from '../services/contentRepository';
@@ -84,6 +85,13 @@ export const BrandSettings: React.FC<BrandSettingsProps> = ({
     setDraft((current) => current ? {
       ...current,
       footerSettings: { ...current.footerSettings, [key]: value }
+    } : current);
+  };
+
+  const updateEditorial = (key: keyof BrandProfile['editorialSettings'], value: string) => {
+    setDraft((current) => current ? {
+      ...current,
+      editorialSettings: { ...current.editorialSettings, [key]: value }
     } : current);
   };
 
@@ -272,6 +280,77 @@ export const BrandSettings: React.FC<BrandSettingsProps> = ({
           </label>
         </section>
       </div>
+
+      <section className="rounded-3xl border border-[#0879D9]/15 bg-white p-5 sm:p-6">
+        <div className="mb-4 flex items-start gap-2">
+          <UserRoundCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0879D9]" />
+          <div>
+            <h3 className="text-base font-medium text-[#071827]">Tác giả và người kiểm duyệt</h3>
+            <p className="mt-1 text-xs font-normal leading-5 text-slate-500">
+              Thông tin này được dùng cho phần tác giả hiển thị trong bài và dữ liệu cấu trúc Article.
+              Chỉ nhập người thực sự chịu trách nhiệm nội dung.
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="text-sm font-normal text-slate-700">
+            Tên tác giả
+            <input
+              className={inputClass}
+              value={draft.editorialSettings.authorName}
+              onChange={(event) => updateEditorial('authorName', event.target.value)}
+              placeholder="Ví dụ: Đội ngũ chuyên môn OMFIT"
+            />
+          </label>
+          <label className="text-sm font-normal text-slate-700">
+            Trang hồ sơ tác giả
+            <input
+              type="url"
+              className={inputClass}
+              value={draft.editorialSettings.authorUrl}
+              onChange={(event) => updateEditorial('authorUrl', event.target.value)}
+              placeholder="https://omfit.com.vn/..."
+            />
+          </label>
+          <label className="text-sm font-normal text-slate-700">
+            Vai trò của tác giả
+            <input
+              className={inputClass}
+              value={draft.editorialSettings.authorJobTitle}
+              onChange={(event) => updateEditorial('authorJobTitle', event.target.value)}
+              placeholder="Ví dụ: Huấn luyện viên Pilates"
+            />
+          </label>
+          <label className="text-sm font-normal text-slate-700">
+            Tên người kiểm duyệt chuyên môn
+            <input
+              className={inputClass}
+              value={draft.editorialSettings.reviewerName}
+              onChange={(event) => updateEditorial('reviewerName', event.target.value)}
+              placeholder="Để trống nếu bài không qua kiểm duyệt chuyên môn"
+            />
+          </label>
+          <label className="text-sm font-normal text-slate-700">
+            Trang hồ sơ người kiểm duyệt
+            <input
+              type="url"
+              className={inputClass}
+              value={draft.editorialSettings.reviewerUrl}
+              onChange={(event) => updateEditorial('reviewerUrl', event.target.value)}
+              placeholder="https://omfit.com.vn/..."
+            />
+          </label>
+          <label className="text-sm font-normal text-slate-700">
+            Chuyên môn hoặc chứng chỉ
+            <input
+              className={inputClass}
+              value={draft.editorialSettings.reviewerCredentials}
+              onChange={(event) => updateEditorial('reviewerCredentials', event.target.value)}
+              placeholder="Ví dụ: Huấn luyện viên Pilates được chứng nhận"
+            />
+          </label>
+        </div>
+      </section>
 
       <section className="rounded-3xl border border-[#0879D9]/15 bg-white p-5 sm:p-6">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -83,6 +83,7 @@ export interface GeneratedArticle {
   updatedAt?: string;
   brandProfileId?: string;
   seoIssues?: SeoIssue[];
+  sources?: ArticleSource[];
 }
 
 export interface GeneratedImage {
@@ -111,6 +112,34 @@ export interface SeoAuditResult {
   passed: boolean;
   issues: SeoIssue[];
   metrics: Record<string, number | string | boolean>;
+}
+
+export interface ArticleSource {
+  id: string;
+  articleId: string;
+  url: string;
+  canonicalUrl?: string;
+  title: string;
+  publisher: string;
+  domain: string;
+  publishedAt?: string;
+  accessedAt: string;
+  sourceType: string;
+  claimText: string;
+  groundingData?: Record<string, unknown>;
+  approved: boolean;
+  status: 'candidate' | 'verified' | 'approved' | 'rejected' | 'broken';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EditorialSettings {
+  authorName: string;
+  authorUrl: string;
+  authorJobTitle: string;
+  reviewerName: string;
+  reviewerUrl: string;
+  reviewerCredentials: string;
 }
 
 export interface BrandProfile {
@@ -145,6 +174,7 @@ export interface BrandProfile {
     ctaLabel: string;
     ctaUrl: string;
   };
+  editorialSettings: EditorialSettings;
 }
 
 export interface BrandBranch {

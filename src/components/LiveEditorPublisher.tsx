@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Edit3,
   Globe,
@@ -20,11 +20,19 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import DOMPurify from 'dompurify';
-import type { GeneratedArticle, GeneratedImage, ActiveTab } from '../types';
+import type {
+  ActiveTab,
+  ArticleSource,
+  GeneratedArticle,
+  GeneratedImage,
+  SeoAuditResult
+} from '../types';
 import { WordpressMcpService } from '../services/wordpressMcpService';
 import { LeonardoService } from '../services/leonardoService';
 import { uploadMediaFile } from '../services/contentRepository';
+import { ApiClientError } from '../services/apiClient';
 import { ArticleImagePackage } from './ArticleImagePackage';
+import { ArticleSourceResearch } from './ArticleSourceResearch';
 import {
   articleContainsImage,
   buildArticleImageMarkup,
@@ -37,7 +45,10 @@ interface LiveEditorPublisherProps {
   article: GeneratedArticle | null;
   wpService: WordpressMcpService;
   leonardoService: LeonardoService;
-  onSaveArticle: (updatedArticle: GeneratedArticle) => void;
+  onSaveArticle: (
+    updatedArticle: GeneratedArticle,
+    options?: { serverAuthoritative?: boolean; audit?: SeoAuditResult }
+  ) => void;
   setActiveTab: (tab: ActiveTab) => void;
 }
 
@@ -48,6 +59,38 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   onSaveArticle,
   setActiveTab
 }) => {
+  const [title, setTitle] = useState(article?.title || '');
+  const [metaTitle, setMetaTitle] = useState(article?.metaTitle || '');
+  const [metaDescription, setMetaDescription] = useState(article?.metaDescription || '');
+  const [slug, setSlug] = useState(article?.slug || '');
+  const [focusKeyword, setFocusKeyword] = useState(article?.focusKeyword || '');
+  const [contentHtml, setContentHtml] = useState(article?.contentHtml || '');
+  const [sources, setSources] = useState<ArticleSource[]>(article?.sources || []);
+  const [postStatus, setPostStatus] = useState<'draft' | 'publish'>('publish');
+  const [activeView, setActiveView] = useState<'visual' | 'code'>('visual');
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishLogs, setPublishLogs] = useState<string[]>([]);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishAudit, setPublishAudit] = useState<SeoAuditResult | null>(null);
+  const [reviewerConfirmed, setReviewerConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (!article) return;
+    setTitle(article.title);
+    setMetaTitle(article.metaTitle);
+    setMetaDescription(article.metaDescription);
+    setSlug(article.slug);
+    setFocusKeyword(article.focusKeyword);
+    setContentHtml(article.contentHtml);
+    setSources(article.sources || []);
+    setPublishLogs([]);
+    setPublishedUrl(null);
+    setPublishAudit(null);
+    setReviewerConfirmed(false);
+    // Chỉ khởi tạo lại trình soạn thảo khi người dùng chuyển sang bài khác.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article?.id]);
+
   if (!article) {
     return (
       <div className="glass-panel p-12 rounded-3xl text-center space-y-4 border border-[#0879D9]/15 bg-white">
@@ -66,18 +109,6 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     );
   }
 
-  const [title, setTitle] = useState(article.title);
-  const [metaTitle, setMetaTitle] = useState(article.metaTitle);
-  const [metaDescription, setMetaDescription] = useState(article.metaDescription);
-  const [slug, setSlug] = useState(article.slug);
-  const [focusKeyword, setFocusKeyword] = useState(article.focusKeyword);
-  const [contentHtml, setContentHtml] = useState(article.contentHtml);
-  const [postStatus, setPostStatus] = useState<'draft' | 'publish'>('publish');
-  const [activeView, setActiveView] = useState<'visual' | 'code'>('visual');
-
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishLogs, setPublishLogs] = useState<string[]>([]);
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const sanitizedPreviewHtml = DOMPurify.sanitize(contentHtml, {
     USE_PROFILES: { html: true },
     FORBID_TAGS: ['button', 'form', 'input', 'math', 'option', 'select', 'style', 'svg', 'textarea'],
@@ -185,6 +216,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
       slug,
       focusKeyword,
       contentHtml,
+      sources,
       status: 'draft'
     });
   };
@@ -205,6 +237,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     setIsPublishing(true);
     setPublishLogs([]);
     setPublishedUrl(null);
+    setPublishAudit(null);
 
     const currentArticleState: GeneratedArticle = {
       ...article,
@@ -213,13 +246,23 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
       metaDescription,
       slug,
       focusKeyword,
-      contentHtml
+      contentHtml,
+      sources
     };
 
     try {
-      const result = await wpService.publishArticleWithMcp(currentArticleState, postStatus);
+      const result = await wpService.publishArticleWithMcp(currentArticleState, postStatus, {
+        reviewerConfirmed
+      });
       setPublishLogs(result.logs);
       setPublishedUrl(result.postUrl);
+      setPublishAudit(result.audit || null);
+      const nextContentHtml = result.contentHtml || currentArticleState.contentHtml;
+      const nextSlug = result.slug || currentArticleState.slug;
+      const nextTitle = result.title || currentArticleState.title;
+      setContentHtml(nextContentHtml);
+      setSlug(nextSlug);
+      setTitle(nextTitle);
 
       confetti({
         particleCount: 120,
@@ -229,15 +272,51 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
 
       onSaveArticle({
         ...currentArticleState,
+        title: nextTitle,
+        contentHtml: nextContentHtml,
+        slug: nextSlug,
         status: postStatus === 'publish' ? 'published' : 'draft',
         wpPostId: result.postId,
-        wpPostUrl: result.postUrl
-      });
+        wpPostUrl: result.postUrl,
+        seoScore: result.audit?.score ?? currentArticleState.seoScore,
+        readabilityScore: result.audit?.readabilityScore ?? currentArticleState.readabilityScore,
+        seoIssues: result.audit?.issues ?? currentArticleState.seoIssues
+      }, { serverAuthoritative: true, audit: result.audit });
       
       window.alert('🎉 Đăng bài thành công lên website omfit.com.vn!');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('WordPress Publishing Failed:', err);
-      window.alert('❌ Đăng bài thất bại:\n' + err.message);
+      const message = err instanceof Error ? err.message : 'Không thể đăng bài lên WordPress.';
+      if (err instanceof ApiClientError) {
+        const payload = err.payload as {
+          audit?: SeoAuditResult;
+          contentHtml?: string;
+          slug?: string;
+        };
+        if (payload.audit) {
+          setPublishAudit(payload.audit);
+          setPublishLogs(
+            payload.audit.issues
+              .filter((issue) => issue.level !== 'success')
+              .map((issue) => issue.message)
+          );
+        }
+        if (payload.contentHtml || payload.slug) {
+          const nextContentHtml = payload.contentHtml || currentArticleState.contentHtml;
+          const nextSlug = payload.slug || currentArticleState.slug;
+          setContentHtml(nextContentHtml);
+          setSlug(nextSlug);
+          onSaveArticle({
+            ...currentArticleState,
+            contentHtml: nextContentHtml,
+            slug: nextSlug,
+            seoScore: payload.audit?.score ?? currentArticleState.seoScore,
+            readabilityScore: payload.audit?.readabilityScore ?? currentArticleState.readabilityScore,
+            seoIssues: payload.audit?.issues ?? currentArticleState.seoIssues
+          }, { serverAuthoritative: true, audit: payload.audit });
+        }
+      }
+      window.alert(`Đăng bài thất bại:\n${message}`);
     } finally {
       setIsPublishing(false);
     }
@@ -293,12 +372,78 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
         </div>
       </div>
 
+      <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-normal text-slate-700">
+        <input
+          type="checkbox"
+          checked={reviewerConfirmed}
+          onChange={(event) => setReviewerConfirmed(event.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0879D9] focus:ring-[#0879D9]"
+        />
+        <span>
+          Tôi xác nhận người kiểm duyệt trong Brand Settings đã thực sự kiểm tra bài này.
+          Chỉ khi xác nhận, thông tin reviewer mới được đưa vào schema và metadata WordPress.
+        </span>
+      </label>
+
       <ArticleImagePackage
         article={article}
         contentHtml={contentHtml}
         leonardoService={leonardoService}
         onApplyArticle={handleImagePackageApply}
       />
+
+      <ArticleSourceResearch
+        articleId={article.id}
+        title={title}
+        focusKeyword={focusKeyword}
+        contentHtml={contentHtml}
+        initialSources={sources}
+        onSourcesChange={(nextSources) => {
+          setSources(nextSources);
+          onSaveArticle({
+            ...article,
+            title,
+            metaTitle,
+            metaDescription,
+            slug,
+            focusKeyword,
+            contentHtml,
+            sources: nextSources
+          });
+        }}
+        onContentApplied={(nextContentHtml, nextSources) => {
+          setContentHtml(nextContentHtml);
+          setSources(nextSources);
+          onSaveArticle({
+            ...article,
+            title,
+            metaTitle,
+            metaDescription,
+            slug,
+            focusKeyword,
+            contentHtml: nextContentHtml,
+            sources: nextSources
+          });
+        }}
+      />
+
+      {publishAudit && !publishAudit.passed && (
+        <section role="alert" className="rounded-3xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
+          <h3 className="text-base font-medium text-amber-900">Bài viết chưa vượt qua kiểm tra trước khi đăng</h3>
+          <p className="mt-1 text-sm font-normal leading-6 text-amber-800">
+            Điểm SEO hiện tại: {publishAudit.score}/100. Hãy xử lý các mục lỗi bên dưới rồi đăng lại.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm font-normal text-amber-900">
+            {publishAudit.issues
+              .filter((issue) => issue.level !== 'success')
+              .map((issue) => (
+                <li key={issue.code} className="rounded-xl border border-amber-200 bg-white/70 px-3 py-2">
+                  {issue.message}
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
 
       {/* Editor Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

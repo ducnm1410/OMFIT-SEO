@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type {
+  ArticleSource,
   BrandAsset,
   BrandProfile,
   GeneratedArticle,
@@ -69,6 +70,14 @@ const DEFAULT_BRAND_PROFILE: BrandProfile = {
     description: 'Kết nối với OMFIT để được tư vấn lộ trình tập luyện phù hợp.',
     ctaLabel: 'Đăng ký tư vấn',
     ctaUrl: 'https://omfit.com.vn/contact-us/'
+  },
+  editorialSettings: {
+    authorName: '',
+    authorUrl: '',
+    authorJobTitle: '',
+    reviewerName: '',
+    reviewerUrl: '',
+    reviewerCredentials: ''
   }
 };
 
@@ -108,6 +117,10 @@ function mapBrandProfile(row: any): BrandProfile {
     footerSettings: {
       ...DEFAULT_BRAND_PROFILE.footerSettings,
       ...useCleanBrandValue(row.footer_settings, DEFAULT_BRAND_PROFILE.footerSettings)
+    },
+    editorialSettings: {
+      ...DEFAULT_BRAND_PROFILE.editorialSettings,
+      ...useCleanBrandValue(row.editorial_settings, DEFAULT_BRAND_PROFILE.editorialSettings)
     }
   };
 }
@@ -140,6 +153,35 @@ function mapImage(row: any): GeneratedImage {
   };
 }
 
+function mapArticleSource(row: any): ArticleSource {
+  const allowedStatuses: ArticleSource['status'][] = [
+    'candidate',
+    'verified',
+    'approved',
+    'rejected',
+    'broken'
+  ];
+  const status = allowedStatuses.includes(row.status) ? row.status : 'candidate';
+  return {
+    id: row.id,
+    articleId: row.article_id,
+    url: row.url,
+    canonicalUrl: row.canonical_url || undefined,
+    title: row.title || '',
+    publisher: row.publisher || '',
+    domain: row.domain || '',
+    publishedAt: row.published_at || undefined,
+    accessedAt: row.accessed_at || row.created_at || new Date().toISOString(),
+    sourceType: row.source_type || 'web',
+    claimText: row.claim_text || '',
+    groundingData: row.grounding_data || {},
+    approved: Boolean(row.approved),
+    status,
+    createdAt: row.created_at || undefined,
+    updatedAt: row.updated_at || undefined
+  };
+}
+
 function mapArticle(row: any): GeneratedArticle {
   const relations = Array.isArray(row.article_media) ? row.article_media : [];
   const media = relations
@@ -165,8 +207,17 @@ function mapArticle(row: any): GeneratedArticle {
     status: row.status === 'published' ? 'published' : 'draft',
     wpPostId: row.wp_post_id || undefined,
     wpPostUrl: row.wp_post_url || undefined,
-    brandProfileId: row.brand_profile_id || undefined
+    brandProfileId: row.brand_profile_id || undefined,
+    sources: Array.isArray(row.article_sources)
+      ? row.article_sources.map(mapArticleSource)
+      : []
   };
+}
+
+function isMissingEditorialSettingsColumn(error: any) {
+  return error?.code === '42703'
+    || error?.code === 'PGRST204'
+    || String(error?.message || '').includes('editorial_settings');
 }
 
 async function requireUserId() {
@@ -208,42 +259,86 @@ export async function ensureBrandProfile(): Promise<BrandProfile> {
       guideline_notes: DEFAULT_BRAND_PROFILE.guidelineNotes,
       company_info: DEFAULT_BRAND_PROFILE.companyInfo,
       branches: DEFAULT_BRAND_PROFILE.branches,
-      footer_settings: DEFAULT_BRAND_PROFILE.footerSettings
+      footer_settings: DEFAULT_BRAND_PROFILE.footerSettings,
+      editorial_settings: DEFAULT_BRAND_PROFILE.editorialSettings
     })
     .select('*')
     .single();
+  if (error && isMissingEditorialSettingsColumn(error)) {
+    const { data: legacyData, error: legacyError } = await supabase
+      .from('brand_profiles')
+      .insert({
+        owner_id: ownerId,
+        name: DEFAULT_BRAND_PROFILE.name,
+        version: DEFAULT_BRAND_PROFILE.version,
+        mission: DEFAULT_BRAND_PROFILE.mission,
+        positioning: DEFAULT_BRAND_PROFILE.positioning,
+        audience: DEFAULT_BRAND_PROFILE.audience,
+        voice: DEFAULT_BRAND_PROFILE.voice,
+        colors: DEFAULT_BRAND_PROFILE.colors,
+        typography: DEFAULT_BRAND_PROFILE.typography,
+        visual_rules: DEFAULT_BRAND_PROFILE.visualRules,
+        prohibited_elements: DEFAULT_BRAND_PROFILE.prohibitedElements,
+        approved_claims: DEFAULT_BRAND_PROFILE.approvedClaims,
+        prompt_template: DEFAULT_BRAND_PROFILE.promptTemplate,
+        negative_prompt: DEFAULT_BRAND_PROFILE.negativePrompt,
+        guideline_notes: DEFAULT_BRAND_PROFILE.guidelineNotes,
+        company_info: DEFAULT_BRAND_PROFILE.companyInfo,
+        branches: DEFAULT_BRAND_PROFILE.branches,
+        footer_settings: DEFAULT_BRAND_PROFILE.footerSettings
+      })
+      .select('*')
+      .single();
+    if (legacyError) throw legacyError;
+    return { ...DEFAULT_BRAND_PROFILE, id: legacyData.id };
+  }
   if (error) throw error;
   return { ...DEFAULT_BRAND_PROFILE, id: data.id };
 }
 
 export async function saveBrandProfile(profile: BrandProfile): Promise<BrandProfile> {
   const ownerId = await requireUserId();
+  const payload = {
+    id: profile.id,
+    owner_id: ownerId,
+    name: profile.name,
+    version: profile.version,
+    is_active: true,
+    mission: profile.mission,
+    positioning: profile.positioning,
+    audience: profile.audience,
+    voice: profile.voice,
+    colors: profile.colors,
+    typography: profile.typography,
+    visual_rules: profile.visualRules,
+    prohibited_elements: profile.prohibitedElements,
+    approved_claims: profile.approvedClaims,
+    prompt_template: profile.promptTemplate,
+    negative_prompt: profile.negativePrompt,
+    guideline_notes: profile.guidelineNotes,
+    company_info: profile.companyInfo,
+    branches: profile.branches,
+    footer_settings: profile.footerSettings,
+    editorial_settings: profile.editorialSettings
+  };
   const { data, error } = await supabase
     .from('brand_profiles')
-    .upsert({
-      id: profile.id,
-      owner_id: ownerId,
-      name: profile.name,
-      version: profile.version,
-      is_active: true,
-      mission: profile.mission,
-      positioning: profile.positioning,
-      audience: profile.audience,
-      voice: profile.voice,
-      colors: profile.colors,
-      typography: profile.typography,
-      visual_rules: profile.visualRules,
-      prohibited_elements: profile.prohibitedElements,
-      approved_claims: profile.approvedClaims,
-      prompt_template: profile.promptTemplate,
-      negative_prompt: profile.negativePrompt,
-      guideline_notes: profile.guidelineNotes,
-      company_info: profile.companyInfo,
-      branches: profile.branches,
-      footer_settings: profile.footerSettings
-    }, { onConflict: 'id' })
+    .upsert(payload, { onConflict: 'id' })
     .select('*')
     .single();
+  if (error && isMissingEditorialSettingsColumn(error)) {
+    const { editorial_settings: _editorialSettings, ...legacyPayload } = payload;
+    const { data: legacyData, error: legacyError } = await supabase
+      .from('brand_profiles')
+      .upsert(legacyPayload, { onConflict: 'id' })
+      .select('*')
+      .single();
+    if (legacyError) throw legacyError;
+    return {
+      ...mapBrandProfile(legacyData),
+      editorialSettings: profile.editorialSettings
+    };
+  }
   if (error) throw error;
   return mapBrandProfile(data);
 }
@@ -336,8 +431,20 @@ export async function uploadBrandAsset(
 export async function loadArticles(): Promise<GeneratedArticle[]> {
   const { data, error } = await supabase
     .from('articles')
-    .select('*, article_media(role, sort_order, media_assets(*))')
+    .select('*, article_media(role, sort_order, media_assets(*)), article_sources(*)')
     .order('updated_at', { ascending: false });
+  if (error && (
+    error.code === 'PGRST200'
+    || error.code === '42P01'
+    || String(error.message || '').includes('article_sources')
+  )) {
+    const { data: legacyData, error: legacyError } = await supabase
+      .from('articles')
+      .select('*, article_media(role, sort_order, media_assets(*))')
+      .order('updated_at', { ascending: false });
+    if (legacyError) throw legacyError;
+    return (legacyData || []).map(mapArticle);
+  }
   if (error) throw error;
   return (data || []).map(mapArticle);
 }
@@ -458,26 +565,22 @@ export async function uploadMediaFile(file: File, articleId?: string): Promise<G
     .from('omfit-public-assets')
     .upload(storagePath, file, { contentType: file.type, upsert: false });
   if (uploadError) throw uploadError;
-  const { data: publicData } = supabase.storage.from('omfit-public-assets').getPublicUrl(storagePath);
-  const { data, error } = await supabase
-    .from('media_assets')
-    .insert({
-      owner_id: ownerId,
-      article_id: articleId || null,
-      provider: 'upload',
-      bucket: 'omfit-public-assets',
-      storage_path: storagePath,
-      public_url: publicData.publicUrl,
-      mime_type: file.type,
-      bytes: file.size,
-      file_name: file.name,
-      alt_text: safeName.replace(/-/g, ' '),
-      status: 'approved'
-    })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return mapImage(data);
+  try {
+    return await authenticatedFetch('/api/media/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        articleId: articleId || null,
+        bucket: 'omfit-public-assets',
+        storagePath,
+        altText: safeName.replace(/-/g, ' ')
+      })
+    }) as GeneratedImage;
+  } catch (error) {
+    // Registration is authoritative. Remove an upload that the server rejected
+    // so it cannot linger as an untracked object in the user's storage prefix.
+    await supabase.storage.from('omfit-public-assets').remove([storagePath]).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function syncWordpressIndex() {

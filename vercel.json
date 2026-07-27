@@ -29,8 +29,14 @@
     "api/content/article.mjs": {
       "maxDuration": 60
     },
+    "api/research/sources.mjs": {
+      "maxDuration": 60
+    },
     "api/images/generate.mjs": {
       "maxDuration": 60
+    },
+    "api/media/register.mjs": {
+      "maxDuration": 30
     },
     "api/wordpress/publish.mjs": {
       "maxDuration": 60

@@ -1,5 +1,26 @@
 import { supabase } from '../lib/supabase';
 
+export class ApiClientError<TPayload = Record<string, unknown>> extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly payload: TPayload;
+
+  constructor(
+    message: string,
+    options: {
+      status: number;
+      code?: string;
+      payload: TPayload;
+    }
+  ) {
+    super(message);
+    this.name = 'ApiClientError';
+    this.status = options.status;
+    this.code = options.code;
+    this.payload = options.payload;
+  }
+}
+
 export async function authenticatedFetch(path: string, init: RequestInit = {}) {
   const { data } = await supabase.auth.getSession();
   const accessToken = data.session?.access_token;
@@ -9,6 +30,15 @@ export async function authenticatedFetch(path: string, init: RequestInit = {}) {
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const response = await fetch(path, { ...init, headers, credentials: 'same-origin' });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Yêu cầu thất bại (${response.status}).`);
+  if (!response.ok) {
+    throw new ApiClientError(
+      payload.error || payload.message || `Yêu cầu thất bại (${response.status}).`,
+      {
+        status: response.status,
+        code: typeof payload.code === 'string' ? payload.code : undefined,
+        payload
+      }
+    );
+  }
   return payload;
 }

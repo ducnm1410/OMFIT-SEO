@@ -16,7 +16,8 @@ import type {
   BrandAsset,
   BrandProfile,
   GeneratedArticle,
-  GeneratedImage
+  GeneratedImage,
+  SeoAuditResult
 } from './types';
 import { GeminiService } from './services/geminiService';
 import { LeonardoService } from './services/leonardoService';
@@ -204,7 +205,32 @@ export function App() {
     })().catch((error) => console.error('Không thể lưu bài viết mới:', error));
   };
 
-  const handleSaveArticle = (updatedArticle: GeneratedArticle) => {
+  const handleSaveArticle = (
+    updatedArticle: GeneratedArticle,
+    options: { serverAuthoritative?: boolean; audit?: SeoAuditResult } = {}
+  ) => {
+    if (options.serverAuthoritative) {
+      const plainText = updatedArticle.contentHtml
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const authoritativeArticle = {
+        ...updatedArticle,
+        wordCount: plainText.split(' ').filter(Boolean).length,
+        seoScore: options.audit?.score ?? updatedArticle.seoScore,
+        readabilityScore: options.audit?.readabilityScore ?? updatedArticle.readabilityScore,
+        seoIssues: options.audit?.issues ?? updatedArticle.seoIssues,
+        updatedAt: new Date().toISOString()
+      };
+      setArticles((previous) => previous.map((article) => (
+        article.id === authoritativeArticle.id ? authoritativeArticle : article
+      )));
+      setSelectedArticle(authoritativeArticle);
+      // The publish endpoint has already persisted content, audit and seo_status
+      // in one server-owned flow. Writing it again from the browser would let the
+      // client-side audit overwrite that authoritative result.
+      return;
+    }
     const prepared = prepareArticle(updatedArticle);
     setArticles((previous) => previous.map((article) => (
       article.id === prepared.article.id ? prepared.article : article
