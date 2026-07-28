@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { SeoOutline, GeneratedArticle, ActiveTab, ContentBrief } from '../types';
 import { GeminiService } from '../services/geminiService';
+import { ButtonContent } from './ButtonContent';
 
 interface SeoContentGeneratorProps {
   selectedKeyword: string;
@@ -295,19 +296,16 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
               <button
                 type="submit"
                 disabled={isGeneratingOutline}
-                className="gradient-bg-omfit-btn px-6 py-3 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20 disabled:opacity-50"
+                aria-busy={isGeneratingOutline}
+                className="ui-action-button gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white shadow-md shadow-[#0879D9]/20 disabled:opacity-50 sm:w-auto sm:max-w-64"
               >
-                {isGeneratingOutline ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Đang Tạo Dàn Ý SEO...
-                  </>
-                ) : (
-                  <>
-                    <FilePenLine className="w-4 h-4" /> Tạo dàn ý chuẩn SEO
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                <ButtonContent
+                  busy={isGeneratingOutline}
+                  busyLabel="Đang tạo dàn ý..."
+                  label="Tạo dàn ý chuẩn SEO"
+                  icon={<FilePenLine className="h-4 w-4" />}
+                  trailingIcon={<ArrowRight className="h-4 w-4" />}
+                />
               </button>
             </div>
           </form>
@@ -402,10 +400,16 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
             <button
               onClick={handleGenerateFullArticle}
               disabled={isGeneratingArticle}
-              className="gradient-bg-omfit-btn px-6 py-3 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow-md shadow-[#0879D9]/20"
+              aria-busy={isGeneratingArticle}
+              className="ui-action-button gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white shadow-md shadow-[#0879D9]/20 sm:w-auto sm:max-w-72"
             >
-              <FilePenLine className="w-4 h-4" /> Tạo toàn bộ bài viết HTML
-              <ArrowRight className="w-4 h-4" />
+              <ButtonContent
+                busy={isGeneratingArticle}
+                busyLabel="Đang tạo bài viết..."
+                label="Tạo toàn bộ bài viết HTML"
+                icon={<FilePenLine className="h-4 w-4" />}
+                trailingIcon={<ArrowRight className="h-4 w-4" />}
+              />
             </button>
           </div>
         </div>

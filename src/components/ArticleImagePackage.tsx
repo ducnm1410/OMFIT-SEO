@@ -18,6 +18,7 @@ import {
   mergeUniqueArticleImages,
   sectionHasImage
 } from '../utils/articleImageMarkup';
+import { ButtonContent } from './ButtonContent';
 
 interface ArticleImagePackageProps {
   article: GeneratedArticle;
@@ -359,17 +360,29 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <button type="button" onClick={() => void generateFeatured()} disabled={Boolean(generatingKey)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#0879D9]/30 bg-[#F0F9FF] px-4 text-sm font-bold text-[#0879D9] disabled:opacity-50">
-          {generatingKey === 'featured' ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <FileImage className="h-4 w-4" />}
-          Tạo ảnh đại diện AI
+        <button type="button" onClick={() => void generateFeatured()} disabled={Boolean(generatingKey)} aria-busy={generatingKey === 'featured'} className="ui-action-button inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#0879D9]/30 bg-[#F0F9FF] px-3 text-sm font-bold text-[#0879D9] disabled:opacity-50">
+          <ButtonContent
+            busy={generatingKey === 'featured'}
+            busyLabel="Đang tạo ảnh..."
+            label="Tạo ảnh đại diện AI"
+            icon={<FileImage className="h-4 w-4" />}
+          />
         </button>
-        <button type="button" onClick={() => selectUpload({ type: 'featured' })} disabled={Boolean(generatingKey)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-[#0879D9]/40 hover:text-[#0879D9] disabled:opacity-50">
-          {generatingKey === 'upload-featured' ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <Upload className="h-4 w-4" />}
-          Upload ảnh đại diện
+        <button type="button" onClick={() => selectUpload({ type: 'featured' })} disabled={Boolean(generatingKey)} aria-busy={generatingKey === 'upload-featured'} className="ui-action-button inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-[#0879D9]/40 hover:text-[#0879D9] disabled:opacity-50">
+          <ButtonContent
+            busy={generatingKey === 'upload-featured'}
+            busyLabel="Đang tải ảnh..."
+            label="Upload ảnh đại diện"
+            icon={<Upload className="h-4 w-4" />}
+          />
         </button>
-        <button type="button" onClick={() => void generateMissingPackage()} disabled={Boolean(generatingKey)} className="gradient-bg-omfit-btn inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-white disabled:opacity-50">
-          {generatingKey === 'package' ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Layers3 className="h-4 w-4" />}
-          Tạo gói tối đa 3 ảnh còn thiếu
+        <button type="button" onClick={() => void generateMissingPackage()} disabled={Boolean(generatingKey)} aria-busy={generatingKey === 'package'} className="ui-action-button gradient-bg-omfit-btn inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-white disabled:opacity-50">
+          <ButtonContent
+            busy={generatingKey === 'package'}
+            busyLabel="Đang tạo gói ảnh..."
+            label="Tạo gói tối đa 3 ảnh còn thiếu"
+            icon={<Layers3 className="h-4 w-4" />}
+          />
         </button>
       </div>
 
@@ -391,13 +404,21 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
               </div>
             </div>
             <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-              <button type="button" onClick={() => void generateSection(section)} disabled={Boolean(generatingKey)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF] disabled:opacity-50">
-                {generatingKey === `section-${section.index}` ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <PlusCircle className="h-4 w-4" />}
-                {section.hasImage ? 'Tạo thêm bằng AI' : 'Tạo ảnh bằng AI'}
+              <button type="button" onClick={() => void generateSection(section)} disabled={Boolean(generatingKey)} aria-busy={generatingKey === `section-${section.index}`} className="ui-action-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-[#0879D9] hover:bg-[#F0F9FF] disabled:opacity-50 sm:max-w-44">
+                <ButtonContent
+                  busy={generatingKey === `section-${section.index}`}
+                  busyLabel="Đang tạo ảnh..."
+                  label={section.hasImage ? 'Tạo thêm bằng AI' : 'Tạo ảnh bằng AI'}
+                  icon={<PlusCircle className="h-4 w-4" />}
+                />
               </button>
-              <button type="button" onClick={() => selectUpload({ type: 'section', section })} disabled={Boolean(generatingKey)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:border-[#0879D9]/40 hover:text-[#0879D9] disabled:opacity-50">
-                {generatingKey === `upload-section-${section.index}` ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" /> : <Upload className="h-4 w-4" />}
-                Tải ảnh lên
+              <button type="button" onClick={() => selectUpload({ type: 'section', section })} disabled={Boolean(generatingKey)} aria-busy={generatingKey === `upload-section-${section.index}`} className="ui-action-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:border-[#0879D9]/40 hover:text-[#0879D9] disabled:opacity-50 sm:max-w-40">
+                <ButtonContent
+                  busy={generatingKey === `upload-section-${section.index}`}
+                  busyLabel="Đang tải ảnh..."
+                  label="Tải ảnh lên"
+                  icon={<Upload className="h-4 w-4" />}
+                />
               </button>
             </div>
           </div>

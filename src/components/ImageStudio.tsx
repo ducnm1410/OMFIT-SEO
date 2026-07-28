@@ -12,6 +12,7 @@ import {
 import type { BrandAsset, BrandProfile, GeneratedImage } from '../types';
 import { LeonardoService } from '../services/leonardoService';
 import { uploadBrandAsset, uploadMediaFile } from '../services/contentRepository';
+import { ButtonContent } from './ButtonContent';
 
 const noLogoSelection = '__no_logo__';
 const logoSelectionStorageKey = 'omfit-image-studio-logo-selection';
@@ -291,11 +292,15 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               <button
                 type="submit"
                 disabled={isGenerating || isUploadingLogo}
-                className="gradient-bg-omfit-btn flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-6 text-sm font-bold text-white shadow-md shadow-[#0879D9]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-busy={isGenerating}
+                className="ui-action-button gradient-bg-omfit-btn flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold text-white shadow-md shadow-[#0879D9]/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isGenerating
-                  ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Đang tạo hình ảnh...</>
-                  : <><ImagePlus className="h-4 w-4" /> Tạo hình ảnh</>}
+                <ButtonContent
+                  busy={isGenerating}
+                  busyLabel="Đang tạo hình ảnh..."
+                  label="Tạo hình ảnh"
+                  icon={<ImagePlus className="h-4 w-4" />}
+                />
               </button>
             </form>
           </section>

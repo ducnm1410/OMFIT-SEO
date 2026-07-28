@@ -40,6 +40,7 @@ import {
   PublishResultDialog,
   type PublishDialogResult
 } from './PublishResultDialog';
+import { ButtonContent } from './ButtonContent';
 import {
   articleContainsImage,
   buildArticleImageMarkup,
@@ -241,6 +242,8 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     }
   ];
   const readinessCount = readinessItems.filter((item) => item.complete).length;
+  const previewIssues = (publishAudit || clientAudit).issues
+    .filter((issue) => issue.level !== 'success');
 
   const sanitizedPreviewHtml = DOMPurify.sanitize(contentHtml, {
     USE_PROFILES: { html: true },
@@ -522,18 +525,15 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               <button
                 onClick={handlePublish}
                 disabled={isPublishing}
-                className="gradient-bg-omfit-btn inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-6 text-xs font-bold text-white shadow-md shadow-[#0879D9]/20 disabled:opacity-50 sm:flex-none"
+                aria-busy={isPublishing}
+                className="ui-action-button gradient-bg-omfit-btn inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold text-white shadow-md shadow-[#0879D9]/20 disabled:opacity-50 sm:max-w-56 sm:flex-none"
               >
-                {isPublishing ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Đang gửi WordPress...
-                  </>
-                ) : (
-                  <>
-                    <Globe className="h-4 w-4" /> Đăng bài
-                  </>
-                )}
+                <ButtonContent
+                  busy={isPublishing}
+                  busyLabel="Đang đăng bài..."
+                  label="Đăng bài"
+                  icon={<Globe className="h-4 w-4" />}
+                />
               </button>
             </>
           )}
@@ -900,13 +900,22 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                 </figure>
               )}
               <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewHtml }} />
-              {article.seoIssues && article.seoIssues.some((issue) => issue.level !== 'success') && (
-                <aside className="seo-audit-notes">
-                  <strong>Các mục cần kiểm tra trước khi xuất bản</strong>
+              {previewIssues.length > 0 && (
+                <aside className="seo-audit-notes" aria-label="Các mục cần kiểm tra trước khi xuất bản">
+                  <div className="seo-audit-notes__header">
+                    <span className="seo-audit-notes__icon" aria-hidden="true">
+                      <AlertTriangle className="h-4 w-4" />
+                    </span>
+                    <div className="seo-audit-notes__heading">
+                      <span className="seo-audit-notes__eyebrow">Kiểm tra SEO</span>
+                      <strong>Các mục cần kiểm tra trước khi xuất bản</strong>
+                    </div>
+                    <span className="seo-audit-notes__count">
+                      {previewIssues.length} mục
+                    </span>
+                  </div>
                   <ul>
-                    {article.seoIssues
-                      .filter((issue) => issue.level !== 'success')
-                      .map((issue) => <li key={issue.code}>{issue.message}</li>)}
+                    {previewIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}
                   </ul>
                 </aside>
               )}

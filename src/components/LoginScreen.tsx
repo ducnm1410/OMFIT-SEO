@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Activity, CheckCircle2, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { ButtonContent } from './ButtonContent';
 
 function normalizeLogin(value: string) {
   const trimmed = value.trim();
@@ -139,9 +140,14 @@ export const LoginScreen: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="gradient-bg-omfit-btn flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                aria-busy={isLoading}
+                className="ui-action-button gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+                <ButtonContent
+                  busy={isLoading}
+                  busyLabel="Đang đăng nhập..."
+                  label="Đăng nhập"
+                />
               </button>
             </form>
 

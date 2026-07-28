@@ -19,6 +19,7 @@ import {
   selectGoogleAdsAccount,
   startGoogleAdsConnection
 } from '../services/keywordResearchService';
+import { ButtonContent } from './ButtonContent';
 
 interface KeywordTrendFinderProps {
   onSelectKeywordForArticle: (keyword: string) => void;
@@ -272,18 +273,15 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
             <button
               type="submit"
               disabled={isLoading || isConnectionLoading || !connection?.connected || !connection.selectedCustomerId}
-              className="w-full gradient-bg-omfit-btn px-4 py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-[#0879D9]/20 disabled:opacity-50"
+              aria-busy={isLoading}
+              className="ui-action-button gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold text-white shadow-md shadow-[#0879D9]/20 disabled:opacity-50"
             >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Đang lấy dữ liệu...
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4" /> Phân tích
-                </>
-              )}
+              <ButtonContent
+                busy={isLoading}
+                busyLabel="Đang phân tích..."
+                label="Phân tích"
+                icon={<Search className="h-4 w-4" />}
+              />
             </button>
           </div>
         </form>

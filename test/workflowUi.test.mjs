@@ -112,3 +112,36 @@ test('đăng bài thành công không tải hoặc chạy hiệu ứng pháo hoa
   assert.equal(packageJson.dependencies?.['canvas-confetti'], undefined);
   assert.equal(packageJson.devDependencies?.['@types/canvas-confetti'], undefined);
 });
+
+test('button đang xử lý dùng component rút gọn nhãn để không tràn giao diện', async () => {
+  const buttonContent = await readFile(
+    new URL('../src/components/ButtonContent.tsx', import.meta.url),
+    'utf8'
+  );
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+  const publisher = await readFile(
+    new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(buttonContent, /ui-action-button__label/);
+  assert.match(buttonContent, /text-overflow|visibleLabel/);
+  assert.match(css, /\.ui-action-button[\s\S]*?overflow:\s*hidden/);
+  assert.match(css, /\.ui-action-button__label[\s\S]*?text-overflow:\s*ellipsis/);
+  assert.match(publisher, /busyLabel="Đang đăng bài\.\.\."/);
+  assert.match(publisher, /aria-busy=\{isPublishing\}/);
+});
+
+test('ghi chú kiểm tra SEO trong preview có màu tương phản và dùng audit hiện tại', async () => {
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+  const publisher = await readFile(
+    new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(css, /\.article-preview\.prose-custom \.seo-audit-notes li/);
+  assert.match(css, /color:\s*#7c2d12/);
+  assert.match(css, /background:\s*#fff/);
+  assert.match(publisher, /const previewIssues = \(publishAudit \|\| clientAudit\)\.issues/);
+  assert.match(publisher, /seo-audit-notes__count/);
+});

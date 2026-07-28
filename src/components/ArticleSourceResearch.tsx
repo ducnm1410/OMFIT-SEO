@@ -14,6 +14,7 @@ import {
   researchArticleSources
 } from '../services/researchService';
 import { ApiClientError } from '../services/apiClient';
+import { ButtonContent } from './ButtonContent';
 
 interface ArticleSourceResearchProps {
   articleId: string;
@@ -222,12 +223,15 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
           type="button"
           onClick={() => void handleResearch()}
           disabled={isResearching || isApplying || !title.trim()}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#0879D9]/30 bg-[#F0F9FF] px-4 text-sm font-medium text-[#075EA8] transition hover:bg-[#E0F2FE] disabled:cursor-not-allowed disabled:opacity-50"
+          aria-busy={isResearching}
+          className="ui-action-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#0879D9]/30 bg-[#F0F9FF] px-4 text-sm font-medium text-[#075EA8] transition hover:bg-[#E0F2FE] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:max-w-60"
         >
-          {isResearching
-            ? <LoaderCircle className="h-4 w-4 animate-spin" />
-            : <Search className="h-4 w-4" />}
-          {isResearching ? 'Đang tìm nguồn...' : 'Tìm nguồn có kiểm chứng'}
+          <ButtonContent
+            busy={isResearching}
+            busyLabel="Đang tìm nguồn..."
+            label="Tìm nguồn có kiểm chứng"
+            icon={<Search className="h-4 w-4" />}
+          />
         </button>
       </div>
 
@@ -273,10 +277,15 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
               type="button"
               onClick={() => void handleResearch()}
               disabled={isResearching || isApplying || !title.trim()}
-              className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-rose-300 bg-white px-3 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
+              aria-busy={isResearching}
+              className="ui-action-button inline-flex min-h-9 max-w-40 items-center justify-center gap-2 self-start rounded-lg border border-rose-300 bg-white px-3 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
             >
-              {isResearching && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
-              {isResearching ? 'Đang thử lại...' : 'Thử lại'}
+              <ButtonContent
+                busy={isResearching}
+                busyLabel="Đang thử lại..."
+                label="Thử lại"
+                icon={<Search className="h-3.5 w-3.5" />}
+              />
             </button>
           </div>
         </div>
@@ -359,12 +368,15 @@ export const ArticleSourceResearch: React.FC<ArticleSourceResearchProps> = ({
             type="button"
             onClick={() => void handleApply()}
             disabled={isApplying || isResearching}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#0879D9] px-4 text-sm font-medium text-white transition hover:bg-[#075EA8] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-busy={isApplying}
+            className="ui-action-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0879D9] px-4 text-sm font-medium text-white transition hover:bg-[#075EA8] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:max-w-60"
           >
-            {isApplying
-              ? <LoaderCircle className="h-4 w-4 animate-spin" />
-              : <CheckCircle2 className="h-4 w-4" />}
-            {isApplying ? 'Đang áp dụng...' : 'Áp dụng nguồn đã duyệt'}
+            <ButtonContent
+              busy={isApplying}
+              busyLabel="Đang áp dụng..."
+              label="Áp dụng nguồn đã duyệt"
+              icon={<CheckCircle2 className="h-4 w-4" />}
+            />
           </button>
         </div>
       )}

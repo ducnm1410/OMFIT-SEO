@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { BrandAsset, BrandBranch, BrandProfile } from '../types';
 import { saveBrandProfile, uploadBrandAsset } from '../services/contentRepository';
+import { ButtonContent } from './ButtonContent';
 
 interface BrandSettingsProps {
   profile: BrandProfile | null;
@@ -173,12 +174,15 @@ export const BrandSettings: React.FC<BrandSettingsProps> = ({
             type="button"
             onClick={() => void handleSave()}
             disabled={isSaving}
-            className="gradient-bg-omfit-btn inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            aria-busy={isSaving}
+            className="ui-action-button gradient-bg-omfit-btn inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:max-w-52"
           >
-            {isSaving
-              ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              : <Save className="h-4 w-4" />}
-            {isSaving ? 'Đang lưu...' : 'Lưu cài đặt'}
+            <ButtonContent
+              busy={isSaving}
+              busyLabel="Đang lưu..."
+              label="Lưu cài đặt"
+              icon={<Save className="h-4 w-4" />}
+            />
           </button>
         </div>
         {message && (

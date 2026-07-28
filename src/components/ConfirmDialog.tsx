@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
+import { ButtonContent } from './ButtonContent';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -107,12 +108,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               type="button"
               onClick={onConfirm}
               disabled={isBusy}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60"
+              aria-busy={isBusy}
+              className="ui-action-button inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60 sm:max-w-56"
             >
-              {isBusy
-                ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                : <Trash2 className="h-4 w-4" />}
-              {isBusy ? 'Đang xóa...' : confirmLabel}
+              <ButtonContent
+                busy={isBusy}
+                busyLabel="Đang xóa..."
+                label={confirmLabel}
+                icon={<Trash2 className="h-4 w-4" />}
+              />
             </button>
           </div>
         </div>
