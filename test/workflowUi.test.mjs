@@ -145,3 +145,44 @@ test('ghi chú kiểm tra SEO trong preview có màu tương phản và dùng au
   assert.match(publisher, /const previewIssues = \(publishAudit \|\| clientAudit\)\.issues/);
   assert.match(publisher, /seo-audit-notes__count/);
 });
+
+test('sau khi publish tự hậu kiểm Google discovery và đồng bộ lại kho internal link', async () => {
+  const publisher = await readFile(
+    new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url),
+    'utf8'
+  );
+  const service = await readFile(
+    new URL('../src/services/wordpressMcpService.ts', import.meta.url),
+    'utf8'
+  );
+  const dialog = await readFile(
+    new URL('../src/components/PublishResultDialog.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(service, /\/api\/wordpress\/post-publish-seo/);
+  assert.match(publisher, /await syncWordpressIndex\(\)/);
+  assert.match(publisher, /label: 'Google Search Console'/);
+  assert.match(dialog, /Trạng thái khám phá và lập chỉ mục/);
+  assert.doesNotMatch(dialog, /Đã index/);
+});
+
+test('từ khóa phụ đi từ Keyword Finder vào brief và request tạo dàn ý', async () => {
+  const finder = await readFile(
+    new URL('../src/components/KeywordTrendFinder.tsx', import.meta.url),
+    'utf8'
+  );
+  const generator = await readFile(
+    new URL('../src/components/SeoContentGenerator.tsx', import.meta.url),
+    'utf8'
+  );
+  const service = await readFile(
+    new URL('../src/services/geminiService.ts', import.meta.url),
+    'utf8'
+  );
+  const server = await readFile(new URL('../server/index.mjs', import.meta.url), 'utf8');
+  assert.match(finder, /onSelectKeywordForArticle\(item\.keyword, item\.relatedLsiKeywords\)/);
+  assert.match(generator, /brief\.secondaryKeywords/);
+  assert.match(service, /\{ keyword, tone, secondaryKeywords \}/);
+  assert.match(server, /Từ khóa phụ gợi ý:/);
+  assert.match(server, /không bắt buộc dùng đủ, không đổi search intent/);
+});

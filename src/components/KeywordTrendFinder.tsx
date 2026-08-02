@@ -22,7 +22,7 @@ import {
 import { ButtonContent } from './ButtonContent';
 
 interface KeywordTrendFinderProps {
-  onSelectKeywordForArticle: (keyword: string) => void;
+  onSelectKeywordForArticle: (keyword: string, secondaryKeywords: string[]) => void;
   setActiveTab: (tab: ActiveTab) => void;
 }
 
@@ -372,7 +372,7 @@ export const KeywordTrendFinder: React.FC<KeywordTrendFinderProps> = ({
               <div className="pt-2 flex justify-end">
                 <button
                   onClick={() => {
-                    onSelectKeywordForArticle(item.keyword);
+                    onSelectKeywordForArticle(item.keyword, item.relatedLsiKeywords);
                     setActiveTab('generator');
                   }}
                   className="gradient-bg-omfit-btn px-4 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 shadow-md shadow-[#0879D9]/20"

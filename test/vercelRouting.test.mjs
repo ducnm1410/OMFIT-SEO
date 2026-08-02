@@ -20,7 +20,7 @@ test('Vercel Hobby chỉ triển khai tối đa 12 serverless functions', async 
   assert.ok(functionFiles.length <= 12, `Đang có ${functionFiles.length} functions`);
 });
 
-test('hai endpoint mới được multiplex nhưng vẫn giữ query gốc', async () => {
+test('các endpoint phụ được multiplex nhưng vẫn giữ query gốc', async () => {
   assert.equal(
     resolveMultiplexedUrl('/api/content/article?__omfit_route=research-sources&articleId=abc'),
     '/api/research/sources?articleId=abc'
@@ -29,9 +29,14 @@ test('hai endpoint mới được multiplex nhưng vẫn giữ query gốc', asy
     resolveMultiplexedUrl('/api/content/article?articleId=abc'),
     '/api/content/article?articleId=abc'
   );
+  assert.equal(
+    resolveMultiplexedUrl('/api/wordpress/sync-index?__omfit_route=post-publish-seo&source=publish'),
+    '/api/wordpress/post-publish-seo?source=publish'
+  );
 
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
   const rewrites = new Map(config.rewrites.map((rewrite) => [rewrite.source, rewrite.destination]));
   assert.match(rewrites.get('/api/research/sources'), /__omfit_route=research-sources/);
   assert.match(rewrites.get('/api/media/register'), /__omfit_route=media-register/);
+  assert.match(rewrites.get('/api/wordpress/post-publish-seo'), /__omfit_route=post-publish-seo/);
 });

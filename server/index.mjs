@@ -24,6 +24,7 @@ import {
   normalizeTrustedWordpressMediaUrl,
   OMFIT_PUBLIC_ASSET_BUCKET
 } from './mediaPolicy.mjs';
+import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
 
 dotenv.config({ override: true, quiet: true });
 
@@ -1440,6 +1441,12 @@ app.post('/api/content/outline', requireSupabaseUser, async (request, response) 
   try {
     const keyword = String(request.body?.keyword || '').trim();
     const tone = String(request.body?.tone || 'Chuyên nghiệp, truyền cảm hứng, cân bằng').trim();
+    const secondaryKeywords = [...new Set(
+      (Array.isArray(request.body?.secondaryKeywords) ? request.body.secondaryKeywords : [])
+        .map((item) => String(item || '').trim())
+        .filter((item) => item.length >= 2 && item.length <= 80)
+        .filter((item) => item.toLocaleLowerCase('vi-VN') !== keyword.toLocaleLowerCase('vi-VN'))
+    )].slice(0, 8);
     if (keyword.length < 2 || keyword.length > 120) {
       return response.status(400).json({ error: 'Từ khóa phải có từ 2 đến 120 ký tự.' });
     }
@@ -1447,6 +1454,7 @@ app.post('/api/content/outline', requireSupabaseUser, async (request, response) 
     const text = await generateGeminiContent(
       `Tạo dàn ý SEO On-Page bằng tiếng Việt cho thương hiệu OMFIT.
 Từ khóa chính: ${keyword}
+Từ khóa phụ gợi ý: ${secondaryKeywords.length ? secondaryKeywords.join(', ') : 'Không có'}
 Giọng văn: ${tone}
 Brand context (chỉ sử dụng dữ liệu này, không tự tạo claim): ${JSON.stringify({
         mission: brand?.mission || '',
@@ -1466,6 +1474,7 @@ Trả về đúng một JSON object:
   "metaDescription": "Một câu tự nhiên từ 145 đến 155 ký tự, kết thúc bằng đúng một dấu chấm",
   "slug": "slug-khong-dau",
   "focusKeyword": "${keyword}",
+  "secondaryKeywords": ${JSON.stringify(secondaryKeywords)},
   "headings": [
     { "tag": "h2", "text": "Tiêu đề mục", "points": ["Ý chính có ích"] },
     { "tag": "h3", "text": "Tiêu đề mục con", "points": ["Ý chính có ích"] }
@@ -1473,12 +1482,13 @@ Trả về đúng một JSON object:
   "faq": [{ "question": "Câu hỏi?", "answer": "Câu trả lời ngắn, không bịa dữ kiện." }]
 }
 
-Bao phủ đúng search intent, giữ nguyên các từ bổ nghĩa quan trọng trong từ khóa (ví dụ "giá rẻ" không được đổi thành "giá trị"), cấu trúc heading logic, không nhồi từ khóa và không thêm Markdown.`,
+Bao phủ đúng search intent, giữ nguyên các từ bổ nghĩa quan trọng trong từ khóa (ví dụ "giá rẻ" không được đổi thành "giá trị"). Chỉ dùng từ khóa phụ khi phù hợp ngữ nghĩa, không bắt buộc dùng đủ, không đổi search intent, không nhồi từ khóa và không thêm Markdown.`,
       'application/json'
     );
     const outline = JSON.parse(text);
     return response.json({
       ...outline,
+      secondaryKeywords,
       slug: normalizeVietnameseSlug(outline?.slug || outline?.title || keyword),
       ...normalizeArticleMetadata(outline, keyword)
     });
@@ -1522,6 +1532,7 @@ Yêu cầu:
 - Rà soát chính tả trước khi trả về; không được có từ hoặc ký tự lặp như "l lỡ".
 - Heading phải theo thứ tự H2 rồi mới đến H3; không dùng cỡ chữ hay style inline.
 - Từ khóa xuất hiện tự nhiên ở phần mở đầu, không nhồi nhét.
+- Nếu dàn ý có secondaryKeywords, chỉ dùng các cụm thực sự phù hợp và mỗi cụm xuất hiện tự nhiên; không cố chèn đủ.
 - Không tự tạo số liệu, giá, chứng nhận, địa chỉ, cam kết kết quả hoặc lời khuyên y khoa.
 - Không chèn URL, ảnh giả, Markdown hay footer website.
 - Có FAQ dựa trên dàn ý.
@@ -3477,6 +3488,32 @@ app.post('/api/wordpress/sync-index', requireSupabaseUser, async (request, respo
   } catch (error) {
     return response.status(error instanceof ApiError ? error.statusCode : 502).json({
       error: error instanceof Error ? error.message : 'Không thể đồng bộ WordPress index.'
+    });
+  }
+});
+
+app.post('/api/wordpress/post-publish-seo', requireSupabaseUser, async (request, response) => {
+  try {
+    const config = getWordpressConfig();
+    const postUrl = String(request.body?.postUrl || '').trim();
+    let parsedPostUrl;
+    try {
+      parsedPostUrl = new URL(postUrl);
+    } catch {
+      throw new ApiError(400, 'URL bài viết không hợp lệ.', 'wordpress_post_url_invalid');
+    }
+    if (parsedPostUrl.origin !== new URL(config.siteUrl).origin) {
+      throw new ApiError(400, 'URL bài viết không thuộc website WordPress.', 'wordpress_post_url_untrusted');
+    }
+    const result = await runPostPublishSeoChecks({
+      postUrl: parsedPostUrl.toString(),
+      siteUrl: config.siteUrl
+    });
+    return response.json(result);
+  } catch (error) {
+    return response.status(error instanceof ApiError ? error.statusCode : 502).json({
+      error: error instanceof Error ? error.message : 'Không thể hậu kiểm SEO sau khi đăng.',
+      code: error instanceof ApiError ? error.code : 'post_publish_seo_failed'
     });
   }
 });

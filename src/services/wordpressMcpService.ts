@@ -11,6 +11,40 @@ export interface PublishPostResult {
   audit?: SeoAuditResult;
   contentHtml?: string;
   slug?: string;
+  seoDiscovery?: PostPublishSeoResult;
+}
+
+export interface PostPublishSeoResult {
+  publicPage: {
+    ok: boolean;
+    httpStatus?: number;
+    canonical?: string;
+    canonicalMatches?: boolean;
+    noindex?: boolean;
+    h1Count?: number;
+    error?: string;
+  };
+  sitemap: {
+    found: boolean;
+    sitemapIndexUrl?: string;
+    sitemapUrl?: string;
+    error?: string;
+  };
+  google: {
+    configured: boolean;
+    missing: string[];
+    sitemapSubmitted: boolean;
+    inspection: null | {
+      verdict: string;
+      coverageState: string;
+      indexingState: string;
+      pageFetchState: string;
+      lastCrawlTime: string;
+      googleCanonical: string;
+      userCanonical: string;
+    };
+    error: string;
+  };
 }
 
 interface MediaSyncResult {
@@ -118,9 +152,35 @@ export class WordpressMcpService {
             reviewerConfirmed: options.reviewerConfirmed === true
           })
         }) as PublishPostResult;
+        let seoDiscovery: PostPublishSeoResult | undefined;
+        const resultLogs = mergeUniqueLogs(syncLogs, result.logs);
+        if (status === 'publish') {
+          options.onProgress?.('Đang xác minh URL công khai, sitemap và Search Console…');
+          try {
+            seoDiscovery = await authenticatedFetch('/api/wordpress/post-publish-seo', {
+              method: 'POST',
+              body: JSON.stringify({ postUrl: result.postUrl })
+            }) as PostPublishSeoResult;
+            if (seoDiscovery.publicPage.ok) resultLogs.push('URL công khai hợp lệ: HTTP, canonical, robots và H1 đã đạt.');
+            else resultLogs.push('Cảnh báo: URL công khai chưa vượt qua toàn bộ hậu kiểm SEO.');
+            if (seoDiscovery.sitemap.found) resultLogs.push('Bài viết đã xuất hiện trong WordPress sitemap.');
+            else resultLogs.push('Cảnh báo: chưa tìm thấy bài viết trong WordPress sitemap.');
+            if (seoDiscovery.google.sitemapSubmitted) {
+              resultLogs.push('Đã tự động gửi lại sitemap cho Google Search Console.');
+            } else if (!seoDiscovery.google.configured) {
+              resultLogs.push('Search Console chưa cấu hình; bài vẫn được Google khám phá qua sitemap.');
+            } else if (seoDiscovery.google.error) {
+              resultLogs.push(`Search Console: ${seoDiscovery.google.error}`);
+            }
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : 'Không thể chạy hậu kiểm.';
+            resultLogs.push(`Bài đã đăng nhưng hậu kiểm SEO chưa hoàn tất: ${detail}`);
+          }
+        }
         return {
           ...result,
-          logs: mergeUniqueLogs(syncLogs, result.logs)
+          logs: resultLogs,
+          seoDiscovery
         };
       } catch (error) {
         if (

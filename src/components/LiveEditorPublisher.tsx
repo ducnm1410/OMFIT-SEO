@@ -31,7 +31,7 @@ import type {
 } from '../types';
 import { WordpressMcpService } from '../services/wordpressMcpService';
 import { LeonardoService } from '../services/leonardoService';
-import { uploadMediaFile } from '../services/contentRepository';
+import { syncWordpressIndex, uploadMediaFile } from '../services/contentRepository';
 import { ApiClientError } from '../services/apiClient';
 import { auditArticle } from '../services/seoAuditService';
 import { ArticleImagePackage } from './ArticleImagePackage';
@@ -394,7 +394,19 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           setPublishLogs((currentLogs) => [...currentLogs, message]);
         }
       });
-      setPublishLogs(result.logs);
+      const nextPublishLogs = [...result.logs];
+      let internalIndexSynced = postStatus !== 'publish';
+      if (postStatus === 'publish') {
+        try {
+          const indexResult = await syncWordpressIndex();
+          internalIndexSynced = true;
+          nextPublishLogs.push(`Đã cập nhật ${indexResult.indexed} URL trong kho internal link.`);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : 'Không thể đồng bộ kho internal link.';
+          nextPublishLogs.push(`Bài đã đăng nhưng kho internal link chưa đồng bộ: ${detail}`);
+        }
+      }
+      setPublishLogs(nextPublishLogs);
       setPublishedUrl(result.postUrl);
       setPublishAudit(result.audit || null);
       const nextContentHtml = result.contentHtml || currentArticleState.contentHtml;
@@ -423,7 +435,42 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
         message: postStatus === 'publish'
           ? `Bài viết “${nextTitle}” đã được xuất bản lên omfit.com.vn.`
           : `Bài viết “${nextTitle}” đã được lưu dưới dạng bản nháp trên WordPress.`,
-        postUrl: result.postUrl
+        postUrl: result.postUrl,
+        checks: postStatus === 'publish' ? [
+          {
+            label: 'URL công khai',
+            status: result.seoDiscovery?.publicPage.ok ? 'success' : 'warning',
+            detail: result.seoDiscovery?.publicPage.ok
+              ? 'HTTP 200, canonical, robots và một H1 hợp lệ.'
+              : result.seoDiscovery?.publicPage.error || 'Chưa vượt qua toàn bộ hậu kiểm.'
+          },
+          {
+            label: 'WordPress sitemap',
+            status: result.seoDiscovery?.sitemap.found ? 'success' : 'warning',
+            detail: result.seoDiscovery?.sitemap.found
+              ? 'URL đã có trong sitemap bài viết.'
+              : result.seoDiscovery?.sitemap.error || 'Chưa tìm thấy URL trong sitemap.'
+          },
+          {
+            label: 'Kho internal link',
+            status: internalIndexSynced ? 'success' : 'warning',
+            detail: internalIndexSynced
+              ? 'Đã đồng bộ ngay sau khi xuất bản.'
+              : 'Sẽ thử lại khi ứng dụng được tải lại.'
+          },
+          {
+            label: 'Google Search Console',
+            status: result.seoDiscovery?.google.sitemapSubmitted
+              ? 'success'
+              : result.seoDiscovery?.google.configured ? 'warning' : 'pending',
+            detail: result.seoDiscovery?.google.sitemapSubmitted
+              ? `Đã gửi sitemap.${result.seoDiscovery.google.inspection?.coverageState
+                ? ` Trạng thái hiện tại: ${result.seoDiscovery.google.inspection.coverageState}.`
+                : ''}`
+              : result.seoDiscovery?.google.error
+                || 'Chưa có credentials; Google vẫn có thể khám phá bài qua sitemap.'
+          }
+        ] : undefined
       });
     } catch (err: unknown) {
       console.error('WordPress Publishing Failed:', err);

@@ -1,15 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { LoginScreen } from './components/LoginScreen';
-import { OverviewDashboard } from './components/OverviewDashboard';
-import { KeywordTrendFinder } from './components/KeywordTrendFinder';
-import { SeoContentGenerator } from './components/SeoContentGenerator';
-import { ImageStudio } from './components/ImageStudio';
-import { LiveEditorPublisher } from './components/LiveEditorPublisher';
-import { PostHistory } from './components/PostHistory';
-import { BrandSettings } from './components/BrandSettings';
 import { SeoWorkflowBar } from './components/SeoWorkflowBar';
 import type {
   ActiveTab,
@@ -46,11 +39,27 @@ import {
   sectionHasImage
 } from './utils/articleImageMarkup';
 
+const OverviewDashboard = lazy(() => import('./components/OverviewDashboard')
+  .then((module) => ({ default: module.OverviewDashboard })));
+const KeywordTrendFinder = lazy(() => import('./components/KeywordTrendFinder')
+  .then((module) => ({ default: module.KeywordTrendFinder })));
+const SeoContentGenerator = lazy(() => import('./components/SeoContentGenerator')
+  .then((module) => ({ default: module.SeoContentGenerator })));
+const ImageStudio = lazy(() => import('./components/ImageStudio')
+  .then((module) => ({ default: module.ImageStudio })));
+const LiveEditorPublisher = lazy(() => import('./components/LiveEditorPublisher')
+  .then((module) => ({ default: module.LiveEditorPublisher })));
+const PostHistory = lazy(() => import('./components/PostHistory')
+  .then((module) => ({ default: module.PostHistory })));
+const BrandSettings = lazy(() => import('./components/BrandSettings')
+  .then((module) => ({ default: module.BrandSettings })));
+
 const workflowStorageKey = 'omfit-seo-workflow-v2';
 const sidebarCollapsedStorageKey = 'omfit-seo-sidebar-collapsed';
 
 const defaultContentBrief: ContentBrief = {
   keyword: '',
+  secondaryKeywords: [],
   searchIntent: 'Informational',
   service: 'OMFIT PILATES',
   audience: 'Người Việt quan tâm đến sức khỏe, vóc dáng và lối sống cân bằng',
@@ -253,10 +262,10 @@ export function App() {
     }
   };
 
-  const handleKeywordSelected = (keyword: string) => {
+  const handleKeywordSelected = (keyword: string, secondaryKeywords: string[] = []) => {
     setSelectedArticle(null);
     setSelectedKeyword(keyword);
-    setContentBrief((current) => ({ ...current, keyword }));
+    setContentBrief((current) => ({ ...current, keyword, secondaryKeywords }));
     setWorkflowStep(2);
     setSaveStatus('idle');
     setLastSavedAt('');
@@ -506,6 +515,14 @@ export function App() {
             </div>
           )}
 
+          <Suspense fallback={(
+            <div className="ui-panel grid min-h-48 place-items-center p-8" role="status">
+              <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#0879D9] border-t-transparent" />
+                Đang tải khu vực làm việc…
+              </div>
+            </div>
+          )}>
           {activeTab === 'overview' && (
             <OverviewDashboard
               articles={articles}
@@ -589,6 +606,7 @@ export function App() {
               ])}
             />
           )}
+          </Suspense>
         </main>
       </div>
     </div>

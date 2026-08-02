@@ -9,6 +9,10 @@
     {
       "source": "/api/media/register",
       "destination": "/api/content/article?__omfit_route=media-register"
+    },
+    {
+      "source": "/api/wordpress/post-publish-seo",
+      "destination": "/api/wordpress/sync-index?__omfit_route=post-publish-seo"
     }
   ],
   "functions": {

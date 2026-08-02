@@ -50,6 +50,7 @@ export interface SeoOutline {
   metaDescription: string;
   slug: string;
   focusKeyword: string;
+  secondaryKeywords?: string[];
   headings: {
     tag: 'h2' | 'h3';
     text: string;
@@ -63,6 +64,7 @@ export interface SeoOutline {
 
 export interface ContentBrief {
   keyword: string;
+  secondaryKeywords: string[];
   searchIntent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational';
   service: string;
   audience: string;

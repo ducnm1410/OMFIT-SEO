@@ -64,6 +64,7 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
   const commitBrief = (overrides: Partial<ContentBrief> = {}) => {
     onBriefChange({
       keyword,
+      secondaryKeywords: brief.secondaryKeywords || [],
       searchIntent,
       service,
       audience,
@@ -86,9 +87,16 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
         `Search intent: ${searchIntent}`,
         `Dịch vụ trọng tâm: ${service}`,
         `Độc giả: ${audience}`,
-        `Mục tiêu chuyển đổi: ${conversionGoal}`
+        `Mục tiêu chuyển đổi: ${conversionGoal}`,
+        brief.secondaryKeywords?.length
+          ? `Từ khóa phụ gợi ý: ${brief.secondaryKeywords.join(', ')}`
+          : ''
       ].join('. ');
-      const generatedOutline = await geminiService.generateOutline(keyword, briefContext);
+      const generatedOutline = await geminiService.generateOutline(
+        keyword,
+        briefContext,
+        brief.secondaryKeywords || []
+      );
       setOutline(generatedOutline);
       setStep('outline');
     } catch (err) {
@@ -181,6 +189,30 @@ export const SeoContentGenerator: React.FC<SeoContentGeneratorProps> = ({
                 className="w-full px-4 py-3 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] text-sm focus:outline-none focus:border-[#0879D9] transition font-medium"
                 required
               />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-700">
+                Từ khóa phụ gợi ý
+              </label>
+              <input
+                type="text"
+                value={(brief.secondaryKeywords || []).join(', ')}
+                onChange={(event) => {
+                  const secondaryKeywords = [...new Set(
+                    event.target.value
+                      .split(',')
+                      .map((item) => item.trim())
+                      .filter(Boolean)
+                  )].slice(0, 8);
+                  commitBrief({ secondaryKeywords });
+                }}
+                placeholder="Các cụm từ liên quan, cách nhau bằng dấu phẩy"
+                className="w-full rounded-xl border border-slate-200 bg-[#F8FAFC] px-4 py-2.5 text-xs font-medium text-[#071827] transition focus:border-[#0879D9] focus:outline-none"
+              />
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                Hệ thống chỉ dùng khi phù hợp ngữ nghĩa; không bắt buộc chèn đủ và không thay đổi search intent chính.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

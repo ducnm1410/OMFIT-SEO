@@ -1,6 +1,7 @@
 const multiplexedRoutes = new Map([
   ['research-sources', '/api/research/sources'],
-  ['media-register', '/api/media/register']
+  ['media-register', '/api/media/register'],
+  ['post-publish-seo', '/api/wordpress/post-publish-seo']
 ]);
 
 export function resolveMultiplexedUrl(rawUrl) {

@@ -51,11 +51,12 @@ export class GeminiService {
   async generateOutline(
     keyword: string,
     tone = 'Chuyên nghiệp, truyền cảm hứng, cân bằng',
+    secondaryKeywords: string[] = [],
     signal?: AbortSignal
   ): Promise<SeoOutline> {
     return requestGeneratedContent<SeoOutline>(
       '/api/content/outline',
-      { keyword, tone },
+      { keyword, tone, secondaryKeywords },
       signal
     );
   }

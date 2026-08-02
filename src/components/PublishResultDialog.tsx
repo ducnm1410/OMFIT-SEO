@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock3,
   ExternalLink,
   X
 } from 'lucide-react';
@@ -12,6 +13,11 @@ export interface PublishDialogResult {
   title: string;
   message: string;
   postUrl?: string;
+  checks?: Array<{
+    label: string;
+    status: 'success' | 'warning' | 'pending';
+    detail: string;
+  }>;
 }
 
 interface PublishResultDialogProps {
@@ -105,6 +111,30 @@ export const PublishResultDialog: React.FC<PublishResultDialogProps> = ({
           <p id={descriptionId} className="max-h-40 overflow-y-auto whitespace-pre-line pr-1 text-sm leading-6 text-slate-600">
             {result.message}
           </p>
+
+          {result.checks && result.checks.length > 0 && (
+            <ul className="mt-4 space-y-2" aria-label="Trạng thái khám phá và lập chỉ mục">
+              {result.checks.map((check) => (
+                <li key={check.label} className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <span className={`mt-0.5 shrink-0 ${
+                    check.status === 'success'
+                      ? 'text-emerald-600'
+                      : check.status === 'warning' ? 'text-amber-600' : 'text-sky-600'
+                  }`}>
+                    {check.status === 'success'
+                      ? <CheckCircle2 className="h-4 w-4" />
+                      : check.status === 'warning'
+                        ? <AlertTriangle className="h-4 w-4" />
+                        : <Clock3 className="h-4 w-4" />}
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">{check.label}</p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{check.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
