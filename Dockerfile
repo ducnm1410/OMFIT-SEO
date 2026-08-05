@@ -27,6 +27,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 COPY server ./server
+COPY src/lib/runtimeEnv.mjs ./src/lib/runtimeEnv.mjs
 
 EXPOSE 8787
 
