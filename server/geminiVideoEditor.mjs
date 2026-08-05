@@ -36,8 +36,7 @@ export function buildGoogleFileUploadConfig(mimeType, sizeBytes) {
   }
 
   // @google/genai replaces its resumable-upload defaults when request-level
-  // httpOptions are supplied. Preserve those required headers while keeping
-  // the longer Railway transfer timeout.
+  // httpOptions are supplied. Preserve those required headers with the timeout.
   return {
     mimeType: normalizedMimeType,
     httpOptions: {
@@ -52,6 +51,12 @@ export function buildGoogleFileUploadConfig(mimeType, sizeBytes) {
       }
     }
   };
+}
+
+export function canonicalGoogleFileUri(file) {
+  const name = String(file?.name || '').trim();
+  if (!/^files\/[a-z0-9_-]+$/i.test(name)) return '';
+  return `https://generativelanguage.googleapis.com/v1beta/${name}`;
 }
 
 function parseJsonError(value) {
@@ -141,16 +146,15 @@ export function buildGeminiVideoEditRequest({
           ]
         : [
         {
-          type: 'document',
+          type: 'video',
           uri: fileUri,
           mime_type: mimeType
         },
         { type: 'text', text: prompt }
       ];
 
-  // Gemini's uploaded-video edit flow infers the task from the File API URI.
-  // Forcing `task: edit` currently makes the provider validate the document as
-  // if it were an inline video and reject it with "Exactly one input video".
+  // The provider validates edit inputs by content type. A File API URI must be
+  // sent as `video`; `document` is accepted initially but fails in the worker.
   const task = mode === 'image-to-video'
     ? 'image_to_video'
     : mode === 'text-to-video' ? 'text_to_video' : null;

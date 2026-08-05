@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import {
   buildGeminiVideoEditRequest,
   buildGoogleFileUploadConfig,
+  canonicalGoogleFileUri,
   calculateVideoTelemetry,
   createVideoEditorTicket,
   extractVideoFromInteraction,
@@ -190,7 +191,7 @@ async function uploadGoogleSource(supabase, ai, storagePath, mimeType, preparedS
     }
     throw error;
   }
-  if (!googleFile?.name || !googleFile?.uri) {
+  if (!canonicalGoogleFileUri(googleFile)) {
     const error = new Error('Google Gemini không trả về mã tệp video nguồn hợp lệ.');
     error.statusCode = 502;
     error.code = 'video_editor_source_upload_invalid';
@@ -351,7 +352,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           issuedAt: Date.now(),
           ownerId,
           googleFileName: googleFile?.name || null,
-          googleFileUri: googleFile?.uri || null,
+          googleFileUri: googleFile ? canonicalGoogleFileUri(googleFile) : null,
           sourceStoragePath: storagePath,
           mimeType,
           inputKind,
@@ -402,7 +403,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
         const refreshedTicket = createVideoEditorTicket({
           ...sourceJob,
           googleFileName: googleFile.name || sourceJob.googleFileName,
-          googleFileUri: googleFile.uri || sourceJob.googleFileUri
+          googleFileUri: canonicalGoogleFileUri(googleFile) || sourceJob.googleFileUri
         }, ticketSecret(getEnv));
         return response.status(state === 'ACTIVE' ? 200 : 202).json({
           status: state === 'ACTIVE' ? 'ready' : 'processing',
@@ -429,6 +430,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
         let sourceJob = null;
         let parentAsset = null;
         let imageData = null;
+        let sourceFileUri = null;
         const previousAssetId = String(request.body?.previousAssetId || '').trim();
         if (generationMode === 'continue') {
           if (!previousAssetId) {
@@ -505,13 +507,20 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
               error.code = 'video_editor_source_processing';
               throw error;
             }
+            sourceFileUri = canonicalGoogleFileUri(googleFile);
+            if (!sourceFileUri) {
+              const error = new Error('Google Gemini không trả về URI video nguồn hợp lệ.');
+              error.statusCode = 502;
+              error.code = 'video_editor_source_uri_invalid';
+              throw error;
+            }
           }
         }
         const promptEn = await translatePrompt(ai, promptVi, getEnv);
         const requestOptions = {
           prompt: promptEn,
           mode: generationMode,
-          fileUri: sourceJob?.googleFileUri,
+          fileUri: sourceFileUri,
           imageData,
           mimeType: sourceJob?.mimeType,
           previousInteractionId: parentAsset?.provider_interaction_id,

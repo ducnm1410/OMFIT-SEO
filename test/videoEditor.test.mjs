@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   buildGeminiVideoEditRequest,
   buildGoogleFileUploadConfig,
+  canonicalGoogleFileUri,
   calculateVideoTelemetry,
   createVideoEditorTicket,
   friendlyGoogleApiError,
@@ -41,6 +42,14 @@ test('upload Gemini Files giữ resumable headers khi tăng timeout trên Railwa
   });
 });
 
+test('AI Video Editor chuẩn hóa URI Files API và gửi đúng loại video', () => {
+  assert.equal(
+    canonicalGoogleFileUri({ name: 'files/abc_123-test', uri: 'blobstore:///internal' }),
+    'https://generativelanguage.googleapis.com/v1beta/files/abc_123-test'
+  );
+  assert.equal(canonicalGoogleFileUri({ name: '../files/unsafe' }), '');
+});
+
 test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉnh sửa', () => {
   const first = buildGeminiVideoEditRequest({
     prompt: 'Make the lighting cinematic',
@@ -59,7 +68,7 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
   assert.equal(first.generation_config, undefined);
   assert.deepEqual(first.input, [
     {
-      type: 'document',
+      type: 'video',
       uri: 'https://generativelanguage.googleapis.com/v1beta/files/source',
       mime_type: 'video/mp4'
     },
@@ -206,6 +215,7 @@ test('UI tải video trực tiếp lên Supabase và API dùng start/poll thay v
   assert.doesNotMatch(previousAssetLookup, /\.eq\('owner_id', ownerId\)/);
   assert.match(route, /isGoogleFileNotFoundError/);
   assert.match(route, /uploadGoogleSource/);
+  assert.match(route, /sourceFileUri = canonicalGoogleFileUri\(googleFile\)/);
   assert.match(migration, /create table if not exists public\.video_assets/i);
   assert.match(migration, /video_assets_owner_select/);
   assert.match(migration, /omfit-video-inputs/);
