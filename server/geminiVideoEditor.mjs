@@ -9,12 +9,23 @@ export const VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 export const VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 export const VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
 export const VIDEO_EDITOR_MAX_BYTES = 100 * 1024 * 1024;
+export const VIDEO_EDITOR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const VIDEO_EDITOR_FILE_RECOVERY_LIMIT = 2;
+export const GEMINI_OMNI_INPUT_USD_PER_MILLION_TOKENS = 1.5;
+export const GEMINI_OMNI_TEXT_OUTPUT_USD_PER_MILLION_TOKENS = 9;
+export const GEMINI_OMNI_VIDEO_OUTPUT_USD_PER_MILLION_TOKENS = 17.5;
+export const GEMINI_OMNI_VIDEO_TOKENS_PER_SECOND = 5_792;
 
 export const VIDEO_EDITOR_MIME_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
   'video/webm'
+]);
+
+export const VIDEO_EDITOR_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp'
 ]);
 
 function parseJsonError(value) {
@@ -86,16 +97,26 @@ export function normalizeOwnedVideoInputPath(ownerId, bucket, storagePath) {
 
 export function buildGeminiVideoEditRequest({
   prompt,
+  mode = 'edit-video',
   fileUri,
+  imageData,
   mimeType = 'video/mp4',
   previousInteractionId,
   resolution = '720p',
+  aspectRatio = '16:9',
   includeResolution = true
 }) {
   const mediaResolution = resolution === '1080p' ? 'ultra_high' : 'high';
   const input = previousInteractionId
     ? prompt
-    : [
+    : mode === 'text-to-video'
+      ? prompt
+      : mode === 'image-to-video'
+        ? [
+            { type: 'image', data: imageData, mime_type: mimeType },
+            { type: 'text', text: prompt }
+          ]
+        : [
         {
           type: 'document',
           uri: fileUri,
@@ -105,13 +126,88 @@ export function buildGeminiVideoEditRequest({
         { type: 'text', text: prompt }
       ];
 
+  const task = previousInteractionId || mode === 'continue'
+    ? 'edit'
+    : mode === 'image-to-video'
+      ? 'image_to_video'
+      : mode === 'text-to-video' ? 'text_to_video' : 'edit';
+
   return {
     model: GEMINI_VIDEO_EDITOR_MODEL,
     input,
     store: true,
     background: true,
-    response_format: { type: 'video', delivery: 'uri' },
+    response_format: {
+      type: 'video',
+      delivery: 'uri',
+      aspect_ratio: aspectRatio === '9:16' ? '9:16' : '16:9'
+    },
+    generation_config: { video_config: { task } },
     ...(previousInteractionId ? { previous_interaction_id: previousInteractionId } : {})
+  };
+}
+
+function numericValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function modalityTokens(entries, modality) {
+  return (Array.isArray(entries) ? entries : []).reduce((total, entry) => (
+    String(entry?.modality || '').toLowerCase() === modality
+      ? total + numericValue(entry?.tokens)
+      : total
+  ), 0);
+}
+
+export function readMp4DurationSeconds(buffer) {
+  if (!Buffer.isBuffer(buffer)) return null;
+  for (let index = 4; index + 32 < buffer.length; index += 1) {
+    if (buffer.toString('ascii', index, index + 4) !== 'mvhd') continue;
+    const version = buffer[index + 4];
+    if (version === 1 && index + 36 <= buffer.length) {
+      const timescale = buffer.readUInt32BE(index + 24);
+      const duration = Number(buffer.readBigUInt64BE(index + 28));
+      return timescale > 0 && duration >= 0 ? duration / timescale : null;
+    }
+    if (version === 0 && index + 24 <= buffer.length) {
+      const timescale = buffer.readUInt32BE(index + 16);
+      const duration = buffer.readUInt32BE(index + 20);
+      return timescale > 0 ? duration / timescale : null;
+    }
+  }
+  return null;
+}
+
+export function calculateVideoTelemetry(usage, videoBuffer) {
+  const inputTokens = numericValue(usage?.total_input_tokens);
+  const outputVideoTokens = modalityTokens(usage?.output_tokens_by_modality, 'video');
+  const outputTextTokens = modalityTokens(usage?.output_tokens_by_modality, 'text');
+  const unclassifiedOutputTokens = outputVideoTokens || outputTextTokens
+    ? 0
+    : numericValue(usage?.total_output_tokens);
+  const parsedDuration = readMp4DurationSeconds(videoBuffer);
+  const outputDurationSeconds = outputVideoTokens > 0
+    ? outputVideoTokens / GEMINI_OMNI_VIDEO_TOKENS_PER_SECOND
+    : parsedDuration;
+  const outputCost = (
+    outputVideoTokens * GEMINI_OMNI_VIDEO_OUTPUT_USD_PER_MILLION_TOKENS
+    + outputTextTokens * GEMINI_OMNI_TEXT_OUTPUT_USD_PER_MILLION_TOKENS
+    + unclassifiedOutputTokens * GEMINI_OMNI_VIDEO_OUTPUT_USD_PER_MILLION_TOKENS
+  ) / 1_000_000;
+  const estimatedCostUsd = (
+    inputTokens * GEMINI_OMNI_INPUT_USD_PER_MILLION_TOKENS / 1_000_000
+    + outputCost
+  );
+  const durationFallbackCost = outputDurationSeconds
+    ? outputDurationSeconds * 0.1
+    : 0;
+
+  return {
+    inputTokens,
+    outputVideoTokens: outputVideoTokens || unclassifiedOutputTokens,
+    outputDurationSeconds: outputDurationSeconds || null,
+    estimatedCostUsd: estimatedCostUsd || durationFallbackCost || null
   };
 }
 

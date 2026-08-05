@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import {
   buildGeminiVideoEditRequest,
+  calculateVideoTelemetry,
   createVideoEditorTicket,
   extractVideoFromInteraction,
   friendlyGoogleApiError,
@@ -9,8 +10,10 @@ import {
   normalizeOwnedVideoInputPath,
   verifyVideoEditorTicket,
   VIDEO_EDITOR_FILE_RECOVERY_LIMIT,
+  VIDEO_EDITOR_IMAGE_MIME_TYPES,
   VIDEO_EDITOR_JOB_TICKET_TTL_MS,
   VIDEO_EDITOR_MAX_BYTES,
+  VIDEO_EDITOR_MAX_IMAGE_BYTES,
   VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS,
   VIDEO_EDITOR_MIME_TYPES,
   VIDEO_EDITOR_OUTPUT_BUCKET,
@@ -76,6 +79,7 @@ function assertTicket(value, expectedKind, ownerId, ttlMs, getEnv) {
 }
 
 function mapVideoAsset(row) {
+  const allowedModes = new Set(['text-to-video', 'image-to-video', 'edit-video', 'continue']);
   return {
     id: row.id,
     url: row.public_url,
@@ -84,11 +88,18 @@ function mapVideoAsset(row) {
     promptVi: row.prompt_vi || '',
     promptEn: row.prompt_en || '',
     resolution: row.resolution === '1080p' ? '1080p' : '720p',
+    aspectRatio: row.aspect_ratio === '9:16' ? '9:16' : '16:9',
+    generationMode: allowedModes.has(row.generation_mode) ? row.generation_mode : 'edit-video',
     fileName: row.file_name,
     mimeType: row.mime_type || 'video/mp4',
     storagePath: row.storage_path,
     sourceStoragePath: row.source_storage_path || undefined,
     bytes: Number(row.bytes) || undefined,
+    renderDurationMs: Number(row.render_duration_ms) || undefined,
+    estimatedCostUsd: Number(row.estimated_cost_usd) || undefined,
+    outputDurationSeconds: Number(row.output_duration_seconds) || undefined,
+    usedAt: row.used_at || undefined,
+    useCount: Number(row.use_count) || 0,
     createdAt: row.created_at
   };
 }
@@ -185,6 +196,7 @@ async function persistCompletedVideo(supabase, ownerId, job, interaction, apiKey
   const extracted = extractVideoFromInteraction(interaction);
   if (!extracted) throw new Error('Gemini đã hoàn tất nhưng không trả về video.');
   const videoBuffer = await materializeVideo(extracted, apiKey, ai);
+  const telemetry = calculateVideoTelemetry(interaction?.usage, videoBuffer);
   if (videoBuffer.byteLength > VIDEO_EDITOR_MAX_BYTES) {
     const error = new Error('Video đầu ra vượt quá giới hạn 100 MB.');
     error.statusCode = 413;
@@ -222,8 +234,21 @@ async function persistCompletedVideo(supabase, ownerId, job, interaction, apiKey
       prompt_vi: job.promptVi,
       prompt_en: job.promptEn,
       resolution: job.resolution,
+      aspect_ratio: job.aspectRatio,
+      generation_mode: job.generationMode,
+      render_duration_ms: Math.max(0, Date.now() - Number(job.renderStartedAt || job.issuedAt)),
+      estimated_cost_usd: telemetry.estimatedCostUsd,
+      output_duration_seconds: telemetry.outputDurationSeconds,
       status: 'approved',
-      metadata: { usage: interaction?.usage || null }
+      metadata: {
+        usage: interaction?.usage || null,
+        sourceMimeType: job.sourceMimeType || null,
+        pricing: {
+          model: GEMINI_VIDEO_EDITOR_MODEL,
+          basis: telemetry.outputVideoTokens > 0 ? 'provider_tokens' : 'output_duration_estimate',
+          capturedAt: new Date().toISOString()
+        }
+      }
     })
     .select('*')
     .single();
@@ -283,29 +308,47 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
         if (downloadError || !sourceFile) throw new Error(`Không thể đọc video nguồn: ${downloadError?.message || 'tệp rỗng'}`);
         const requestedMimeType = String(request.body?.mimeType || '').split(';')[0].trim().toLowerCase();
         const storedMimeType = String(sourceFile.type || '').split(';')[0].trim().toLowerCase();
+        const inputKind = request.body?.inputKind === 'image' ? 'image' : 'video';
         const mimeType = VIDEO_EDITOR_MIME_TYPES.has(storedMimeType)
           ? storedMimeType
-          : requestedMimeType;
-        if (!VIDEO_EDITOR_MIME_TYPES.has(mimeType)) {
-          const error = new Error('Chỉ hỗ trợ video MP4, MOV hoặc WEBM.');
+          : VIDEO_EDITOR_IMAGE_MIME_TYPES.has(storedMimeType) ? storedMimeType : requestedMimeType;
+        const allowedMimeTypes = inputKind === 'image'
+          ? VIDEO_EDITOR_IMAGE_MIME_TYPES
+          : VIDEO_EDITOR_MIME_TYPES;
+        if (!allowedMimeTypes.has(mimeType)) {
+          const error = new Error(inputKind === 'image'
+            ? 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP.'
+            : 'Chỉ hỗ trợ video MP4, MOV hoặc WEBM.');
           error.statusCode = 415;
           error.code = 'video_editor_source_type_invalid';
           throw error;
         }
-        const googleFile = await uploadGoogleSource(supabase, ai, storagePath, mimeType, sourceFile);
+        const maxBytes = inputKind === 'image' ? VIDEO_EDITOR_MAX_IMAGE_BYTES : VIDEO_EDITOR_MAX_BYTES;
+        if (sourceFile.size > maxBytes) {
+          const error = new Error(inputKind === 'image'
+            ? 'Ảnh nguồn vượt quá giới hạn 10 MB.'
+            : 'Video nguồn vượt quá giới hạn 100 MB.');
+          error.statusCode = 413;
+          error.code = 'video_editor_source_too_large';
+          throw error;
+        }
+        const googleFile = inputKind === 'video'
+          ? await uploadGoogleSource(supabase, ai, storagePath, mimeType, sourceFile)
+          : null;
         const sourceTicket = createVideoEditorTicket({
           version: 1,
           kind: 'source',
           issuedAt: Date.now(),
           ownerId,
-          googleFileName: googleFile.name,
-          googleFileUri: googleFile.uri,
+          googleFileName: googleFile?.name || null,
+          googleFileUri: googleFile?.uri || null,
           sourceStoragePath: storagePath,
           mimeType,
+          inputKind,
           fileRecoveryCount: 0,
           originalFileName: String(request.body?.fileName || 'video-source').slice(0, 200)
         }, ticketSecret(getEnv));
-        const state = normalizedState(googleFile.state);
+        const state = inputKind === 'image' ? 'ACTIVE' : normalizedState(googleFile.state);
         if (state === 'FAILED') throw new Error('Gemini không thể xử lý video nguồn.');
         return response.status(state === 'ACTIVE' ? 200 : 202).json({
           status: state === 'ACTIVE' ? 'ready' : 'processing',
@@ -322,6 +365,9 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           VIDEO_EDITOR_SOURCE_TICKET_TTL_MS,
           getEnv
         );
+        if (sourceJob.inputKind === 'image') {
+          return response.json({ status: 'ready', ticket: request.body.ticket });
+        }
         let googleFile;
         try {
           googleFile = await ai.files.get({
@@ -364,10 +410,23 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           throw error;
         }
         const resolution = request.body?.resolution === '1080p' ? '1080p' : '720p';
+        const aspectRatio = request.body?.aspectRatio === '9:16' ? '9:16' : '16:9';
+        const allowedModes = new Set(['text-to-video', 'image-to-video', 'edit-video', 'continue']);
+        const generationMode = allowedModes.has(request.body?.mode)
+          ? request.body.mode
+          : 'edit-video';
+        const renderStartedAt = Date.now();
         let sourceJob = null;
         let parentAsset = null;
+        let imageData = null;
         const previousAssetId = String(request.body?.previousAssetId || '').trim();
-        if (previousAssetId) {
+        if (generationMode === 'continue') {
+          if (!previousAssetId) {
+            const error = new Error('Hãy chọn một phiên bản video để tiếp tục chỉnh sửa.');
+            error.statusCode = 400;
+            error.code = 'video_editor_parent_missing';
+            throw error;
+          }
           if (!isUuid(previousAssetId)) {
             const error = new Error('Mã video trước không hợp lệ.');
             error.statusCode = 400;
@@ -388,7 +447,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
             throw error;
           }
           parentAsset = data;
-        } else {
+        } else if (generationMode !== 'text-to-video') {
           sourceJob = assertTicket(
             request.body?.sourceTicket,
             'source',
@@ -396,30 +455,58 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
             VIDEO_EDITOR_SOURCE_TICKET_TTL_MS,
             getEnv
           );
-          let googleFile;
-          try {
-            googleFile = await ai.files.get({
-              name: sourceJob.googleFileName,
-              config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
-            });
-          } catch (error) {
-            if (isGoogleFileNotFoundError(error)) throw sourceFileMissingError();
+          const expectedInputKind = generationMode === 'image-to-video' ? 'image' : 'video';
+          if ((sourceJob.inputKind || 'video') !== expectedInputKind) {
+            const error = new Error(generationMode === 'image-to-video'
+              ? 'Chế độ Ảnh thành video cần một ảnh nguồn.'
+              : 'Chế độ Sửa video cần một video nguồn.');
+            error.statusCode = 400;
+            error.code = 'video_editor_source_mode_mismatch';
             throw error;
           }
-          if (normalizedState(googleFile.state) !== 'ACTIVE') {
-            const error = new Error('Video nguồn chưa xử lý xong.');
-            error.statusCode = 409;
-            error.code = 'video_editor_source_processing';
-            throw error;
+          if (expectedInputKind === 'image') {
+            const { data: sourceImage, error: imageError } = await supabase.storage
+              .from(VIDEO_EDITOR_SOURCE_BUCKET)
+              .download(sourceJob.sourceStoragePath);
+            if (imageError || !sourceImage) {
+              throw new Error(`Không thể đọc ảnh nguồn: ${imageError?.message || 'tệp rỗng'}`);
+            }
+            if (sourceImage.size > VIDEO_EDITOR_MAX_IMAGE_BYTES) {
+              const error = new Error('Ảnh nguồn vượt quá giới hạn 10 MB.');
+              error.statusCode = 413;
+              error.code = 'video_editor_source_too_large';
+              throw error;
+            }
+            imageData = Buffer.from(await sourceImage.arrayBuffer()).toString('base64');
+          } else {
+            let googleFile;
+            try {
+              googleFile = await ai.files.get({
+                name: sourceJob.googleFileName,
+                config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
+              });
+            } catch (error) {
+              if (isGoogleFileNotFoundError(error)) throw sourceFileMissingError();
+              throw error;
+            }
+            if (normalizedState(googleFile.state) !== 'ACTIVE') {
+              const error = new Error('Video nguồn chưa xử lý xong.');
+              error.statusCode = 409;
+              error.code = 'video_editor_source_processing';
+              throw error;
+            }
           }
         }
         const promptEn = await translatePrompt(ai, promptVi, getEnv);
         const requestOptions = {
           prompt: promptEn,
+          mode: generationMode,
           fileUri: sourceJob?.googleFileUri,
+          imageData,
           mimeType: sourceJob?.mimeType,
           previousInteractionId: parentAsset?.provider_interaction_id,
-          resolution
+          resolution,
+          aspectRatio
         };
         let interaction;
         try {
@@ -428,7 +515,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
             { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
           );
         } catch (error) {
-          if (!parentAsset && /resolution|invalid|unknown|400|argument/i.test(String(error?.message || ''))) {
+          if (generationMode === 'edit-video' && /resolution|invalid|unknown|400|argument/i.test(String(error?.message || ''))) {
             interaction = await ai.interactions.create(
               buildGeminiVideoEditRequest({ ...requestOptions, includeResolution: false }),
               { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
@@ -442,15 +529,105 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           version: 1,
           kind: 'edit',
           issuedAt: Date.now(),
+          renderStartedAt,
           ownerId,
           interactionId: interaction.id,
           parentAssetId: parentAsset?.id || null,
           sourceStoragePath: sourceJob?.sourceStoragePath || parentAsset?.source_storage_path || null,
+          sourceMimeType: sourceJob?.mimeType || parentAsset?.metadata?.sourceMimeType || null,
           promptVi,
           promptEn,
-          resolution
+          resolution,
+          aspectRatio,
+          generationMode
         }, ticketSecret(getEnv));
         return response.status(202).json({ status: 'pending', ticket: jobTicket });
+      }
+
+      if (operation === 'comparison_source') {
+        fallbackCode = 'video_editor_comparison_failed';
+        const assetId = String(request.body?.assetId || '').trim();
+        if (!isUuid(assetId)) {
+          const error = new Error('Mã video so sánh không hợp lệ.');
+          error.statusCode = 400;
+          error.code = 'video_editor_asset_invalid';
+          throw error;
+        }
+        const { data: asset, error: assetError } = await supabase
+          .from('video_assets')
+          .select('*')
+          .eq('id', assetId)
+          .eq('status', 'approved')
+          .maybeSingle();
+        if (assetError) throw new Error(`Không thể đọc video so sánh: ${assetError.message}`);
+        if (!asset) {
+          const error = new Error('Video so sánh không tồn tại.');
+          error.statusCode = 404;
+          error.code = 'video_editor_asset_missing';
+          throw error;
+        }
+        if (asset.parent_asset_id) {
+          const { data: parent, error: parentError } = await supabase
+            .from('video_assets')
+            .select('public_url')
+            .eq('id', asset.parent_asset_id)
+            .eq('status', 'approved')
+            .maybeSingle();
+          if (parentError) throw new Error(`Không thể đọc phiên bản trước: ${parentError.message}`);
+          return response.json({
+            source: parent?.public_url ? { url: parent.public_url, kind: 'video' } : null
+          });
+        }
+        if (!asset.source_storage_path) return response.json({ source: null });
+        const { data: signed, error: signedError } = await supabase.storage
+          .from(VIDEO_EDITOR_SOURCE_BUCKET)
+          .createSignedUrl(asset.source_storage_path, 60 * 60);
+        if (signedError || !signed?.signedUrl) {
+          throw new Error(`Không thể tạo liên kết video nguồn: ${signedError?.message || 'không có URL'}`);
+        }
+        const sourceMimeType = String(asset.metadata?.sourceMimeType || '');
+        const isImage = asset.generation_mode === 'image-to-video'
+          || sourceMimeType.startsWith('image/');
+        return response.json({
+          source: { url: signed.signedUrl, kind: isImage ? 'image' : 'video' }
+        });
+      }
+
+      if (operation === 'mark_used') {
+        fallbackCode = 'video_editor_mark_used_failed';
+        const assetId = String(request.body?.assetId || '').trim();
+        if (!isUuid(assetId)) {
+          const error = new Error('Mã video không hợp lệ.');
+          error.statusCode = 400;
+          error.code = 'video_editor_asset_invalid';
+          throw error;
+        }
+        const action = request.body?.action === 'selected' ? 'selected' : 'download';
+        const { data: current, error: currentError } = await supabase
+          .from('video_assets')
+          .select('*')
+          .eq('id', assetId)
+          .eq('status', 'approved')
+          .maybeSingle();
+        if (currentError) throw new Error(`Không thể đọc trạng thái sử dụng video: ${currentError.message}`);
+        if (!current) {
+          const error = new Error('Video không tồn tại.');
+          error.statusCode = 404;
+          error.code = 'video_editor_asset_missing';
+          throw error;
+        }
+        const { data: updated, error: updateError } = await supabase
+          .from('video_assets')
+          .update({
+            used_at: new Date().toISOString(),
+            use_count: Number(current.use_count || 0) + 1,
+            last_used_action: action
+          })
+          .eq('id', assetId)
+          .select('*')
+          .single();
+        if (updateError) throw new Error(`Không thể ghi nhận video đã sử dụng: ${updateError.message}`);
+        return response.json(mapVideoAsset(updated));
       }
 
       if (operation === 'poll') {

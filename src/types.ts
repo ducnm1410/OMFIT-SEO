@@ -102,6 +102,10 @@ export interface GeneratedArticle {
 
 export type ImageAspectRatio = '1:1' | '2:3' | '3:2' | '16:9' | '9:16';
 
+export type VideoAspectRatio = '16:9' | '9:16';
+
+export type VideoEditorMode = 'text-to-video' | 'image-to-video' | 'edit-video' | 'continue';
+
 export interface GeneratedImage {
   id: string;
   ownerId?: string;
@@ -133,11 +137,18 @@ export interface GeneratedVideo {
   promptVi: string;
   promptEn: string;
   resolution: '720p' | '1080p';
+  aspectRatio: VideoAspectRatio;
+  generationMode: VideoEditorMode;
   fileName: string;
   mimeType: string;
   storagePath: string;
   sourceStoragePath?: string;
   bytes?: number;
+  renderDurationMs?: number;
+  estimatedCostUsd?: number;
+  outputDurationSeconds?: number;
+  usedAt?: string;
+  useCount: number;
   createdAt: string;
 }
 

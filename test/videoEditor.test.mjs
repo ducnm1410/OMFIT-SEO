@@ -4,11 +4,13 @@ import test from 'node:test';
 
 import {
   buildGeminiVideoEditRequest,
+  calculateVideoTelemetry,
   createVideoEditorTicket,
   friendlyGoogleApiError,
   GEMINI_VIDEO_EDITOR_MODEL,
   isGoogleFileNotFoundError,
   normalizeOwnedVideoInputPath,
+  readMp4DurationSeconds,
   VIDEO_EDITOR_JOB_TICKET_TTL_MS,
   VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS,
   VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS,
@@ -34,7 +36,12 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
   assert.equal(first.model, GEMINI_VIDEO_EDITOR_MODEL);
   assert.equal(first.background, true);
   assert.equal(first.store, true);
-  assert.deepEqual(first.response_format, { type: 'video', delivery: 'uri' });
+  assert.deepEqual(first.response_format, {
+    type: 'video',
+    delivery: 'uri',
+    aspect_ratio: '16:9'
+  });
+  assert.equal(first.generation_config.video_config.task, 'edit');
   assert.equal(first.input[0].type, 'document');
   assert.equal(first.input[0].resolution, 'ultra_high');
 
@@ -45,6 +52,51 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
   });
   assert.equal(chained.input, 'Add light rain');
   assert.equal(chained.previous_interaction_id, 'v1_previous');
+  assert.equal(chained.generation_config.video_config.task, 'edit');
+});
+
+test('AI Video Editor hỗ trợ text, ảnh và tỷ lệ dọc/ngang đúng schema Gemini Omni', () => {
+  const textRequest = buildGeminiVideoEditRequest({
+    mode: 'text-to-video',
+    prompt: 'A calm Pilates studio',
+    aspectRatio: '9:16'
+  });
+  assert.equal(textRequest.input, 'A calm Pilates studio');
+  assert.equal(textRequest.response_format.aspect_ratio, '9:16');
+  assert.equal(textRequest.generation_config.video_config.task, 'text_to_video');
+
+  const imageRequest = buildGeminiVideoEditRequest({
+    mode: 'image-to-video',
+    prompt: 'Slow camera push in',
+    imageData: 'aW1hZ2U=',
+    mimeType: 'image/jpeg',
+    aspectRatio: '16:9'
+  });
+  assert.deepEqual(imageRequest.input, [
+    { type: 'image', data: 'aW1hZ2U=', mime_type: 'image/jpeg' },
+    { type: 'text', text: 'Slow camera push in' }
+  ]);
+  assert.equal(imageRequest.generation_config.video_config.task, 'image_to_video');
+});
+
+test('telemetry video tính thời lượng MP4 và chi phí từ usage Gemini', () => {
+  const buffer = Buffer.alloc(64);
+  buffer.writeUInt32BE(32, 0);
+  buffer.write('mvhd', 4, 'ascii');
+  buffer.writeUInt8(0, 8);
+  buffer.writeUInt32BE(1_000, 20);
+  buffer.writeUInt32BE(8_000, 24);
+  assert.equal(readMp4DurationSeconds(buffer), 8);
+
+  const telemetry = calculateVideoTelemetry({
+    total_input_tokens: 1_000,
+    output_tokens_by_modality: [
+      { modality: 'video', tokens: 57_920 }
+    ]
+  }, buffer);
+  assert.equal(telemetry.outputDurationSeconds, 10);
+  assert.equal(telemetry.outputVideoTokens, 57_920);
+  assert.ok(telemetry.estimatedCostUsd > 1);
 });
 
 test('Railway cho phép Video Editor render 60 phút và transfer tối đa 10 phút', async () => {
@@ -111,6 +163,11 @@ test('UI tải video trực tiếp lên Supabase và API dùng start/poll thay v
   assert.match(component, /AI Video Editor/);
   assert.match(component, /Lịch sử chỉnh sửa/);
   assert.match(component, /Tiếp tục từ bản này/);
+  assert.match(component, /Tạo từ prompt/);
+  assert.match(component, /Ảnh thành video/);
+  assert.match(component, /So sánh Before \/ After/);
+  assert.match(component, /Tỷ lệ video được sử dụng/);
+  assert.match(component, /promptLocked/);
   assert.match(service, /\.from\(sourceBucket\)[\s\S]*?\.upload\(storagePath, file/);
   assert.match(service, /operation: 'prepare'/);
   assert.match(service, /operation: 'start'/);
@@ -136,6 +193,28 @@ test('UI tải video trực tiếp lên Supabase và API dùng start/poll thay v
   assert.match(app, /const AIVideoEditor = lazy/);
   assert.match(app, /activeTab === 'videoeditor'/);
   assert.match(sidebar, /id: 'videoeditor'/);
+});
+
+test('dashboard video lưu telemetry và migration hỗ trợ usage cùng ảnh nguồn', async () => {
+  const [service, route, migration] = await Promise.all([
+    readFile(new URL('../src/services/videoEditorService.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../server/videoEditorRoute.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../supabase/migrations/202608050004_video_editor_productivity.sql', import.meta.url), 'utf8')
+  ]);
+  assert.match(service, /loadVideoEditorAnalytics/);
+  assert.match(service, /rpc\('get_video_editor_analytics'\)/);
+  assert.match(service, /markVideoUsed/);
+  assert.match(service, /loadVideoComparisonSource/);
+  assert.match(route, /render_duration_ms/);
+  assert.match(route, /estimated_cost_usd/);
+  assert.match(route, /operation === 'mark_used'/);
+  assert.match(route, /operation === 'comparison_source'/);
+  assert.match(migration, /generation_mode/);
+  assert.match(migration, /aspect_ratio/);
+  assert.match(migration, /image\/jpeg/);
+  assert.match(migration, /used_at/);
+  assert.match(migration, /create or replace function public\.get_video_editor_analytics/);
+  assert.match(migration, /public\.is_internal_profile_user\(\)/);
 });
 
 test('lịch sử video dùng chung cho người dùng nội bộ', async () => {
