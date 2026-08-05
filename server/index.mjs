@@ -38,6 +38,7 @@ import {
 } from './leonardoImageGeneration.mjs';
 import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
 import { registerVideoEditorRoute } from './videoEditorRoute.mjs';
+import { registerInternalProfileAuthRoute } from './internalProfileAuth.mjs';
 
 dotenv.config({ override: true, quiet: true });
 
@@ -240,6 +241,7 @@ async function requireSupabaseUser(request, response, next) {
   }
 }
 
+registerInternalProfileAuthRoute({ app, getSupabaseAdmin });
 registerVideoEditorRoute({ app, requireSupabaseUser, getSupabaseAdmin, getEnv });
 
 function formatSearchVolume(value) {

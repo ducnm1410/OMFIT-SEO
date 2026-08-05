@@ -1,5 +1,3 @@
-export const INTERNAL_AUTH_EMAIL_DOMAINS = Object.freeze(['omfit.local', 'omfit.app']);
-
 export function normalizeInternalPhone(value) {
   let phone = String(value || '').replace(/\D/g, '');
   if (phone.startsWith('84') && phone.length === 11) {
@@ -8,15 +6,13 @@ export function normalizeInternalPhone(value) {
   return /^0\d{9}$/.test(phone) ? phone : '';
 }
 
-export function buildInternalLoginEmails(value) {
-  const phone = normalizeInternalPhone(value);
-  return phone ? INTERNAL_AUTH_EMAIL_DOMAINS.map((domain) => `${phone}@${domain}`) : [];
-}
-
 export function isInvalidCredentialsError(error) {
   const code = String(error?.code || '').toLowerCase();
   const message = String(error?.message || '').toLowerCase();
-  return code === 'invalid_credentials' || message.includes('invalid login credentials');
+  const status = Number(error?.status || 0);
+  return code === 'invalid_credentials'
+    || message.includes('invalid login credentials')
+    || (!code && status === 401);
 }
 
 export function getInternalLoginErrorMessage(error) {
@@ -37,21 +33,27 @@ export function getInternalLoginErrorMessage(error) {
   return 'Không thể kết nối hệ thống xác thực. Vui lòng thử lại.';
 }
 
-export async function signInInternalUser(auth, phoneInput, password) {
-  const emails = buildInternalLoginEmails(phoneInput);
-  if (!emails.length) {
+export async function signInInternalUser(auth, phoneInput, password, fetchImplementation = fetch) {
+  const phone = normalizeInternalPhone(phoneInput);
+  if (!phone) {
     throw Object.assign(new Error('Invalid internal phone number.'), { code: 'invalid_phone' });
   }
-
-  let lastCredentialsError = null;
-  for (const email of emails) {
-    const { error } = await auth.signInWithPassword({ email, password });
-    if (!error) return;
-    if (!isInvalidCredentialsError(error)) throw error;
-    lastCredentialsError = error;
-  }
-
-  throw lastCredentialsError || Object.assign(new Error('Invalid login credentials.'), {
-    code: 'invalid_credentials'
+  const response = await fetchImplementation('/api/auth/internal-login', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, password })
   });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw Object.assign(new Error(payload.error || 'Internal login failed.'), {
+      code: payload.code || '',
+      status: response.status
+    });
+  }
+  const { error } = await auth.verifyOtp({
+    token_hash: payload.tokenHash,
+    type: payload.verificationType || 'magiclink'
+  });
+  if (error) throw error;
 }
