@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   buildLeonardoGenerationRequest,
+  createLeonardoGenerationTicket,
   DEFAULT_LEONARDO_ASPECT_RATIO,
   LEONARDO_ASPECT_RATIOS,
   LEONARDO_IMAGE_MODEL,
-  resolveLeonardoAspectRatio
+  resolveLeonardoAspectRatio,
+  verifyLeonardoGenerationTicket
 } from '../server/leonardoImageGeneration.mjs';
 
 test('GPT Image 2 dùng đúng model và năm preset aspect ratio của Leonardo', () => {
@@ -71,4 +73,33 @@ test('aspect ratio không hợp lệ bị từ chối và UI gửi lựa chọn 
   assert.match(service, /aspectRatio: options\.aspectRatio/);
   assert.match(server, /resolveLeonardoAspectRatio\(request\.body\?\.aspectRatio\)/);
   assert.match(server, /model: LEONARDO_IMAGE_MODEL/);
+});
+
+test('generation ticket được ký, chống sửa nội dung và ràng buộc job polling', () => {
+  const secret = 'test-only-secret';
+  const job = {
+    version: 1,
+    issuedAt: 1785900000000,
+    ownerId: '11111111-1111-4111-8111-111111111111',
+    generationId: '22222222-2222-4222-8222-222222222222',
+    aspectRatio: '16:9'
+  };
+  const ticket = createLeonardoGenerationTicket(job, secret);
+  assert.deepEqual(verifyLeonardoGenerationTicket(ticket, secret), job);
+  assert.equal(verifyLeonardoGenerationTicket(`${ticket}tampered`, secret), null);
+  assert.equal(verifyLeonardoGenerationTicket(ticket, 'wrong-secret'), null);
+});
+
+test('luồng GPT Image 2 dùng request start/poll ngắn thay cho vòng chờ 45 giây trên server', async () => {
+  const [service, server] = await Promise.all([
+    readFile(new URL('../src/services/leonardoService.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../server/index.mjs', import.meta.url), 'utf8')
+  ]);
+  assert.match(service, /operation: 'start'/);
+  assert.match(service, /operation: 'poll'/);
+  assert.match(service, /attempt < 100/);
+  assert.match(server, /response\.status\(202\)\.json\(\{ status: 'pending', ticket \}\)/);
+  assert.match(server, /verifyLeonardoGenerationTicket/);
+  assert.doesNotMatch(server, /attempt < 18/);
+  assert.doesNotMatch(server, /leonardo_timeout/);
 });

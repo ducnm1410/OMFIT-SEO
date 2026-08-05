@@ -1,5 +1,8 @@
+import crypto from 'node:crypto';
+
 export const LEONARDO_IMAGE_MODEL = 'gpt-image-2';
 export const DEFAULT_LEONARDO_ASPECT_RATIO = '16:9';
+export const LEONARDO_GENERATION_TICKET_TTL_MS = 15 * 60 * 1000;
 
 export const LEONARDO_ASPECT_RATIOS = Object.freeze({
   '1:1': Object.freeze({ width: 1024, height: 1024 }),
@@ -44,4 +47,35 @@ export function buildLeonardoGenerationRequest({
       } : {})
     }
   };
+}
+
+export function createLeonardoGenerationTicket(job, secret) {
+  if (!secret) throw new TypeError('Leonardo generation ticket secret is required');
+  const payload = Buffer.from(JSON.stringify(job)).toString('base64url');
+  const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+export function verifyLeonardoGenerationTicket(ticket, secret) {
+  if (!secret || typeof ticket !== 'string' || ticket.length > 64_000) return null;
+  const separatorIndex = ticket.lastIndexOf('.');
+  if (separatorIndex <= 0) return null;
+  const payload = ticket.slice(0, separatorIndex);
+  const signature = ticket.slice(separatorIndex + 1);
+  const expected = crypto.createHmac('sha256', secret).update(payload).digest();
+  let provided;
+  try {
+    provided = Buffer.from(signature, 'base64url');
+  } catch {
+    return null;
+  }
+  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
+    return null;
+  }
+  try {
+    const job = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return job && typeof job === 'object' ? job : null;
+  } catch {
+    return null;
+  }
 }

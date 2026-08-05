@@ -26,8 +26,11 @@ import {
 } from './mediaPolicy.mjs';
 import {
   buildLeonardoGenerationRequest,
+  createLeonardoGenerationTicket,
+  LEONARDO_GENERATION_TICKET_TTL_MS,
   LEONARDO_IMAGE_MODEL,
-  resolveLeonardoAspectRatio
+  resolveLeonardoAspectRatio,
+  verifyLeonardoGenerationTicket
 } from './leonardoImageGeneration.mjs';
 import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
 
@@ -1815,16 +1818,186 @@ function safeAssetName(value, fallback = 'omfit-image') {
     .slice(0, 80) || fallback;
 }
 
+function mapLeonardoMediaResponse(media) {
+  const metadata = media?.metadata && typeof media.metadata === 'object' ? media.metadata : {};
+  return {
+    id: media.id,
+    url: media.public_url,
+    prompt: media.prompt,
+    altText: media.alt_text,
+    fileName: media.file_name,
+    style: media.style,
+    source: 'leonardo-gpt-image-2',
+    width: Number(media.width || metadata.width) || undefined,
+    height: Number(media.height || metadata.height) || undefined,
+    aspectRatio: metadata.aspectRatio,
+    storagePath: media.storage_path,
+    providerGenerationId: media.provider_generation_id
+  };
+}
+
+async function findPersistedLeonardoGeneration(supabase, ownerId, generationId) {
+  const { data, error } = await supabase
+    .from('media_assets')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .eq('provider', 'leonardo')
+    .eq('provider_generation_id', generationId)
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    throw new ApiError(502, `Không thể kiểm tra ảnh Leonardo đã lưu: ${error.message}`, 'leonardo_media_lookup_failed');
+  }
+  return data ? mapLeonardoMediaResponse(data) : null;
+}
+
+async function pollLeonardoGeneration(apiKey, generationId) {
+  const pollResponse = await fetch(
+    `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
+    {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(20_000)
+    }
+  );
+  if (pollResponse.status === 404 || pollResponse.status === 429 || pollResponse.status >= 500) {
+    return { status: 'PENDING', sourceUrl: '' };
+  }
+  if (!pollResponse.ok) {
+    const detail = await pollResponse.text();
+    throw new ApiError(
+      502,
+      `Leonardo không trả được trạng thái ảnh (${pollResponse.status}): ${detail.slice(0, 300)}`,
+      'leonardo_poll_failed'
+    );
+  }
+  const pollPayload = await pollResponse.json();
+  const status = String(pollPayload?.generations_by_pk?.status || 'PENDING').toUpperCase();
+  if (status === 'FAILED') {
+    throw new ApiError(502, 'Leonardo không thể tạo ảnh từ prompt này.', 'leonardo_generation_failed');
+  }
+  const sourceUrl = status === 'COMPLETE'
+    ? pollPayload?.generations_by_pk?.generated_images?.[0]?.url || ''
+    : '';
+  if (status === 'COMPLETE' && !sourceUrl) {
+    throw new ApiError(502, 'Leonardo đã hoàn tất nhưng không trả về tệp ảnh.', 'leonardo_output_missing');
+  }
+  return { status: sourceUrl ? 'COMPLETE' : 'PENDING', sourceUrl };
+}
+
+async function persistLeonardoGeneration(supabase, ownerId, job, sourceUrl) {
+  const existing = await findPersistedLeonardoGeneration(supabase, ownerId, job.generationId);
+  if (existing) return existing;
+
+  const dimensions = resolveLeonardoAspectRatio(job.aspectRatio);
+  if (!dimensions) {
+    throw new ApiError(400, 'Ticket tạo ảnh chứa tỷ lệ không hợp lệ.', 'leonardo_ticket_invalid');
+  }
+  const imageResponse = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!imageResponse.ok) throw new ApiError(502, 'Không thể tải ảnh từ Leonardo CDN.', 'leonardo_download_failed');
+  const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
+  if (imageBytes.byteLength > 10 * 1024 * 1024) {
+    throw new ApiError(413, 'Ảnh Leonardo vượt quá giới hạn 10 MB.', 'image_too_large');
+  }
+  const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+  const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+  const fileName = `${safeAssetName(job.keyword)}-${job.generationId}.${extension}`;
+  const storagePath = `${ownerId}/${job.articleId || 'library'}/${fileName}`;
+  const { error: uploadError } = await supabase.storage
+    .from(OMFIT_PUBLIC_ASSET_BUCKET)
+    .upload(storagePath, imageBytes, { contentType: mimeType, upsert: true });
+  if (uploadError) throw new ApiError(502, `Không thể lưu ảnh vào Supabase: ${uploadError.message}`, 'image_storage_failed');
+  const { data: publicUrlData } = supabase.storage
+    .from(OMFIT_PUBLIC_ASSET_BUCKET)
+    .getPublicUrl(storagePath);
+  const altText = `OMFIT - ${job.keyword}`;
+  const { data: media, error: mediaError } = await supabase
+    .from('media_assets')
+    .insert({
+      owner_id: ownerId,
+      article_id: job.articleId,
+      brand_profile_id: job.brandProfileId,
+      provider: 'leonardo',
+      provider_generation_id: job.generationId,
+      model: LEONARDO_IMAGE_MODEL,
+      bucket: OMFIT_PUBLIC_ASSET_BUCKET,
+      storage_path: storagePath,
+      public_url: publicUrlData.publicUrl,
+      source_url: sourceUrl,
+      mime_type: mimeType,
+      width: dimensions.width,
+      height: dimensions.height,
+      bytes: imageBytes.byteLength,
+      file_name: fileName,
+      alt_text: altText,
+      prompt: job.prompt,
+      negative_prompt: job.negativePrompt,
+      style: job.style,
+      status: 'approved',
+      metadata: {
+        width: dimensions.width,
+        height: dimensions.height,
+        aspectRatio: dimensions.aspectRatio,
+        brandVersion: job.brandVersion
+      }
+    })
+    .select('*')
+    .single();
+  if (mediaError) {
+    const persisted = await findPersistedLeonardoGeneration(supabase, ownerId, job.generationId);
+    if (persisted) return persisted;
+    throw new ApiError(502, `Không thể lưu metadata ảnh: ${mediaError.message}`, 'media_metadata_failed');
+  }
+  return mapLeonardoMediaResponse(media);
+}
+
 app.post('/api/images/generate', requireSupabaseUser, async (request, response) => {
   try {
     const apiKey = getEnv('LEONARDO_API_KEY');
     if (!apiKey) throw new ApiError(503, 'Chưa cấu hình Leonardo API trên máy chủ.', 'leonardo_missing');
+    const supabase = getSupabaseAdmin();
+    const operation = String(request.body?.operation || 'start').trim().toLowerCase();
+    if (operation === 'poll') {
+      const ticketSecret = getEnv('IMAGE_GENERATION_JOB_SECRET') || getEnv('SUPABASE_SERVICE_ROLE_KEY');
+      const job = verifyLeonardoGenerationTicket(request.body?.ticket, ticketSecret);
+      const issuedAt = Number(job?.issuedAt || 0);
+      if (
+        !job
+        || job.version !== 1
+        || job.ownerId !== request.supabaseUser.id
+        || !job.generationId
+        || !issuedAt
+        || issuedAt > Date.now() + 60_000
+        || Date.now() - issuedAt > LEONARDO_GENERATION_TICKET_TTL_MS
+      ) {
+        throw new ApiError(400, 'Phiên chờ tạo ảnh không hợp lệ hoặc đã hết hạn.', 'leonardo_ticket_invalid');
+      }
+      const existing = await findPersistedLeonardoGeneration(
+        supabase,
+        request.supabaseUser.id,
+        job.generationId
+      );
+      if (existing) return response.json(existing);
+      const generation = await pollLeonardoGeneration(apiKey, job.generationId);
+      if (generation.status !== 'COMPLETE') {
+        return response.status(202).json({ status: 'pending', ticket: request.body.ticket });
+      }
+      const image = await persistLeonardoGeneration(
+        supabase,
+        request.supabaseUser.id,
+        job,
+        generation.sourceUrl
+      );
+      return response.json(image);
+    }
+    if (operation !== 'start') {
+      throw new ApiError(400, 'Thao tác tạo ảnh không hợp lệ.', 'leonardo_operation_invalid');
+    }
     if (request.body?.referenceImage) {
       return response.status(400).json({ error: 'Ảnh tham chiếu cần được tải vào Brand Assets trước khi tạo ảnh.' });
     }
     const prompt = String(request.body?.prompt || '').trim();
-    const style = String(request.body?.style || 'Photorealistic 4K').trim();
-    const keyword = String(request.body?.keyword || 'omfit-seo').trim();
+    const style = String(request.body?.style || 'Photorealistic 4K').trim().slice(0, 100);
+    const keyword = String(request.body?.keyword || 'omfit-seo').trim().slice(0, 200);
     const articleId = String(request.body?.articleId || '').trim() || null;
     const logoAssetId = String(request.body?.logoAssetId || '').trim() || null;
     const imageDimensions = resolveLeonardoAspectRatio(request.body?.aspectRatio);
@@ -1841,7 +2014,9 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
     if (logoAssetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(logoAssetId)) {
       return response.status(400).json({ error: 'Mã logo không hợp lệ.' });
     }
-    const supabase = getSupabaseAdmin();
+    if (articleId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(articleId)) {
+      throw new ApiError(400, 'Mã bài viết không hợp lệ.', 'article_id_invalid');
+    }
     const brand = await getActiveBrandProfile(request.supabaseUser.id);
     let logoAsset = null;
     let leonardoLogoId = null;
@@ -1938,7 +2113,7 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       logoAsset
         ? `Official logo exception: use the supplied reference image ${logoAsset.name} as the only approved OMFIT logo. Preserve its proportions, colors and recognizable mark, place it naturally, and do not invent or redraw a different logo.`
         : 'Do not invent or add a brand logo unless explicitly requested.'
-    ].join('\n');
+    ].join('\n').slice(0, 9999);
     const generationResponse = await fetch('https://cloud.leonardo.ai/api/rest/v2/generations', {
       method: 'POST',
       headers: {
@@ -1978,89 +2153,22 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       );
     }
 
-    let sourceUrl = '';
-    for (let attempt = 0; attempt < 18 && !sourceUrl; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-      const pollResponse = await fetch(
-        `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
-        { headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' } }
-      );
-      if (!pollResponse.ok) continue;
-      const pollPayload = await pollResponse.json();
-      if (pollPayload?.generations_by_pk?.status === 'FAILED') {
-        throw new ApiError(502, 'Leonardo không thể tạo ảnh từ prompt này.', 'leonardo_generation_failed');
-      }
-      if (pollPayload?.generations_by_pk?.status === 'COMPLETE') {
-        sourceUrl = pollPayload.generations_by_pk.generated_images?.[0]?.url || '';
-      }
-    }
-    if (!sourceUrl) throw new ApiError(504, 'Leonardo tạo ảnh quá thời gian chờ.', 'leonardo_timeout');
-
-    const imageResponse = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
-    if (!imageResponse.ok) throw new ApiError(502, 'Không thể tải ảnh từ Leonardo CDN.', 'leonardo_download_failed');
-    const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
-    if (imageBytes.byteLength > 10 * 1024 * 1024) {
-      throw new ApiError(413, 'Ảnh Leonardo vượt quá giới hạn 10 MB.', 'image_too_large');
-    }
-    const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
-    const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
-    const fileName = `${safeAssetName(keyword)}-${Date.now()}.${extension}`;
-    const storagePath = `${request.supabaseUser.id}/${articleId || 'library'}/${fileName}`;
-    const { error: uploadError } = await supabase.storage
-      .from('omfit-public-assets')
-      .upload(storagePath, imageBytes, { contentType: mimeType, upsert: false });
-    if (uploadError) throw new ApiError(502, `Không thể lưu ảnh vào Supabase: ${uploadError.message}`, 'image_storage_failed');
-    const { data: publicUrlData } = supabase.storage
-      .from('omfit-public-assets')
-      .getPublicUrl(storagePath);
-    const altText = `OMFIT - ${keyword}`;
-    const { data: media, error: mediaError } = await supabase
-      .from('media_assets')
-      .insert({
-        owner_id: request.supabaseUser.id,
-        article_id: articleId,
-        brand_profile_id: brand?.id || null,
-        provider: 'leonardo',
-        provider_generation_id: generationId,
-        model: LEONARDO_IMAGE_MODEL,
-        bucket: 'omfit-public-assets',
-        storage_path: storagePath,
-        public_url: publicUrlData.publicUrl,
-        source_url: sourceUrl,
-        mime_type: mimeType,
-        width: imageDimensions.width,
-        height: imageDimensions.height,
-        bytes: imageBytes.byteLength,
-        file_name: fileName,
-        alt_text: altText,
-        prompt: finalPrompt,
-        negative_prompt: brand?.negative_prompt || '',
-        style,
-        status: 'approved',
-        metadata: {
-          width: imageDimensions.width,
-          height: imageDimensions.height,
-          aspectRatio: imageDimensions.aspectRatio,
-          brandVersion: brand?.version || 1
-        }
-      })
-      .select('*')
-      .single();
-    if (mediaError) throw new ApiError(502, `Không thể lưu metadata ảnh: ${mediaError.message}`, 'media_metadata_failed');
-    return response.json({
-      id: media.id,
-      url: media.public_url,
-      prompt: media.prompt,
-      altText: media.alt_text,
-      fileName: media.file_name,
-      style: media.style,
-      source: 'leonardo-gpt-image-2',
-      width: imageDimensions.width,
-      height: imageDimensions.height,
-      aspectRatio: imageDimensions.aspectRatio,
-      storagePath: media.storage_path,
-      providerGenerationId: generationId
-    });
+    const ticketSecret = getEnv('IMAGE_GENERATION_JOB_SECRET') || getEnv('SUPABASE_SERVICE_ROLE_KEY');
+    const ticket = createLeonardoGenerationTicket({
+      version: 1,
+      issuedAt: Date.now(),
+      ownerId: request.supabaseUser.id,
+      generationId,
+      prompt: finalPrompt,
+      style,
+      keyword,
+      articleId,
+      brandProfileId: brand?.id || null,
+      negativePrompt: String(brand?.negative_prompt || '').slice(0, 2000),
+      brandVersion: brand?.version || 1,
+      aspectRatio: imageDimensions.aspectRatio
+    }, ticketSecret);
+    return response.status(202).json({ status: 'pending', ticket });
   } catch (error) {
     return response.status(error instanceof ApiError ? error.statusCode : 502).json({
       error: error instanceof Error ? error.message : 'Không thể tạo và lưu ảnh.',
