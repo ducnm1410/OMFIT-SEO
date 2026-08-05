@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase';
-import { getAuthenticatedUserId } from '../lib/authSession.mjs';
+import {
+  getAuthenticatedUserId,
+  withAuthenticatedSupabaseRetry
+} from '../lib/authSession.mjs';
 import type { GeneratedVideo } from '../types';
 import { ApiClientError, authenticatedFetch } from './apiClient';
 
@@ -139,12 +142,15 @@ export async function generateVideoEdit(options: {
 }
 
 export async function loadVideoLibrary(limit = 30): Promise<GeneratedVideo[]> {
-  const { data, error } = await supabase
-    .from('video_assets')
-    .select('*')
-    .eq('status', 'approved')
-    .order('created_at', { ascending: false })
-    .limit(Math.max(1, Math.min(100, Math.round(limit))));
+  const { data, error } = await withAuthenticatedSupabaseRetry(
+    supabase.auth,
+    () => supabase
+      .from('video_assets')
+      .select('*')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(Math.max(1, Math.min(100, Math.round(limit))))
+  );
   if (error) throw error;
   return (data || []).map((row) => ({
     id: row.id,

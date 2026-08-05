@@ -118,14 +118,15 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void getAuthenticatedSession(supabase.auth)
+    void getAuthenticatedSession(supabase.auth, { forceRefresh: true })
       .then((currentSession) => {
         if (!cancelled) setSession(currentSession);
       })
       .catch(() => {
         if (!cancelled) setSession(null);
       });
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'INITIAL_SESSION') return;
       setSession(nextSession);
     });
     return () => {

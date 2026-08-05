@@ -6,7 +6,8 @@ import {
   AuthSessionExpiredError,
   getAuthenticatedAccessToken,
   getAuthenticatedSession,
-  getAuthenticatedUserId
+  getAuthenticatedUserId,
+  withAuthenticatedSupabaseRetry
 } from '../src/lib/authSession.mjs';
 
 function createAuth({ currentSession = null, refreshedSession = null, refreshError = null } = {}) {
@@ -83,6 +84,31 @@ test('retry 401 buộc refresh dù access token cũ vẫn còn hạn', async () 
   assert.deepEqual(auth.calls, ['getSession', 'refreshSession']);
 });
 
+test('query Supabase 401 refresh session rồi chạy lại đúng một lần', async () => {
+  const auth = createAuth({
+    currentSession: {
+      access_token: 'rejected-token',
+      expires_at: 2_000,
+      user: { id: 'user-1' }
+    },
+    refreshedSession: {
+      access_token: 'replacement-token',
+      expires_at: 3_000,
+      user: { id: 'user-1' }
+    }
+  });
+  let queryCalls = 0;
+  const result = await withAuthenticatedSupabaseRetry(auth, async () => {
+    queryCalls += 1;
+    return queryCalls === 1
+      ? { data: null, error: { status: 401, code: 'UNAUTHORIZED_INVALID_API_KEY' } }
+      : { data: ['restored'], error: null };
+  });
+  assert.deepEqual(result, { data: ['restored'], error: null });
+  assert.equal(queryCalls, 2);
+  assert.deepEqual(auth.calls, ['getSession', 'refreshSession']);
+});
+
 test('refresh token hết hạn sẽ xóa session local và yêu cầu đăng nhập lại', async () => {
   const auth = createAuth({
     currentSession: null,
@@ -110,8 +136,11 @@ test('mọi luồng dữ liệu dùng chung session helper thay cho getUser tr�
     readFile(new URL('../src/App.tsx', import.meta.url), 'utf8')
   ]);
   assert.match(apiClient, /response\.status === 401[\s\S]*forceRefresh: true/);
+  assert.match(videoEditor, /withAuthenticatedSupabaseRetry/);
+  assert.match(contentRepository, /withAuthenticatedSupabaseRetry/);
   assert.doesNotMatch(videoEditor, /supabase\.auth\.getUser\(/);
   assert.doesNotMatch(contentRepository, /supabase\.auth\.getUser\(/);
   assert.doesNotMatch(keywordResearch, /supabase\.auth\.getSession\(/);
-  assert.match(app, /getAuthenticatedSession\(supabase\.auth\)/);
+  assert.match(app, /getAuthenticatedSession\(supabase\.auth, \{ forceRefresh: true \}\)/);
+  assert.match(app, /event === 'INITIAL_SESSION'/);
 });

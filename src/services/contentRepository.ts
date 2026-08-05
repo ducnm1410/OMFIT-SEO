@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase';
-import { getAuthenticatedUserId } from '../lib/authSession.mjs';
+import {
+  getAuthenticatedUserId,
+  withAuthenticatedSupabaseRetry
+} from '../lib/authSession.mjs';
 import type {
   ArticleSource,
   BrandAsset,
@@ -252,14 +255,17 @@ async function requireUserId() {
 
 export async function ensureBrandProfile(): Promise<BrandProfile> {
   const ownerId = await requireUserId();
-  const { data: existing, error: readError } = await supabase
-    .from('brand_profiles')
-    .select('*')
-    .eq('owner_id', ownerId)
-    .eq('is_active', true)
-    .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data: existing, error: readError } = await withAuthenticatedSupabaseRetry(
+    supabase.auth,
+    () => supabase
+      .from('brand_profiles')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .eq('is_active', true)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  );
   if (readError) throw readError;
   if (existing) return mapBrandProfile(existing);
 
@@ -368,11 +374,14 @@ export async function saveBrandProfile(profile: BrandProfile): Promise<BrandProf
 }
 
 export async function loadBrandAssets(brandProfileId: string): Promise<BrandAsset[]> {
-  const { data, error } = await supabase
-    .from('brand_assets')
-    .select('*')
-    .eq('brand_profile_id', brandProfileId)
-    .order('created_at', { ascending: false });
+  const { data, error } = await withAuthenticatedSupabaseRetry(
+    supabase.auth,
+    () => supabase
+      .from('brand_assets')
+      .select('*')
+      .eq('brand_profile_id', brandProfileId)
+      .order('created_at', { ascending: false })
+  );
   if (error) throw error;
   return Promise.all((data || []).map(async (row) => {
     if (row.public_url || row.bucket !== 'omfit-draft-assets') return mapBrandAsset(row);
@@ -454,19 +463,25 @@ export async function uploadBrandAsset(
 
 export async function loadArticles(): Promise<GeneratedArticle[]> {
   const ownerId = await requireUserId();
-  const { data, error } = await supabase
-    .from('articles')
-    .select('*, article_media(role, sort_order, media_assets(*)), article_sources(*)')
-    .order('updated_at', { ascending: false });
+  const { data, error } = await withAuthenticatedSupabaseRetry(
+    supabase.auth,
+    () => supabase
+      .from('articles')
+      .select('*, article_media(role, sort_order, media_assets(*)), article_sources(*)')
+      .order('updated_at', { ascending: false })
+  );
   if (error && (
     error.code === 'PGRST200'
     || error.code === '42P01'
     || String(error.message || '').includes('article_sources')
   )) {
-    const { data: legacyData, error: legacyError } = await supabase
-      .from('articles')
-      .select('*, article_media(role, sort_order, media_assets(*))')
-      .order('updated_at', { ascending: false });
+    const { data: legacyData, error: legacyError } = await withAuthenticatedSupabaseRetry(
+      supabase.auth,
+      () => supabase
+        .from('articles')
+        .select('*, article_media(role, sort_order, media_assets(*))')
+        .order('updated_at', { ascending: false })
+    );
     if (legacyError) throw legacyError;
     return (legacyData || []).map((row) => mapArticle(row, ownerId));
   }
@@ -476,14 +491,17 @@ export async function loadArticles(): Promise<GeneratedArticle[]> {
 
 export async function loadMediaLibrary(limit = 60): Promise<GeneratedImage[]> {
   const safeLimit = Math.max(1, Math.min(100, Math.round(limit)));
-  const { data, error } = await supabase
-    .from('media_assets')
-    .select('*')
-    .eq('status', 'approved')
-    .eq('bucket', 'omfit-public-assets')
-    .not('public_url', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(safeLimit);
+  const { data, error } = await withAuthenticatedSupabaseRetry(
+    supabase.auth,
+    () => supabase
+      .from('media_assets')
+      .select('*')
+      .eq('status', 'approved')
+      .eq('bucket', 'omfit-public-assets')
+      .not('public_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(safeLimit)
+  );
   if (error) throw error;
   return (data || []).map(mapImage).filter((image) => Boolean(image.url));
 }

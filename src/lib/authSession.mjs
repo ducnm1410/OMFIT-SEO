@@ -68,3 +68,20 @@ export async function getAuthenticatedUserId(auth, options) {
   await clearLocalSession(auth);
   throw new AuthSessionExpiredError();
 }
+
+function isAuthenticationQueryError(error) {
+  const status = Number(error?.status || error?.statusCode || 0);
+  const code = String(error?.code || '');
+  const message = String(error?.message || '');
+  return status === 401
+    || /unauthorized|invalid[_ ]api[_ ]key|jwt.*(?:expired|invalid)|token.*(?:expired|invalid)/i
+      .test(`${code} ${message}`);
+}
+
+export async function withAuthenticatedSupabaseRetry(auth, operation) {
+  let result = await operation();
+  if (!isAuthenticationQueryError(result?.error)) return result;
+  await getAuthenticatedSession(auth, { forceRefresh: true });
+  result = await operation();
+  return result;
+}
