@@ -4,7 +4,10 @@ export const GEMINI_VIDEO_EDITOR_MODEL = 'gemini-omni-flash-preview';
 export const VIDEO_EDITOR_SOURCE_BUCKET = 'omfit-video-inputs';
 export const VIDEO_EDITOR_OUTPUT_BUCKET = 'omfit-video-assets';
 export const VIDEO_EDITOR_SOURCE_TICKET_TTL_MS = 47 * 60 * 60 * 1000;
-export const VIDEO_EDITOR_JOB_TICKET_TTL_MS = 30 * 60 * 1000;
+export const VIDEO_EDITOR_JOB_TICKET_TTL_MS = 2 * 60 * 60 * 1000;
+export const VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+export const VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+export const VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
 export const VIDEO_EDITOR_MAX_BYTES = 100 * 1024 * 1024;
 
 export const VIDEO_EDITOR_MIME_TYPES = new Set([

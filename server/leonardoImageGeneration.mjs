@@ -2,7 +2,9 @@ import crypto from 'node:crypto';
 
 export const LEONARDO_IMAGE_MODEL = 'gpt-image-2';
 export const DEFAULT_LEONARDO_ASPECT_RATIO = '16:9';
-export const LEONARDO_GENERATION_TICKET_TTL_MS = 15 * 60 * 1000;
+export const LEONARDO_GENERATION_TICKET_TTL_MS = 60 * 60 * 1000;
+export const LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+export const LEONARDO_MEDIA_DOWNLOAD_TIMEOUT_MS = 2 * 60 * 1000;
 
 export const LEONARDO_ASPECT_RATIOS = Object.freeze({
   '1:1': Object.freeze({ width: 1024, height: 1024 }),

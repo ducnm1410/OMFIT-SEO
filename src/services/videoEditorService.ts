@@ -5,6 +5,10 @@ import { ApiClientError, authenticatedFetch } from './apiClient';
 const sourceBucket = 'omfit-video-inputs';
 const allowedMimeTypes = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
 const maxVideoBytes = 100 * 1024 * 1024;
+const sourcePollIntervalMs = 3_000;
+const sourceMaxPollAttempts = 400;
+const renderPollIntervalMs = 5_000;
+const renderMaxPollAttempts = 720;
 
 function resolveVideoMimeType(file: File) {
   const browserMimeType = String(file.type || '').split(';')[0].trim().toLowerCase();
@@ -90,8 +94,8 @@ export async function prepareSourceVideo(file: File): Promise<PreparedSourceVide
       })
     }) as PendingVideoOperation | { status: 'ready'; ticket: string };
 
-    for (let attempt = 0; isPending(result) && attempt < 100; attempt += 1) {
-      await wait(3000);
+    for (let attempt = 0; isPending(result) && attempt < sourceMaxPollAttempts; attempt += 1) {
+      await wait(sourcePollIntervalMs);
       try {
         result = await authenticatedFetch('/api/video/editor', {
           method: 'POST',
@@ -101,7 +105,7 @@ export async function prepareSourceVideo(file: File): Promise<PreparedSourceVide
         if (!isRetryable(error)) throw error;
       }
     }
-    if (isPending(result)) throw new Error('Video nguồn vẫn đang xử lý sau 5 phút.');
+    if (isPending(result)) throw new Error('Video nguồn vẫn đang xử lý sau 20 phút.');
     return { ticket: result.ticket, storagePath, mimeType, fileName: file.name };
   } catch (error) {
     await supabase.storage.from(sourceBucket).remove([storagePath]).catch(() => undefined);
@@ -120,8 +124,8 @@ export async function generateVideoEdit(options: {
     body: JSON.stringify({ operation: 'start', ...options })
   }) as GeneratedVideo | PendingVideoOperation;
 
-  for (let attempt = 0; isPending(result) && attempt < 120; attempt += 1) {
-    await wait(5000);
+  for (let attempt = 0; isPending(result) && attempt < renderMaxPollAttempts; attempt += 1) {
+    await wait(renderPollIntervalMs);
     try {
       result = await authenticatedFetch('/api/video/editor', {
         method: 'POST',
@@ -131,7 +135,7 @@ export async function generateVideoEdit(options: {
       if (!isRetryable(error)) throw error;
     }
   }
-  if (isPending(result)) throw new Error('Video vẫn đang render sau 10 phút. Vui lòng thử lại sau.');
+  if (isPending(result)) throw new Error('Video vẫn đang render sau 60 phút. Vui lòng thử lại sau.');
   return result;
 }
 

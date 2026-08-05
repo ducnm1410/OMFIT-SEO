@@ -13,6 +13,9 @@ interface PendingLeonardoGeneration {
   ticket: string;
 }
 
+const imagePollIntervalMs = 3_000;
+const imageMaxPollAttempts = 300;
+
 function isPendingGeneration(value: unknown): value is PendingLeonardoGeneration {
   return Boolean(
     value
@@ -60,8 +63,8 @@ export class LeonardoService {
       })
     }) as GeneratedImage | PendingLeonardoGeneration;
 
-    for (let attempt = 0; isPendingGeneration(result) && attempt < 100; attempt += 1) {
-      await wait(3000);
+    for (let attempt = 0; isPendingGeneration(result) && attempt < imageMaxPollAttempts; attempt += 1) {
+      await wait(imagePollIntervalMs);
       try {
         result = await authenticatedFetch('/api/images/generate', {
           method: 'POST',
@@ -73,7 +76,7 @@ export class LeonardoService {
     }
 
     if (isPendingGeneration(result)) {
-      throw new Error('Hệ thống tạo ảnh vẫn đang xử lý sau 5 phút. Vui lòng thử lại sau.');
+      throw new Error('Hệ thống tạo ảnh vẫn đang xử lý sau 15 phút. Vui lòng thử lại sau.');
     }
     return result;
   }

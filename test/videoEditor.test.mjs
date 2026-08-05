@@ -7,6 +7,10 @@ import {
   createVideoEditorTicket,
   GEMINI_VIDEO_EDITOR_MODEL,
   normalizeOwnedVideoInputPath,
+  VIDEO_EDITOR_JOB_TICKET_TTL_MS,
+  VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS,
+  VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS,
+  VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS,
   verifyVideoEditorTicket
 } from '../server/geminiVideoEditor.mjs';
 
@@ -31,6 +35,24 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
   });
   assert.equal(chained.input, 'Add light rain');
   assert.equal(chained.previous_interaction_id, 'v1_previous');
+});
+
+test('Railway cho phép Video Editor render 60 phút và transfer tối đa 10 phút', async () => {
+  assert.equal(VIDEO_EDITOR_JOB_TICKET_TTL_MS, 2 * 60 * 60 * 1000);
+  assert.equal(VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS, 5 * 60 * 1000);
+  assert.equal(VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS, 2 * 60 * 1000);
+  assert.equal(VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS, 10 * 60 * 1000);
+  const [service, route] = await Promise.all([
+    readFile(new URL('../src/services/videoEditorService.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../server/videoEditorRoute.mjs', import.meta.url), 'utf8')
+  ]);
+  assert.match(service, /sourceMaxPollAttempts = 400/);
+  assert.match(service, /renderMaxPollAttempts = 720/);
+  assert.match(service, /sau 20 phút/);
+  assert.match(service, /sau 60 phút/);
+  assert.match(route, /timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS/);
+  assert.match(route, /timeout_ms: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS/);
+  assert.match(route, /AbortSignal\.timeout\(VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS\)/);
 });
 
 test('AI Video Editor giới hạn video nguồn và output ở 100 MB', async () => {
@@ -86,7 +108,7 @@ test('UI tải video trực tiếp lên Supabase và API dùng start/poll thay v
   assert.doesNotMatch(service, /readAsDataURL|videoBase64/);
   assert.match(route, /background: true|buildGeminiVideoEditRequest/);
   assert.match(route, /:download/);
-  assert.match(route, /timeout_ms: 45_000/);
+  assert.match(route, /timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS/);
   assert.match(route, /\.eq\('owner_id', ownerId\)/);
   assert.match(route, /VIDEO_EDITOR_OUTPUT_BUCKET/);
   assert.match(migration, /create table if not exists public\.video_assets/i);

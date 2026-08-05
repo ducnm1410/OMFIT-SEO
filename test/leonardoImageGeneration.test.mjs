@@ -6,7 +6,10 @@ import {
   createLeonardoGenerationTicket,
   DEFAULT_LEONARDO_ASPECT_RATIO,
   LEONARDO_ASPECT_RATIOS,
+  LEONARDO_GENERATION_TICKET_TTL_MS,
   LEONARDO_IMAGE_MODEL,
+  LEONARDO_MEDIA_DOWNLOAD_TIMEOUT_MS,
+  LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS,
   resolveLeonardoAspectRatio,
   verifyLeonardoGenerationTicket
 } from '../server/leonardoImageGeneration.mjs';
@@ -28,6 +31,20 @@ test('GPT Image 2 dùng đúng model và năm preset aspect ratio của Leonardo
     assert.ok(dimensions.width * dimensions.height >= 655_360);
     assert.ok(dimensions.width * dimensions.height <= 8_294_400);
   }
+});
+
+test('Railway cho phép job tạo ảnh chờ 15 phút và request provider 2 phút', async () => {
+  assert.equal(LEONARDO_GENERATION_TICKET_TTL_MS, 60 * 60 * 1000);
+  assert.equal(LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS, 2 * 60 * 1000);
+  assert.equal(LEONARDO_MEDIA_DOWNLOAD_TIMEOUT_MS, 2 * 60 * 1000);
+  const [service, server] = await Promise.all([
+    readFile(new URL('../src/services/leonardoService.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../server/index.mjs', import.meta.url), 'utf8')
+  ]);
+  assert.match(service, /imageMaxPollAttempts = 300/);
+  assert.match(service, /sau 15 phút/);
+  assert.match(server, /AbortSignal\.timeout\(LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS\)/);
+  assert.match(server, /AbortSignal\.timeout\(LEONARDO_MEDIA_DOWNLOAD_TIMEOUT_MS\)/);
 });
 
 test('payload GPT Image 2 gửi quality và reference đúng schema, không gửi strength hoặc style_ids', () => {
@@ -97,7 +114,7 @@ test('luồng GPT Image 2 dùng request start/poll ngắn thay cho vòng chờ 4
   ]);
   assert.match(service, /operation: 'start'/);
   assert.match(service, /operation: 'poll'/);
-  assert.match(service, /attempt < 100/);
+  assert.match(service, /attempt < imageMaxPollAttempts/);
   assert.match(server, /response\.status\(202\)\.json\(\{ status: 'pending', ticket \}\)/);
   assert.match(server, /verifyLeonardoGenerationTicket/);
   assert.doesNotMatch(server, /attempt < 18/);

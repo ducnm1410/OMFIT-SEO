@@ -31,6 +31,8 @@ import {
   createLeonardoGenerationTicket,
   LEONARDO_GENERATION_TICKET_TTL_MS,
   LEONARDO_IMAGE_MODEL,
+  LEONARDO_MEDIA_DOWNLOAD_TIMEOUT_MS,
+  LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS,
   resolveLeonardoAspectRatio,
   verifyLeonardoGenerationTicket
 } from './leonardoImageGeneration.mjs';
@@ -1867,7 +1869,7 @@ async function pollLeonardoGeneration(apiKey, generationId) {
     `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
     {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
-      signal: AbortSignal.timeout(20_000)
+      signal: AbortSignal.timeout(LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS)
     }
   );
   if (pollResponse.status === 404 || pollResponse.status === 429 || pollResponse.status >= 500) {
@@ -1903,7 +1905,9 @@ async function persistLeonardoGeneration(supabase, ownerId, job, sourceUrl) {
   if (!dimensions) {
     throw new ApiError(400, 'Ticket tạo ảnh chứa tỷ lệ không hợp lệ.', 'leonardo_ticket_invalid');
   }
-  const imageResponse = await fetch(sourceUrl, { signal: AbortSignal.timeout(30_000) });
+  const imageResponse = await fetch(sourceUrl, {
+    signal: AbortSignal.timeout(LEONARDO_MEDIA_DOWNLOAD_TIMEOUT_MS)
+  });
   if (!imageResponse.ok) throw new ApiError(502, 'Không thể tải ảnh từ Leonardo CDN.', 'leonardo_download_failed');
   const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
   if (imageBytes.byteLength > 10 * 1024 * 1024) {
@@ -2082,7 +2086,7 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
           Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({ extension }),
-        signal: AbortSignal.timeout(30_000)
+        signal: AbortSignal.timeout(LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS)
       });
       if (!initResponse.ok) {
         const detail = await initResponse.text();
@@ -2101,7 +2105,7 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       const uploadResponse = await fetch(upload.url, {
         method: 'POST',
         body: formData,
-        signal: AbortSignal.timeout(30_000)
+        signal: AbortSignal.timeout(LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS)
       });
       if (!uploadResponse.ok) {
         const detail = await uploadResponse.text();
@@ -2144,7 +2148,7 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
         aspectRatio: imageDimensions.aspectRatio,
         uploadedImageId: leonardoReferenceId
       })),
-      signal: AbortSignal.timeout(30_000)
+      signal: AbortSignal.timeout(LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS)
     });
     if (!generationResponse.ok) {
       const detail = await generationResponse.text();

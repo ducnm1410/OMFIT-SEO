@@ -8,8 +8,11 @@ import {
   verifyVideoEditorTicket,
   VIDEO_EDITOR_JOB_TICKET_TTL_MS,
   VIDEO_EDITOR_MAX_BYTES,
+  VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS,
   VIDEO_EDITOR_MIME_TYPES,
   VIDEO_EDITOR_OUTPUT_BUCKET,
+  VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS,
+  VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS,
   VIDEO_EDITOR_SOURCE_BUCKET,
   VIDEO_EDITOR_SOURCE_TICKET_TTL_MS
 } from './geminiVideoEditor.mjs';
@@ -101,7 +104,10 @@ async function materializeVideo(extracted, apiKey, ai) {
   }
   const fileMatch = url.pathname.match(/\/(files\/[a-zA-Z0-9_-]+)$/);
   if (!fileMatch) throw new Error('Gemini trả về mã tệp video không hợp lệ.');
-  const googleFile = await ai.files.get({ name: fileMatch[1] });
+  const googleFile = await ai.files.get({
+    name: fileMatch[1],
+    config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
+  });
   const fileState = normalizedState(googleFile.state);
   if (fileState === 'FAILED') throw new Error('Gemini không thể hoàn tất tệp video đầu ra.');
   if (fileState !== 'ACTIVE') throw new VideoNotReadyError('Video output is still processing.');
@@ -112,7 +118,7 @@ async function materializeVideo(extracted, apiKey, ai) {
   downloadUrl.searchParams.set('alt', 'media');
   const result = await fetch(downloadUrl, {
     headers: { 'x-goog-api-key': apiKey },
-    signal: AbortSignal.timeout(30_000)
+    signal: AbortSignal.timeout(VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS)
   });
   if ([404, 409, 425, 429].includes(result.status) || result.status >= 500) {
     throw new VideoNotReadyError('Video output is still processing.');
@@ -243,7 +249,10 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
         }
         const googleFile = await ai.files.upload({
           file: new Blob([await sourceFile.arrayBuffer()], { type: mimeType }),
-          config: { mimeType }
+          config: {
+            mimeType,
+            httpOptions: { timeout: VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS }
+          }
         });
         const sourceTicket = createVideoEditorTicket({
           version: 1,
@@ -273,7 +282,10 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           VIDEO_EDITOR_SOURCE_TICKET_TTL_MS,
           getEnv
         );
-        const googleFile = await ai.files.get({ name: sourceJob.googleFileName });
+        const googleFile = await ai.files.get({
+          name: sourceJob.googleFileName,
+          config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
+        });
         const state = normalizedState(googleFile.state);
         if (state === 'FAILED') throw new Error('Gemini không thể xử lý video nguồn.');
         const refreshedTicket = createVideoEditorTicket({
@@ -329,7 +341,10 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
             VIDEO_EDITOR_SOURCE_TICKET_TTL_MS,
             getEnv
           );
-          const googleFile = await ai.files.get({ name: sourceJob.googleFileName });
+          const googleFile = await ai.files.get({
+            name: sourceJob.googleFileName,
+            config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
+          });
           if (normalizedState(googleFile.state) !== 'ACTIVE') {
             const error = new Error('Video nguồn chưa xử lý xong.');
             error.statusCode = 409;
@@ -349,13 +364,13 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
         try {
           interaction = await ai.interactions.create(
             buildGeminiVideoEditRequest({ ...requestOptions, includeResolution: true }),
-            { timeout_ms: 45_000 }
+            { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
           );
         } catch (error) {
           if (!parentAsset && /resolution|invalid|unknown|400|argument/i.test(String(error?.message || ''))) {
             interaction = await ai.interactions.create(
               buildGeminiVideoEditRequest({ ...requestOptions, includeResolution: false }),
-              { timeout_ms: 45_000 }
+              { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
             );
           } else {
             throw error;
@@ -388,7 +403,11 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
         );
         const existing = await findVideoAsset(supabase, ownerId, editJob.interactionId);
         if (existing) return response.json(mapVideoAsset(existing));
-        const interaction = await ai.interactions.get(editJob.interactionId);
+        const interaction = await ai.interactions.get(
+          editJob.interactionId,
+          {},
+          { timeout_ms: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS }
+        );
         const status = String(interaction?.status || 'in_progress').toLowerCase();
         if (['failed', 'cancelled', 'incomplete'].includes(status)) {
           const error = new Error(`Gemini kết thúc interaction với trạng thái ${status}.`);
