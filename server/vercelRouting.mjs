@@ -1,6 +1,7 @@
 const multiplexedRoutes = new Map([
   ['research-sources', '/api/research/sources'],
   ['media-register', '/api/media/register'],
+  ['video-editor', '/api/video/editor'],
   ['post-publish-seo', '/api/wordpress/post-publish-seo']
 ]);
 

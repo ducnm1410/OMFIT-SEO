@@ -4,7 +4,7 @@ import { ApiClientError, authenticatedFetch } from './apiClient';
 interface LeonardoGenerationOptions {
   keyword?: string;
   articleId?: string;
-  logoAssetId?: string;
+  referenceAssetId?: string;
   aspectRatio: ImageAspectRatio;
 }
 
@@ -55,7 +55,7 @@ export class LeonardoService {
         style,
         keyword: options.keyword || 'omfit-seo',
         articleId: options.articleId,
-        logoAssetId: options.logoAssetId,
+        referenceAssetId: options.referenceAssetId,
         aspectRatio: options.aspectRatio
       })
     }) as GeneratedImage | PendingLeonardoGeneration;
@@ -73,7 +73,7 @@ export class LeonardoService {
     }
 
     if (isPendingGeneration(result)) {
-      throw new Error('GPT Image 2 vẫn đang xử lý sau 5 phút. Vui lòng thử lại sau.');
+      throw new Error('Hệ thống tạo ảnh vẫn đang xử lý sau 5 phút. Vui lòng thử lại sau.');
     }
     return result;
   }

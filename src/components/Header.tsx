@@ -38,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
     keywords: 'Phân tích keyword',
     generator: 'Soạn bài SEO',
     imagestudio: 'Thư viện hình ảnh',
+    videoeditor: 'AI Video Editor',
     editor: 'Biên tập & xuất bản',
     history: 'Lịch sử bài viết',
     settings: 'Cài đặt thương hiệu'

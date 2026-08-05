@@ -16,6 +16,7 @@
     "wordpress:deploy-agentic": "node scripts/deploy-wordpress-agentic.mjs"
   },
   "dependencies": {
+    "@google/genai": "^2.15.0",
     "@supabase/supabase-js": "^2.110.8",
     "dompurify": "^3.4.12",
     "dotenv": "^17.4.2",

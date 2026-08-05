@@ -43,6 +43,30 @@ test('quản lý ảnh bài viết hỗ trợ cả tạo AI, upload và xóa kh�
   assert.match(source, /aria-label="Chèn ảnh vào nội dung bài"/);
 });
 
+test('Image Studio tải lịch sử Supabase và chỉ gắn ảnh vào bài khi người dùng chọn', async () => {
+  const [studio, repository, app, publisher] = await Promise.all([
+    readFile(new URL('../src/components/ImageStudio.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/contentRepository.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url), 'utf8')
+  ]);
+  const generateFlow = studio.slice(
+    studio.indexOf('const handleGenerate'),
+    studio.indexOf('return (')
+  );
+
+  assert.match(repository, /export async function loadMediaLibrary/);
+  assert.match(repository, /\.from\('media_assets'\)[\s\S]*?\.eq\('owner_id', ownerId\)/);
+  assert.match(repository, /\.not\('public_url', 'is', null\)/);
+  assert.match(repository, /\.order\('created_at', \{ ascending: false \}\)/);
+  assert.match(studio, /Lịch sử hình ảnh/);
+  assert.match(studio, /onSetFeaturedImage\?\./);
+  assert.match(studio, /onInsertInline\?\./);
+  assert.doesNotMatch(generateFlow, /onSetFeaturedImage|onInsertInline/);
+  assert.match(app, /onSetFeaturedImage=\{selectedArticle \? handleImageGenerated : undefined\}/);
+  assert.doesNotMatch(`${studio}\n${publisher}`, /LEONARDO GPT IMAGE 2/);
+});
+
 test('sau khi Gemini trả bài, UI chuyển editor trước khi chờ lưu nền hoàn tất', async () => {
   const generator = await readFile(
     new URL('../src/components/SeoContentGenerator.tsx', import.meta.url),

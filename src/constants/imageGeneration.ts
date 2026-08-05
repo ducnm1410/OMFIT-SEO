@@ -1,4 +1,4 @@
-import type { GeneratedImage, ImageAspectRatio } from '../types';
+import type { ImageAspectRatio } from '../types';
 
 export const DEFAULT_IMAGE_ASPECT_RATIO: ImageAspectRatio = '16:9';
 
@@ -22,12 +22,4 @@ export function isImageAspectRatio(value: unknown): value is ImageAspectRatio {
 export function getImageAspectRatioOption(aspectRatio: ImageAspectRatio) {
   return IMAGE_ASPECT_RATIO_OPTIONS.find((option) => option.ratio === aspectRatio)
     || IMAGE_ASPECT_RATIO_OPTIONS.find((option) => option.ratio === DEFAULT_IMAGE_ASPECT_RATIO)!;
-}
-
-export function getGeneratedImageSourceLabel(source: GeneratedImage['source']) {
-  if (source === 'upload') return 'ẢNH TẢI LÊN';
-  if (source === 'leonardo-gpt-image-2' || source === 'leonardo-chatgpt-2') {
-    return 'LEONARDO GPT IMAGE 2';
-  }
-  return 'LEONARDO BANANA 2';
 }

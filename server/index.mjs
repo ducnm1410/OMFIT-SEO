@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import {
   applyApprovedSourcesToHtml,
@@ -33,11 +35,12 @@ import {
   verifyLeonardoGenerationTicket
 } from './leonardoImageGeneration.mjs';
 import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
+import { registerVideoEditorRoute } from './videoEditorRoute.mjs';
 
 dotenv.config({ override: true, quiet: true });
 
 const app = express();
-const port = Number(process.env.API_PORT || 8787);
+const port = Number(process.env.PORT || process.env.API_PORT || 8787);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
@@ -234,6 +237,8 @@ async function requireSupabaseUser(request, response, next) {
     return response.status(503).json({ error: 'Không thể xác thực phiên đăng nhập lúc này.' });
   }
 }
+
+registerVideoEditorRoute({ app, requireSupabaseUser, getSupabaseAdmin, getEnv });
 
 function formatSearchVolume(value) {
   const number = Number(value || 0);
@@ -1832,7 +1837,13 @@ function mapLeonardoMediaResponse(media) {
     height: Number(media.height || metadata.height) || undefined,
     aspectRatio: metadata.aspectRatio,
     storagePath: media.storage_path,
-    providerGenerationId: media.provider_generation_id
+    providerGenerationId: media.provider_generation_id,
+    referenceAssetId: metadata.referenceAssetId || undefined,
+    referenceAssetType: metadata.referenceAssetType === 'logo' || metadata.referenceAssetType === 'reference'
+      ? metadata.referenceAssetType
+      : undefined,
+    referenceAssetName: metadata.referenceAssetName || undefined,
+    createdAt: media.created_at || undefined
   };
 }
 
@@ -1937,7 +1948,10 @@ async function persistLeonardoGeneration(supabase, ownerId, job, sourceUrl) {
         width: dimensions.width,
         height: dimensions.height,
         aspectRatio: dimensions.aspectRatio,
-        brandVersion: job.brandVersion
+        brandVersion: job.brandVersion,
+        referenceAssetId: job.referenceAssetId || null,
+        referenceAssetType: job.referenceAssetType || null,
+        referenceAssetName: job.referenceAssetName || null
       }
     })
     .select('*')
@@ -1999,7 +2013,9 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
     const style = String(request.body?.style || 'Photorealistic 4K').trim().slice(0, 100);
     const keyword = String(request.body?.keyword || 'omfit-seo').trim().slice(0, 200);
     const articleId = String(request.body?.articleId || '').trim() || null;
-    const logoAssetId = String(request.body?.logoAssetId || '').trim() || null;
+    const referenceAssetId = String(
+      request.body?.referenceAssetId || request.body?.logoAssetId || ''
+    ).trim() || null;
     const imageDimensions = resolveLeonardoAspectRatio(request.body?.aspectRatio);
     if (prompt.length < 10 || prompt.length > 1200) {
       return response.status(400).json({ error: 'Mô tả ảnh phải có từ 10 đến 1200 ký tự.' });
@@ -2011,49 +2027,49 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
         'leonardo_aspect_ratio_invalid'
       );
     }
-    if (logoAssetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(logoAssetId)) {
-      return response.status(400).json({ error: 'Mã logo không hợp lệ.' });
+    if (referenceAssetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(referenceAssetId)) {
+      return response.status(400).json({ error: 'Mã ảnh tham chiếu không hợp lệ.' });
     }
     if (articleId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(articleId)) {
       throw new ApiError(400, 'Mã bài viết không hợp lệ.', 'article_id_invalid');
     }
     const brand = await getActiveBrandProfile(request.supabaseUser.id);
-    let logoAsset = null;
-    let leonardoLogoId = null;
+    let referenceAsset = null;
+    let leonardoReferenceId = null;
 
-    if (logoAssetId) {
+    if (referenceAssetId) {
       const { data, error } = await supabase
         .from('brand_assets')
-        .select('id, name, bucket, storage_path, mime_type')
-        .eq('id', logoAssetId)
+        .select('id, name, asset_type, bucket, storage_path, mime_type')
+        .eq('id', referenceAssetId)
         .eq('owner_id', request.supabaseUser.id)
-        .eq('asset_type', 'logo')
+        .in('asset_type', ['logo', 'reference'])
         .maybeSingle();
-      if (error) throw new ApiError(502, `Không thể đọc logo thương hiệu: ${error.message}`, 'brand_logo_lookup_failed');
-      if (!data) throw new ApiError(400, 'Logo đã chọn không tồn tại hoặc bạn không có quyền sử dụng.', 'brand_logo_invalid');
-      const trustedLogoPath = normalizeOwnedStoragePath(
+      if (error) throw new ApiError(502, `Không thể đọc ảnh tham chiếu: ${error.message}`, 'brand_reference_lookup_failed');
+      if (!data) throw new ApiError(400, 'Ảnh tham chiếu đã chọn không tồn tại hoặc bạn không có quyền sử dụng.', 'brand_reference_invalid');
+      const trustedReferencePath = normalizeOwnedStoragePath(
         request.supabaseUser.id,
         data.bucket,
         data.storage_path
       );
-      if (!trustedLogoPath) {
-        throw new ApiError(400, 'Logo không thuộc kho OMFIT của tài khoản.', 'brand_logo_storage_invalid');
+      if (!trustedReferencePath) {
+        throw new ApiError(400, 'Ảnh tham chiếu không thuộc kho OMFIT của tài khoản.', 'brand_reference_storage_invalid');
       }
-      logoAsset = { ...data, storage_path: trustedLogoPath };
+      referenceAsset = { ...data, storage_path: trustedReferencePath };
 
-      const { data: logoFile, error: logoDownloadError } = await supabase.storage
+      const { data: referenceFile, error: referenceDownloadError } = await supabase.storage
         .from(OMFIT_PUBLIC_ASSET_BUCKET)
-        .download(trustedLogoPath);
-      if (logoDownloadError || !logoFile) {
-        throw new ApiError(502, `Không thể tải logo thương hiệu: ${logoDownloadError?.message || 'tệp rỗng'}`, 'brand_logo_download_failed');
+        .download(trustedReferencePath);
+      if (referenceDownloadError || !referenceFile) {
+        throw new ApiError(502, `Không thể tải ảnh tham chiếu: ${referenceDownloadError?.message || 'tệp rỗng'}`, 'brand_reference_download_failed');
       }
-      if (logoFile.size > 10 * 1024 * 1024) {
-        throw new ApiError(413, 'Logo vượt quá giới hạn 10 MB.', 'brand_logo_too_large');
+      if (referenceFile.size > 10 * 1024 * 1024) {
+        throw new ApiError(413, 'Ảnh tham chiếu vượt quá giới hạn 10 MB.', 'brand_reference_too_large');
       }
 
-      const mimeType = String(logoFile.type || '').split(';')[0].trim().toLowerCase();
+      const mimeType = String(referenceFile.type || '').split(';')[0].trim().toLowerCase();
       if (!publishableImageMimeTypes.has(mimeType)) {
-        throw new ApiError(415, 'Định dạng logo không được hỗ trợ.', 'brand_logo_type_invalid');
+        throw new ApiError(415, 'Định dạng ảnh tham chiếu không được hỗ trợ.', 'brand_reference_type_invalid');
       }
       const extension = mimeType.includes('jpeg') || mimeType.includes('jpg')
         ? 'jpg'
@@ -2070,18 +2086,18 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       });
       if (!initResponse.ok) {
         const detail = await initResponse.text();
-        throw new ApiError(502, `Leonardo không thể khởi tạo logo tham chiếu (${initResponse.status}): ${detail.slice(0, 300)}`, 'leonardo_logo_init_failed');
+        throw new ApiError(502, `Leonardo không thể khởi tạo ảnh tham chiếu (${initResponse.status}): ${detail.slice(0, 300)}`, 'leonardo_reference_init_failed');
       }
       const initPayload = await initResponse.json();
       const upload = initPayload?.uploadInitImage;
       if (!upload?.id || !upload?.url || !upload?.fields) {
-        throw new ApiError(502, 'Leonardo không trả về thông tin tải logo tham chiếu.', 'leonardo_logo_upload_missing');
+        throw new ApiError(502, 'Leonardo không trả về thông tin tải ảnh tham chiếu.', 'leonardo_reference_upload_missing');
       }
 
       const formData = new FormData();
       const uploadFields = typeof upload.fields === 'string' ? JSON.parse(upload.fields) : upload.fields;
       Object.entries(uploadFields || {}).forEach(([key, value]) => formData.append(key, String(value)));
-      formData.append('file', logoFile, `brand-logo.${extension}`);
+      formData.append('file', referenceFile, `brand-reference.${extension}`);
       const uploadResponse = await fetch(upload.url, {
         method: 'POST',
         body: formData,
@@ -2089,9 +2105,9 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       });
       if (!uploadResponse.ok) {
         const detail = await uploadResponse.text();
-        throw new ApiError(502, `Không thể tải logo lên Leonardo (${uploadResponse.status}): ${detail.slice(0, 300)}`, 'leonardo_logo_upload_failed');
+        throw new ApiError(502, `Không thể tải ảnh tham chiếu lên Leonardo (${uploadResponse.status}): ${detail.slice(0, 300)}`, 'leonardo_reference_upload_failed');
       }
-      leonardoLogoId = upload.id;
+      leonardoReferenceId = upload.id;
     }
 
     const styleSuffix = style === 'Modern Tech 3D Render'
@@ -2110,8 +2126,10 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       }).slice(0, 2500)}`,
       `Visual rules: ${JSON.stringify(brand?.visual_rules || {})}`,
       `Avoid: ${[...(brand?.prohibited_elements || []), brand?.negative_prompt || ''].filter(Boolean).join(', ')}`,
-      logoAsset
-        ? `Official logo exception: use the supplied reference image ${logoAsset.name} as the only approved OMFIT logo. Preserve its proportions, colors and recognizable mark, place it naturally, and do not invent or redraw a different logo.`
+      referenceAsset?.asset_type === 'logo'
+        ? `Official logo exception: include the supplied logo reference ${referenceAsset.name} exactly once as the only approved OMFIT logo. Preserve its proportions, colors and recognizable mark, place it naturally, and do not invent or redraw a different logo. This exception overrides any generic no-logo or no-text rule for the supplied official logo.`
+        : referenceAsset?.asset_type === 'reference'
+          ? `Visual reference: use the supplied image ${referenceAsset.name} for composition, lighting, color palette and visual direction. Do not copy any text, watermark or logo visible in the reference unless the prompt explicitly requests it.`
         : 'Do not invent or add a brand logo unless explicitly requested.'
     ].join('\n').slice(0, 9999);
     const generationResponse = await fetch('https://cloud.leonardo.ai/api/rest/v2/generations', {
@@ -2124,7 +2142,7 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       body: JSON.stringify(buildLeonardoGenerationRequest({
         prompt: finalPrompt,
         aspectRatio: imageDimensions.aspectRatio,
-        uploadedImageId: leonardoLogoId
+        uploadedImageId: leonardoReferenceId
       })),
       signal: AbortSignal.timeout(30_000)
     });
@@ -2166,7 +2184,10 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       brandProfileId: brand?.id || null,
       negativePrompt: String(brand?.negative_prompt || '').slice(0, 2000),
       brandVersion: brand?.version || 1,
-      aspectRatio: imageDimensions.aspectRatio
+      aspectRatio: imageDimensions.aspectRatio,
+      referenceAssetId: referenceAsset?.id || null,
+      referenceAssetType: referenceAsset?.asset_type || null,
+      referenceAssetName: referenceAsset?.name || null
     }, ticketSecret);
     return response.status(202).json({ status: 'pending', ticket });
   } catch (error) {
@@ -2346,7 +2367,7 @@ app.post('/api/media/register', requireSupabaseUser, async (request, response) =
     const admin = getSupabaseAdmin();
     const { data: existing, error: existingError } = await admin
       .from('media_assets')
-      .select('id,storage_path,file_name,alt_text,prompt,style,status')
+      .select('id,storage_path,file_name,alt_text,prompt,style,status,created_at')
       .eq('owner_id', ownerId)
       .eq('bucket', object.bucket)
       .eq('storage_path', object.storagePath)
@@ -2382,7 +2403,7 @@ app.post('/api/media/register', requireSupabaseUser, async (request, response) =
             }
           }
         })
-        .select('id,storage_path,file_name,alt_text,prompt,style,status')
+        .select('id,storage_path,file_name,alt_text,prompt,style,status,created_at')
         .single();
       if (error || !data) {
         throw new ApiError(502, 'Không thể đăng ký ảnh vào kho OMFIT.', 'media_registration_failed');
@@ -2397,7 +2418,8 @@ app.post('/api/media/register', requireSupabaseUser, async (request, response) =
       fileName: media.file_name || object.fileName,
       style: media.style || 'Uploaded',
       source: 'upload',
-      storagePath: media.storage_path
+      storagePath: media.storage_path,
+      createdAt: media.created_at || new Date().toISOString()
     });
   } catch (error) {
     return response.status(error instanceof ApiError ? error.statusCode : 502).json({
@@ -3778,9 +3800,18 @@ app.post('/api/keywords/analyze', requireSupabaseUser, async (request, response)
   }
 });
 
+if (!process.env.VERCEL && (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production')) {
+  const distributionDirectory = fileURLToPath(new URL('../dist/', import.meta.url));
+  app.use(express.static(distributionDirectory));
+  app.get('/{*splat}', (request, response, next) => {
+    if (request.path.startsWith('/api/')) return next();
+    return response.sendFile(path.join(distributionDirectory, 'index.html'));
+  });
+}
+
 if (!process.env.VERCEL) {
   app.listen(port, () => {
-    console.log(`OMFIT API listening on http://127.0.0.1:${port}`);
+    console.log(`OMFIT app listening on port ${port}`);
   });
 }
 

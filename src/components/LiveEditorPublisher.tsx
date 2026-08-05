@@ -34,7 +34,6 @@ import { LeonardoService } from '../services/leonardoService';
 import { syncWordpressIndex, uploadMediaFile } from '../services/contentRepository';
 import { ApiClientError } from '../services/apiClient';
 import { auditArticle } from '../services/seoAuditService';
-import { getGeneratedImageSourceLabel } from '../constants/imageGeneration';
 import { ArticleImagePackage } from './ArticleImagePackage';
 import { ArticleSourceResearch } from './ArticleSourceResearch';
 import {
@@ -781,9 +780,9 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               <h3 className="text-xs font-extrabold text-[#071827] uppercase tracking-wider flex items-center gap-1.5">
                 <ImageIcon className="w-4 h-4 text-[#0879D9]" /> Ảnh Đại Diện (Featured Image)
               </h3>
-              {article.featuredImage && (
+              {article.featuredImage?.source === 'upload' && (
                 <span className="text-[9px] font-extrabold px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9]">
-                  {getGeneratedImageSourceLabel(article.featuredImage.source)}
+                  ẢNH TẢI LÊN
                 </span>
               )}
             </div>

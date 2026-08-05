@@ -165,6 +165,12 @@ function mapImage(row: any): GeneratedImage {
     aspectRatio,
     storagePath: row.storage_path,
     providerGenerationId: row.provider_generation_id,
+    referenceAssetId: metadata.referenceAssetId || undefined,
+    referenceAssetType: metadata.referenceAssetType === 'logo' || metadata.referenceAssetType === 'reference'
+      ? metadata.referenceAssetType
+      : undefined,
+    referenceAssetName: metadata.referenceAssetName || undefined,
+    createdAt: row.created_at || undefined,
     caption: row.caption || ''
   };
 }
@@ -393,7 +399,7 @@ export async function uploadBrandAsset(
     webp: 'image/webp'
   };
   const contentType = file.type || mimeTypeByExtension[extension] || 'application/octet-stream';
-  const allowedMimeTypes = assetType === 'logo'
+  const allowedMimeTypes = assetType === 'logo' || assetType === 'reference'
     ? new Set(['image/jpeg', 'image/png', 'image/webp'])
     : new Set([
         'application/pdf',
@@ -463,6 +469,22 @@ export async function loadArticles(): Promise<GeneratedArticle[]> {
   }
   if (error) throw error;
   return (data || []).map(mapArticle);
+}
+
+export async function loadMediaLibrary(limit = 60): Promise<GeneratedImage[]> {
+  const ownerId = await requireUserId();
+  const safeLimit = Math.max(1, Math.min(100, Math.round(limit)));
+  const { data, error } = await supabase
+    .from('media_assets')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .eq('status', 'approved')
+    .eq('bucket', 'omfit-public-assets')
+    .not('public_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(safeLimit);
+  if (error) throw error;
+  return (data || []).map(mapImage).filter((image) => Boolean(image.url));
 }
 
 export async function deleteDraftArticle(articleId: string) {

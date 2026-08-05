@@ -47,6 +47,8 @@ const SeoContentGenerator = lazy(() => import('./components/SeoContentGenerator'
   .then((module) => ({ default: module.SeoContentGenerator })));
 const ImageStudio = lazy(() => import('./components/ImageStudio')
   .then((module) => ({ default: module.ImageStudio })));
+const AIVideoEditor = lazy(() => import('./components/AIVideoEditor')
+  .then((module) => ({ default: module.AIVideoEditor })));
 const LiveEditorPublisher = lazy(() => import('./components/LiveEditorPublisher')
   .then((module) => ({ default: module.LiveEditorPublisher })));
 const PostHistory = lazy(() => import('./components/PostHistory')
@@ -90,7 +92,7 @@ export function App() {
   const [session, setSession] = useState<Session | null>();
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'editor', 'history', 'settings'];
+    const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'videoeditor', 'editor', 'history', 'settings'];
     if (allowedTabs.includes(requestedTab as ActiveTab)) return requestedTab as ActiveTab;
     return allowedTabs.includes(initialWorkflow.activeTab as ActiveTab)
       ? initialWorkflow.activeTab as ActiveTab
@@ -391,7 +393,7 @@ export function App() {
     if (!selectedArticle) return;
     handleSaveArticle({
       ...selectedArticle,
-      featuredImage: newImage
+      featuredImage: { ...newImage, role: 'featured' }
     });
   };
 
@@ -565,10 +567,12 @@ export function App() {
                 asset,
                 ...previous.filter((item) => item.id !== asset.id)
               ])}
-              onImageGenerated={handleImageGenerated}
+              onSetFeaturedImage={selectedArticle ? handleImageGenerated : undefined}
               onInsertInline={selectedArticle ? handleInlineImage : undefined}
             />
           )}
+
+          {activeTab === 'videoeditor' && <AIVideoEditor />}
 
           {activeTab === 'editor' && (
             <LiveEditorPublisher

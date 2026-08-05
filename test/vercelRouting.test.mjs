@@ -33,10 +33,15 @@ test('các endpoint phụ được multiplex nhưng vẫn giữ query gốc', as
     resolveMultiplexedUrl('/api/wordpress/sync-index?__omfit_route=post-publish-seo&source=publish'),
     '/api/wordpress/post-publish-seo?source=publish'
   );
+  assert.equal(
+    resolveMultiplexedUrl('/api/images/generate?__omfit_route=video-editor'),
+    '/api/video/editor'
+  );
 
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
   const rewrites = new Map(config.rewrites.map((rewrite) => [rewrite.source, rewrite.destination]));
   assert.match(rewrites.get('/api/research/sources'), /__omfit_route=research-sources/);
   assert.match(rewrites.get('/api/media/register'), /__omfit_route=media-register/);
+  assert.match(rewrites.get('/api/video/editor'), /__omfit_route=video-editor/);
   assert.match(rewrites.get('/api/wordpress/post-publish-seo'), /__omfit_route=post-publish-seo/);
 });

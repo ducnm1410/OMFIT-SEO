@@ -113,8 +113,28 @@ export interface GeneratedImage {
   aspectRatio?: ImageAspectRatio;
   storagePath?: string;
   providerGenerationId?: string;
+  referenceAssetId?: string;
+  referenceAssetType?: 'logo' | 'reference';
+  referenceAssetName?: string;
+  createdAt?: string;
   caption?: string;
   role?: 'featured' | 'inline';
+}
+
+export interface GeneratedVideo {
+  id: string;
+  url: string;
+  interactionId: string;
+  parentAssetId?: string;
+  promptVi: string;
+  promptEn: string;
+  resolution: '720p' | '1080p';
+  fileName: string;
+  mimeType: string;
+  storagePath: string;
+  sourceStoragePath?: string;
+  bytes?: number;
+  createdAt: string;
 }
 
 export interface SeoIssue {
@@ -224,7 +244,7 @@ export interface ApiSettings {
   defaultAuthor: string;
 }
 
-export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'editor' | 'history' | 'settings';
+export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'videoeditor' | 'editor' | 'history' | 'settings';
 
 export type SeoWorkflowStep = 1 | 2 | 3 | 4;
 

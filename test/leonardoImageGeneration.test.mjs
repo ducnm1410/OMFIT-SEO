@@ -103,3 +103,19 @@ test('luồng GPT Image 2 dùng request start/poll ngắn thay cho vòng chờ 4
   assert.doesNotMatch(server, /attempt < 18/);
   assert.doesNotMatch(server, /leonardo_timeout/);
 });
+
+test('logo và ảnh mẫu đều được gửi làm image reference và lưu provenance', async () => {
+  const [studio, service, server] = await Promise.all([
+    readFile(new URL('../src/components/ImageStudio.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/leonardoService.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../server/index.mjs', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(studio, /asset\.assetType === 'logo' \|\| asset\.assetType === 'reference'/);
+  assert.match(studio, /uploadBrandAsset\(file, brandProfile\.id, assetType\)/);
+  assert.match(studio, /referenceAssetId/);
+  assert.match(service, /referenceAssetId: options\.referenceAssetId/);
+  assert.match(server, /\.in\('asset_type', \['logo', 'reference'\]\)/);
+  assert.match(server, /uploadedImageId: leonardoReferenceId/);
+  assert.match(server, /referenceAssetName: job\.referenceAssetName \|\| null/);
+});

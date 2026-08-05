@@ -19,7 +19,7 @@ export const ImageAspectRatioSelector: React.FC<ImageAspectRatioSelectorProps> =
     <legend className="text-sm font-bold text-slate-700">Tỷ lệ & kích thước (Aspect Ratio Settings)</legend>
     {!compact && (
       <p className="mt-1 text-xs leading-5 text-slate-500">
-        Chọn một kích thước chuẩn được GPT Image 2 hỗ trợ.
+        Chọn tỷ lệ và kích thước đầu ra phù hợp với vị trí sử dụng ảnh.
       </p>
     )}
     <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-5'}`}>

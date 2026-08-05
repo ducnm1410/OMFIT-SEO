@@ -5,6 +5,7 @@ import {
   FilePenLine,
   Image as ImageIcon,
   Edit3,
+  Film,
   History,
   Globe,
   CheckCircle2,
@@ -54,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       label: 'Nội dung',
       items: [
+        { id: 'videoeditor', label: 'AI Video Editor', icon: Film, badge: 'Mới' },
         { id: 'history', label: 'Lịch sử bài viết', icon: History, badge: '' }
       ]
     },
