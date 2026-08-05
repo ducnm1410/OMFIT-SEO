@@ -1,17 +1,8 @@
 import React, { useState } from 'react';
 import { Activity, CheckCircle2, Eye, EyeOff, LockKeyhole } from 'lucide-react';
+import { getInternalLoginErrorMessage, signInInternalUser } from '../lib/internalAuth.mjs';
 import { supabase } from '../lib/supabase';
 import { ButtonContent } from './ButtonContent';
-
-function normalizeLogin(value: string) {
-  const trimmed = value.trim();
-  if (trimmed.includes('@')) return trimmed.toLowerCase();
-  let phone = trimmed.replace(/\D/g, '');
-  if (phone.startsWith('84') && phone.length === 11) {
-    phone = `0${phone.slice(2)}`;
-  }
-  return phone ? `${phone}@omfit.local` : trimmed;
-}
 
 export const LoginScreen: React.FC = () => {
   const [login, setLogin] = useState('');
@@ -25,13 +16,9 @@ export const LoginScreen: React.FC = () => {
     setError('');
     setIsLoading(true);
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: normalizeLogin(login),
-        password
-      });
-      if (signInError) throw signInError;
-    } catch {
-      setError('Thông tin đăng nhập không đúng hoặc tài khoản chưa được kích hoạt.');
+      await signInInternalUser(supabase.auth, login, password);
+    } catch (loginError) {
+      setError(getInternalLoginErrorMessage(loginError));
     } finally {
       setIsLoading(false);
     }
@@ -96,17 +83,18 @@ export const LoginScreen: React.FC = () => {
 
               <div>
                 <label htmlFor="login" className="mb-2 block text-xs font-semibold text-slate-700">
-                  Số điện thoại hoặc email
+                  Số điện thoại
                 </label>
                 <input
                   id="login"
-                  type="text"
+                  type="tel"
+                  inputMode="tel"
                   autoComplete="username"
                   required
                   value={login}
                   onChange={(event) => setLogin(event.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-sm font-medium text-[#17191D] outline-none transition placeholder:text-slate-400 focus:border-[#0879D9] focus:ring-4 focus:ring-sky-100"
-                  placeholder="Nhập tài khoản"
+                  placeholder="Ví dụ: 0912 345 678"
                 />
               </div>
 
