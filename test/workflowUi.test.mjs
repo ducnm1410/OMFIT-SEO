@@ -197,6 +197,24 @@ test('ghi chú kiểm tra SEO trong preview có màu tương phản và dùng au
   assert.match(publisher, /seo-audit-notes__count/);
 });
 
+test('trình xuất bản có ba chế độ xem, sửa HTML và sửa bài trực quan', async () => {
+  const [publisher, css] = await Promise.all([
+    readFile(new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/index.css', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(publisher, /type ArticleEditorView = 'visual' \| 'code' \| 'edit'/);
+  assert.match(publisher, /> Xem trực quan/);
+  assert.match(publisher, /> Chế độ sửa HTML/);
+  assert.match(publisher, /> Chế độ sửa bài/);
+  assert.doesNotMatch(publisher, /Visual Render|HTML Mã Nguồn/);
+  assert.match(publisher, /contentEditable/);
+  assert.match(publisher, /onInput=\{handleInput\}/);
+  assert.match(publisher, /sanitizeArticleHtml\(event\.currentTarget\.innerHTML\)/);
+  assert.match(publisher, /onChange=\{setContentHtml\}/);
+  assert.match(css, /\.article-visual-editor:focus/);
+});
+
 test('sau khi publish tự hậu kiểm Google discovery và đồng bộ lại kho internal link', async () => {
   const publisher = await readFile(
     new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url),

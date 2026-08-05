@@ -63,6 +63,60 @@ interface LiveEditorPublisherProps {
   onWorkflowStepChange: (step: SeoWorkflowStep) => void;
 }
 
+type ArticleEditorView = 'visual' | 'code' | 'edit';
+
+const sanitizeArticleHtml = (html: string) => DOMPurify.sanitize(html, {
+  USE_PROFILES: { html: true },
+  FORBID_TAGS: ['button', 'form', 'input', 'math', 'option', 'select', 'style', 'svg', 'textarea'],
+  FORBID_ATTR: ['style']
+});
+
+interface VisualArticleEditorProps {
+  html: string;
+  onChange: (html: string) => void;
+}
+
+const VisualArticleEditor: React.FC<VisualArticleEditorProps> = ({ html, onChange }) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || isFocusedRef.current || editor.innerHTML === html) return;
+    editor.innerHTML = html;
+  }, [html]);
+
+  const handleInput = (event: React.FormEvent<HTMLDivElement>) => {
+    const nextHtml = sanitizeArticleHtml(event.currentTarget.innerHTML);
+    if (nextHtml !== event.currentTarget.innerHTML) {
+      event.currentTarget.innerHTML = nextHtml;
+    }
+    onChange(nextHtml);
+  };
+
+  return (
+    <div
+      ref={editorRef}
+      className="article-visual-editor"
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label="Nội dung bài viết có thể chỉnh sửa trực quan"
+      aria-multiline="true"
+      onFocus={() => {
+        isFocusedRef.current = true;
+      }}
+      onBlur={() => {
+        isFocusedRef.current = false;
+      }}
+      onInput={handleInput}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('a')) event.preventDefault();
+      }}
+    />
+  );
+};
+
 export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   article,
   wpService,
@@ -80,7 +134,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   const [contentHtml, setContentHtml] = useState(article?.contentHtml || '');
   const [sources, setSources] = useState<ArticleSource[]>(article?.sources || []);
   const [postStatus, setPostStatus] = useState<'draft' | 'publish'>('publish');
-  const [activeView, setActiveView] = useState<'visual' | 'code'>('visual');
+  const [activeView, setActiveView] = useState<ArticleEditorView>('visual');
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishLogs, setPublishLogs] = useState<string[]>([]);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -249,11 +303,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   const previewIssues = (publishAudit || clientAudit).issues
     .filter((issue) => issue.level !== 'success');
 
-  const sanitizedPreviewHtml = DOMPurify.sanitize(contentHtml, {
-    USE_PROFILES: { html: true },
-    FORBID_TAGS: ['button', 'form', 'input', 'math', 'option', 'select', 'style', 'svg', 'textarea'],
-    FORBID_ATTR: ['style']
-  });
+  const sanitizedPreviewHtml = sanitizeArticleHtml(contentHtml);
 
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -892,24 +942,40 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setActiveView('visual')}
+                aria-pressed={activeView === 'visual'}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
                   activeView === 'visual'
                     ? 'bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30'
                     : 'text-slate-500 hover:text-[#0879D9]'
                 }`}
               >
-                <Eye className="w-3.5 h-3.5" /> Xem Trực Quan (Visual Render)
+                <Eye className="w-3.5 h-3.5" /> Xem trực quan
               </button>
               <button
+                type="button"
                 onClick={() => setActiveView('code')}
+                aria-pressed={activeView === 'code'}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
                   activeView === 'code'
                     ? 'bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30'
                     : 'text-slate-500 hover:text-[#0879D9]'
                 }`}
               >
-                <Code className="w-3.5 h-3.5" /> Chế Độ Sửa HTML Mã Nguồn
+                <Code className="w-3.5 h-3.5" /> Chế độ sửa HTML
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('edit')}
+                aria-pressed={activeView === 'edit'}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                  activeView === 'edit'
+                    ? 'bg-[#E0F2FE] text-[#0879D9] border border-[#0879D9]/30'
+                    : 'text-slate-500 hover:text-[#0879D9]'
+                }`}
+              >
+                <Edit3 className="w-3.5 h-3.5" /> Chế độ sửa bài
               </button>
             </div>
 
@@ -928,8 +994,18 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
             </div>
           </div>
 
-          {activeView === 'visual' ? (
-            <div className="article-preview bg-[#233968] rounded-2xl border border-[#40558A] min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
+          {activeView === 'code' ? (
+            <textarea
+              rows={20}
+              value={contentHtml}
+              onChange={(e) => setContentHtml(e.target.value)}
+              aria-label="Mã HTML của bài viết"
+              className="w-full p-4 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] font-mono text-xs focus:outline-none focus:border-[#0879D9]"
+            />
+          ) : (
+            <div className={`article-preview bg-[#233968] rounded-2xl border border-[#40558A] min-h-[450px] prose-custom overflow-y-auto max-h-[680px] ${
+              activeView === 'edit' ? 'article-preview--editing' : ''
+            }`}>
               <h1>{title}</h1>
               {article.featuredImage && (
                 <figure className="mb-6 text-center">
@@ -948,7 +1024,11 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   </figcaption>
                 </figure>
               )}
-              <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewHtml }} />
+              {activeView === 'edit' ? (
+                <VisualArticleEditor html={sanitizedPreviewHtml} onChange={setContentHtml} />
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewHtml }} />
+              )}
               {previewIssues.length > 0 && (
                 <aside className="seo-audit-notes" aria-label="Các mục cần kiểm tra trước khi xuất bản">
                   <div className="seo-audit-notes__header">
@@ -969,13 +1049,6 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                 </aside>
               )}
             </div>
-          ) : (
-            <textarea
-              rows={20}
-              value={contentHtml}
-              onChange={(e) => setContentHtml(e.target.value)}
-              className="w-full p-4 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] font-mono text-xs focus:outline-none focus:border-[#0879D9]"
-            />
           )}
         </div>
       </div>
