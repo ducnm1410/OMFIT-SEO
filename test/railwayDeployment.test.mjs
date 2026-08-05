@@ -24,6 +24,10 @@ test('Railway dùng Docker Node 22 và không chạy npm ci qua Nixpacks cache',
   assert.match(dockerfile, /^FROM node:22\.12\.0-bookworm-slim AS runtime/m);
   assert.match(dockerfile, /RUN npm ci --include=dev/);
   assert.match(dockerfile, /RUN npm ci --omit=dev/);
+  assert.match(dockerfile, /^ARG VITE_SUPABASE_URL$/m);
+  assert.match(dockerfile, /^ARG VITE_SUPABASE_ANON_KEY$/m);
+  assert.doesNotMatch(dockerfile, /^ARG SUPABASE_SERVICE_ROLE_KEY$/m);
+  assert.match(dockerfile, /Missing required build variable/);
   assert.match(dockerfile, /COPY --from=build \/app\/dist \.\/dist/);
   assert.match(dockerfile, /CMD \["npm", "start"\]/);
   assert.match(dockerignore, /^node_modules$/m);
