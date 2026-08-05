@@ -39,6 +39,7 @@ import {
 import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
 import { registerVideoEditorRoute } from './videoEditorRoute.mjs';
 import { registerInternalProfileAuthRoute } from './internalProfileAuth.mjs';
+import { startMediaRetentionScheduler } from './mediaRetention.mjs';
 import { normalizeRuntimeEnvValue } from '../src/lib/runtimeEnv.mjs';
 
 dotenv.config({ override: true, quiet: true });
@@ -3827,6 +3828,13 @@ if (!process.env.VERCEL) {
   app.listen(port, () => {
     console.log(`OMFIT app listening on port ${port}`);
   });
+  const retentionEnabled = getEnv(
+    'MEDIA_RETENTION_ENABLED',
+    process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production' ? 'true' : 'false'
+  ).toLowerCase() !== 'false';
+  if (retentionEnabled) {
+    startMediaRetentionScheduler({ getSupabase: getSupabaseAdmin });
+  }
 }
 
 export {

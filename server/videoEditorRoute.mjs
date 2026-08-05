@@ -343,6 +343,21 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           error.code = 'video_editor_source_too_large';
           throw error;
         }
+        const originalFileName = String(request.body?.fileName || 'video-source').slice(0, 200);
+        const { error: sourceAssetError } = await supabase
+          .from('video_source_assets')
+          .upsert({
+            owner_id: ownerId,
+            bucket: VIDEO_EDITOR_SOURCE_BUCKET,
+            storage_path: storagePath,
+            mime_type: mimeType,
+            bytes: sourceFile.size,
+            file_name: originalFileName,
+            input_kind: inputKind
+          }, { onConflict: 'bucket,storage_path' });
+        if (sourceAssetError) {
+          throw new Error(`Không thể ghi nhận tệp nguồn để tự dọn sau 14 ngày: ${sourceAssetError.message}`);
+        }
         const googleFile = inputKind === 'video'
           ? await uploadGoogleSource(supabase, ai, storagePath, mimeType, sourceFile)
           : null;
@@ -357,7 +372,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           mimeType,
           inputKind,
           fileRecoveryCount: 0,
-          originalFileName: String(request.body?.fileName || 'video-source').slice(0, 200)
+          originalFileName
         }, ticketSecret(getEnv));
         const state = inputKind === 'image' ? 'ACTIVE' : normalizedState(googleFile.state);
         if (state === 'FAILED') throw new Error('Gemini không thể xử lý video nguồn.');
