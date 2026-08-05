@@ -118,20 +118,32 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void getAuthenticatedSession(supabase.auth, { forceRefresh: true })
-      .then((currentSession) => {
-        if (!cancelled) setSession(currentSession);
-      })
-      .catch(() => {
-        if (!cancelled) setSession(null);
+    let unsubscribeAuth = () => {};
+
+    void (async () => {
+      try {
+        const currentSession = await getAuthenticatedSession(
+          supabase.auth,
+          { forceRefresh: true }
+        );
+        if (cancelled) return;
+        setSession(currentSession);
+      } catch {
+        if (cancelled) return;
+        setSession(null);
+      }
+
+      if (cancelled) return;
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+        if (event === 'INITIAL_SESSION') return;
+        setSession(nextSession);
       });
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (event === 'INITIAL_SESSION') return;
-      setSession(nextSession);
-    });
+      unsubscribeAuth = () => authListener.subscription.unsubscribe();
+    })();
+
     return () => {
       cancelled = true;
-      authListener.subscription.unsubscribe();
+      unsubscribeAuth();
     };
   }, []);
 

@@ -141,6 +141,11 @@ test('mọi luồng dữ liệu dùng chung session helper thay cho getUser tr�
   assert.doesNotMatch(videoEditor, /supabase\.auth\.getUser\(/);
   assert.doesNotMatch(contentRepository, /supabase\.auth\.getUser\(/);
   assert.doesNotMatch(keywordResearch, /supabase\.auth\.getSession\(/);
-  assert.match(app, /getAuthenticatedSession\(supabase\.auth, \{ forceRefresh: true \}\)/);
+  assert.match(app, /getAuthenticatedSession\(\s*supabase\.auth,\s*\{ forceRefresh: true \}\s*\)/);
   assert.match(app, /event === 'INITIAL_SESSION'/);
+  assert.ok(
+    app.indexOf('await getAuthenticatedSession')
+      < app.indexOf('supabase.auth.onAuthStateChange'),
+    'listener phải được đăng ký sau khi session ban đầu đã refresh xong'
+  );
 });
