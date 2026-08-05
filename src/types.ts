@@ -98,6 +98,8 @@ export interface GeneratedArticle {
   sources?: ArticleSource[];
 }
 
+export type ImageAspectRatio = '1:1' | '2:3' | '3:2' | '16:9' | '9:16';
+
 export interface GeneratedImage {
   id: string;
   url: string;
@@ -105,7 +107,10 @@ export interface GeneratedImage {
   altText: string;
   fileName: string;
   style: string;
-  source: 'upload' | 'leonardo-nano-banana-2' | 'leonardo-chatgpt-2';
+  source: 'upload' | 'leonardo-nano-banana-2' | 'leonardo-chatgpt-2' | 'leonardo-gpt-image-2';
+  width?: number;
+  height?: number;
+  aspectRatio?: ImageAspectRatio;
   storagePath?: string;
   providerGenerationId?: string;
   caption?: string;

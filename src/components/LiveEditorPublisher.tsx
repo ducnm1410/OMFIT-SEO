@@ -34,6 +34,7 @@ import { LeonardoService } from '../services/leonardoService';
 import { syncWordpressIndex, uploadMediaFile } from '../services/contentRepository';
 import { ApiClientError } from '../services/apiClient';
 import { auditArticle } from '../services/seoAuditService';
+import { getGeneratedImageSourceLabel } from '../constants/imageGeneration';
 import { ArticleImagePackage } from './ArticleImagePackage';
 import { ArticleSourceResearch } from './ArticleSourceResearch';
 import {
@@ -45,6 +46,7 @@ import {
   articleContainsImage,
   buildArticleImageMarkup,
   collectArticleAltTexts,
+  getArticleImageDimensions,
   mergeUniqueArticleImages,
   sectionHasImage
 } from '../utils/articleImageMarkup';
@@ -179,6 +181,9 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     contentHtml,
     sources
   };
+  const featuredImageDimensions = article.featuredImage
+    ? getArticleImageDimensions(article.featuredImage)
+    : { width: 1200, height: 896 };
   const clientAudit = auditArticle(workingArticle);
   const approvedSourceCount = sources.filter(
     (source) => source.approved && source.status !== 'broken'
@@ -778,9 +783,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               </h3>
               {article.featuredImage && (
                 <span className="text-[9px] font-extrabold px-2 py-0.5 rounded bg-[#E0F2FE] text-[#0879D9]">
-                  {article.featuredImage.source === 'upload'
-                    ? 'ẢNH TẢI LÊN'
-                    : 'LEONARDO BANANA 2'}
+                  {getGeneratedImageSourceLabel(article.featuredImage.source)}
                 </span>
               )}
             </div>
@@ -807,8 +810,8 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   <img
                     src={article.featuredImage.url}
                     alt={article.featuredImage.altText}
-                    width={1200}
-                    height={896}
+                    width={featuredImageDimensions.width}
+                    height={featuredImageDimensions.height}
                     loading="lazy"
                     decoding="async"
                     sizes="(max-width: 768px) 100vw, 384px"
@@ -934,8 +937,8 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
                   <img
                     src={article.featuredImage.url}
                     alt={article.featuredImage.altText}
-                    width={1200}
-                    height={896}
+                    width={featuredImageDimensions.width}
+                    height={featuredImageDimensions.height}
                     loading="lazy"
                     decoding="async"
                     sizes="(max-width: 768px) 100vw, 768px"

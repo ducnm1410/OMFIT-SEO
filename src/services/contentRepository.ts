@@ -7,6 +7,7 @@ import type {
   GeneratedImage,
   SeoAuditResult
 } from '../types';
+import { isImageAspectRatio } from '../constants/imageGeneration';
 import { authenticatedFetch } from './apiClient';
 
 const DEFAULT_BRAND_PROFILE: BrandProfile = {
@@ -139,6 +140,18 @@ function mapBrandAsset(row: any, signedUrl?: string): BrandAsset {
 }
 
 function mapImage(row: any): GeneratedImage {
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const model = String(row.model || '');
+  const source: GeneratedImage['source'] = row.provider === 'upload'
+    ? 'upload'
+    : model === 'gpt-image-2'
+      ? 'leonardo-gpt-image-2'
+      : model === 'chatgpt-2'
+        ? 'leonardo-chatgpt-2'
+        : 'leonardo-nano-banana-2';
+  const aspectRatio = isImageAspectRatio(metadata.aspectRatio)
+    ? metadata.aspectRatio
+    : undefined;
   return {
     id: row.id,
     url: row.public_url || row.source_url || '',
@@ -146,7 +159,10 @@ function mapImage(row: any): GeneratedImage {
     altText: row.alt_text || '',
     fileName: row.file_name || 'omfit-image.webp',
     style: row.style || '',
-    source: row.provider === 'upload' ? 'upload' : 'leonardo-nano-banana-2',
+    source,
+    width: Number(row.width || metadata.width) || undefined,
+    height: Number(row.height || metadata.height) || undefined,
+    aspectRatio,
     storagePath: row.storage_path,
     providerGenerationId: row.provider_generation_id,
     caption: row.caption || ''

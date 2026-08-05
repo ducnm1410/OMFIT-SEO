@@ -9,13 +9,21 @@ import {
   Tag,
   Upload
 } from 'lucide-react';
-import type { BrandAsset, BrandProfile, GeneratedImage } from '../types';
+import type { BrandAsset, BrandProfile, GeneratedImage, ImageAspectRatio } from '../types';
 import { LeonardoService } from '../services/leonardoService';
 import { uploadBrandAsset, uploadMediaFile } from '../services/contentRepository';
+import {
+  DEFAULT_IMAGE_ASPECT_RATIO,
+  getGeneratedImageSourceLabel,
+  getImageAspectRatioOption,
+  isImageAspectRatio
+} from '../constants/imageGeneration';
 import { ButtonContent } from './ButtonContent';
+import { ImageAspectRatioSelector } from './ImageAspectRatioSelector';
 
 const noLogoSelection = '__no_logo__';
 const logoSelectionStorageKey = 'omfit-image-studio-logo-selection';
+const aspectRatioStorageKey = 'omfit-image-studio-aspect-ratio';
 
 interface ImageStudioProps {
   leonardoService: LeonardoService;
@@ -46,6 +54,14 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
     'Hình ảnh phòng tập Pilates Reformer cao cấp OMFIT, không gian sáng tự nhiên, máy Reformer nhập khẩu, bố cục hiện đại và chuyên nghiệp'
   );
   const [style, setStyle] = useState('Photorealistic 4K');
+  const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>(() => {
+    try {
+      const storedValue = window.localStorage.getItem(aspectRatioStorageKey);
+      return isImageAspectRatio(storedValue) ? storedValue : DEFAULT_IMAGE_ASPECT_RATIO;
+    } catch {
+      return DEFAULT_IMAGE_ASPECT_RATIO;
+    }
+  });
   const [selectedLogoId, setSelectedLogoId] = useState(() => {
     try {
       return window.localStorage.getItem(logoSelectionStorageKey) || '';
@@ -76,6 +92,14 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
       // Logo selection remains active for the current session.
     }
   }, [selectedLogoId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(aspectRatioStorageKey, aspectRatio);
+    } catch {
+      // Aspect ratio selection remains active for the current session.
+    }
+  }, [aspectRatio]);
 
   const handleDirectCustomUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -135,18 +159,20 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
       const newImage = await leonardoService.generateImage(
         prompt.trim(),
         style,
-        undefined,
-        currentKeyword || 'omfit-seo',
-        'nano-banana-2',
-        articleId,
-        logoAssetId
+        {
+          keyword: currentKeyword || 'omfit-seo',
+          articleId,
+          logoAssetId,
+          aspectRatio
+        }
       );
       setGeneratedImages((previous) => [newImage, ...previous]);
       setSelectedImage(newImage);
       onImageGenerated(newImage);
+      const dimensions = getImageAspectRatioOption(aspectRatio);
       setMessage(logoAssetId
-        ? 'Đã tạo ảnh với logo được chọn làm ngữ cảnh thương hiệu.'
-        : 'Đã tạo ảnh không dùng logo tham chiếu.');
+        ? `Đã tạo ảnh ${aspectRatio} (${dimensions.width} × ${dimensions.height}) với logo làm ngữ cảnh thương hiệu.`
+        : `Đã tạo ảnh ${aspectRatio} (${dimensions.width} × ${dimensions.height}) không dùng logo tham chiếu.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Không thể tạo hình ảnh.');
     } finally {
@@ -289,6 +315,12 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                 </select>
               </label>
 
+              <ImageAspectRatioSelector
+                value={aspectRatio}
+                onChange={setAspectRatio}
+                disabled={isGenerating || isUploadingLogo}
+              />
+
               <button
                 type="submit"
                 disabled={isGenerating || isUploadingLogo}
@@ -315,7 +347,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
               <div className="relative overflow-hidden rounded-2xl border border-[#0879D9]/30 bg-[#F8FAFC]">
                 <img src={selectedImage.url} alt={selectedImage.altText} className="h-80 w-full object-cover" />
                 <div className="absolute right-3 top-3 rounded-full border border-[#0879D9]/30 bg-white/90 px-2.5 py-1 text-[10px] font-extrabold text-[#0879D9] shadow-sm">
-                  {selectedImage.source === 'upload' ? 'ẢNH TẢI LÊN' : 'LEONARDO BANANA 2'}
+                  {getGeneratedImageSourceLabel(selectedImage.source)}
                 </div>
               </div>
               <div className="space-y-2 rounded-xl border border-[#0879D9]/15 bg-[#F0F9FF] p-4 text-xs">
@@ -327,6 +359,12 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({
                   <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#0879D9]" />
                   <span>Alt text: <strong className="text-slate-900">{selectedImage.altText}</strong></span>
                 </div>
+                {selectedImage.width && selectedImage.height && (
+                  <div className="flex items-start gap-2 font-semibold text-slate-700">
+                    <ImageIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#0879D9]" />
+                    <span>Kích thước: <strong className="text-slate-900">{selectedImage.aspectRatio || `${selectedImage.width}:${selectedImage.height}`} · {selectedImage.width} × {selectedImage.height}</strong></span>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button

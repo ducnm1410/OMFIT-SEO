@@ -4,15 +4,6 @@ const DEFAULT_IMAGE_WIDTH = 1200;
 const DEFAULT_IMAGE_HEIGHT = 896;
 const DEFAULT_IMAGE_SIZES = '(max-width: 1200px) 100vw, 1200px';
 
-type DimensionedImage = GeneratedImage & {
-  width?: unknown;
-  height?: unknown;
-  metadata?: {
-    width?: unknown;
-    height?: unknown;
-  };
-};
-
 export interface ArticleImageMarkupOptions {
   image: GeneratedImage;
   caption?: string;
@@ -60,10 +51,9 @@ function validDimension(value: unknown, fallback: number) {
 }
 
 export function getArticleImageDimensions(image: GeneratedImage) {
-  const dimensioned = image as DimensionedImage;
   return {
-    width: validDimension(dimensioned.width ?? dimensioned.metadata?.width, DEFAULT_IMAGE_WIDTH),
-    height: validDimension(dimensioned.height ?? dimensioned.metadata?.height, DEFAULT_IMAGE_HEIGHT)
+    width: validDimension(image.width, DEFAULT_IMAGE_WIDTH),
+    height: validDimension(image.height, DEFAULT_IMAGE_HEIGHT)
   };
 }
 

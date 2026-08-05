@@ -8,9 +8,10 @@ import {
   Trash2,
   Upload
 } from 'lucide-react';
-import type { GeneratedArticle, GeneratedImage } from '../types';
+import type { GeneratedArticle, GeneratedImage, ImageAspectRatio } from '../types';
 import { LeonardoService } from '../services/leonardoService';
 import { uploadMediaFile } from '../services/contentRepository';
+import { DEFAULT_IMAGE_ASPECT_RATIO } from '../constants/imageGeneration';
 import {
   articleContainsImage,
   buildArticleImageMarkup,
@@ -19,6 +20,7 @@ import {
   sectionHasImage
 } from '../utils/articleImageMarkup';
 import { ButtonContent } from './ButtonContent';
+import { ImageAspectRatioSelector } from './ImageAspectRatioSelector';
 
 interface ArticleImagePackageProps {
   article: GeneratedArticle;
@@ -119,16 +121,18 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
   }, [article.articleImages, contentHtml]);
   const [generatingKey, setGeneratingKey] = useState('');
   const [message, setMessage] = useState('');
+  const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>(DEFAULT_IMAGE_ASPECT_RATIO);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<UploadTarget | null>(null);
 
   const createImage = (description: string) => leonardoService.generateImage(
     description,
     'Photorealistic 4K',
-    undefined,
-    article.focusKeyword,
-    'nano-banana-2',
-    article.id
+    {
+      keyword: article.focusKeyword,
+      articleId: article.id,
+      aspectRatio
+    }
   );
 
   const generateFeatured = async () => {
@@ -136,7 +140,7 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
     setMessage('');
     try {
       const image = await createImage(
-        `Ảnh đại diện cho bài viết "${article.title}". Chủ đề chính: "${article.focusKeyword}". Bố cục ngang 4:3, chủ thể rõ ràng, phù hợp thumbnail WordPress, không có chữ trong ảnh.`
+        `Ảnh đại diện cho bài viết "${article.title}". Chủ đề chính: "${article.focusKeyword}". Bố cục ${aspectRatio}, chủ thể rõ ràng, phù hợp thumbnail WordPress, không có chữ trong ảnh.`
       );
       onApplyArticle({
         ...article,
@@ -357,6 +361,15 @@ export const ArticleImagePackage: React.FC<ArticleImagePackageProps> = ({
           <div className="min-w-20 rounded-xl bg-[#F8FAFC] p-2.5"><strong className="block text-base text-[#071827]">{sections.length}</strong><span className="text-[10px] text-slate-500">Mục H2</span></div>
           <div className="min-w-20 rounded-xl bg-[#F8FAFC] p-2.5"><strong className="block text-base text-[#071827]">{article.articleImages.length}</strong><span className="text-[10px] text-slate-500">Ảnh bài</span></div>
         </div>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-[#F8FAFC] p-4">
+        <ImageAspectRatioSelector
+          value={aspectRatio}
+          onChange={setAspectRatio}
+          disabled={Boolean(generatingKey)}
+          compact
+        />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">

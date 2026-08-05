@@ -24,6 +24,11 @@ import {
   normalizeTrustedWordpressMediaUrl,
   OMFIT_PUBLIC_ASSET_BUCKET
 } from './mediaPolicy.mjs';
+import {
+  buildLeonardoGenerationRequest,
+  LEONARDO_IMAGE_MODEL,
+  resolveLeonardoAspectRatio
+} from './leonardoImageGeneration.mjs';
 import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
 
 dotenv.config({ override: true, quiet: true });
@@ -1822,8 +1827,16 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
     const keyword = String(request.body?.keyword || 'omfit-seo').trim();
     const articleId = String(request.body?.articleId || '').trim() || null;
     const logoAssetId = String(request.body?.logoAssetId || '').trim() || null;
+    const imageDimensions = resolveLeonardoAspectRatio(request.body?.aspectRatio);
     if (prompt.length < 10 || prompt.length > 1200) {
       return response.status(400).json({ error: 'Mô tả ảnh phải có từ 10 đến 1200 ký tự.' });
+    }
+    if (!imageDimensions) {
+      throw new ApiError(
+        400,
+        'Tỷ lệ ảnh không hợp lệ. Hãy chọn 1:1, 2:3, 3:2, 16:9 hoặc 9:16.',
+        'leonardo_aspect_ratio_invalid'
+      );
     }
     if (logoAssetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(logoAssetId)) {
       return response.status(400).json({ error: 'Mã logo không hợp lệ.' });
@@ -1933,26 +1946,11 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: 'nano-banana-2',
-        parameters: {
-          width: 1200,
-          height: 896,
-          prompt: finalPrompt,
-          quantity: 1,
-          prompt_enhance: 'OFF',
-          style_ids: ['111dc692-d470-4eec-b791-3475abac4c46'],
-          ...(leonardoLogoId ? {
-            guidances: {
-              image_reference: [{
-                image: { id: leonardoLogoId, type: 'UPLOADED' },
-                strength: 'HIGH'
-              }]
-            }
-          } : {})
-        },
-        public: false
-      }),
+      body: JSON.stringify(buildLeonardoGenerationRequest({
+        prompt: finalPrompt,
+        aspectRatio: imageDimensions.aspectRatio,
+        uploadedImageId: leonardoLogoId
+      })),
       signal: AbortSignal.timeout(30_000)
     });
     if (!generationResponse.ok) {
@@ -2024,12 +2022,14 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
         brand_profile_id: brand?.id || null,
         provider: 'leonardo',
         provider_generation_id: generationId,
-        model: 'nano-banana-2',
+        model: LEONARDO_IMAGE_MODEL,
         bucket: 'omfit-public-assets',
         storage_path: storagePath,
         public_url: publicUrlData.publicUrl,
         source_url: sourceUrl,
         mime_type: mimeType,
+        width: imageDimensions.width,
+        height: imageDimensions.height,
         bytes: imageBytes.byteLength,
         file_name: fileName,
         alt_text: altText,
@@ -2037,7 +2037,12 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
         negative_prompt: brand?.negative_prompt || '',
         style,
         status: 'approved',
-        metadata: { width: 1200, height: 896, brandVersion: brand?.version || 1 }
+        metadata: {
+          width: imageDimensions.width,
+          height: imageDimensions.height,
+          aspectRatio: imageDimensions.aspectRatio,
+          brandVersion: brand?.version || 1
+        }
       })
       .select('*')
       .single();
@@ -2049,13 +2054,17 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       altText: media.alt_text,
       fileName: media.file_name,
       style: media.style,
-      source: 'leonardo-nano-banana-2',
+      source: 'leonardo-gpt-image-2',
+      width: imageDimensions.width,
+      height: imageDimensions.height,
+      aspectRatio: imageDimensions.aspectRatio,
       storagePath: media.storage_path,
       providerGenerationId: generationId
     });
   } catch (error) {
     return response.status(error instanceof ApiError ? error.statusCode : 502).json({
-      error: error instanceof Error ? error.message : 'Không thể tạo và lưu ảnh.'
+      error: error instanceof Error ? error.message : 'Không thể tạo và lưu ảnh.',
+      code: error instanceof ApiError ? error.code : 'leonardo_generation_failed'
     });
   }
 });
