@@ -1,5 +1,6 @@
 import type { GoogleAdsConnection, KeywordResearchResponse } from '../types';
 import { supabase } from '../lib/supabase';
+import { getAuthenticatedAccessToken } from '../lib/authSession.mjs';
 
 interface AnalyzeKeywordInput {
   query: string;
@@ -8,9 +9,7 @@ interface AnalyzeKeywordInput {
 }
 
 async function getAuthenticatedHeaders(includeJson = false) {
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+  const accessToken = await getAuthenticatedAccessToken(supabase.auth);
   return {
     ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
     Authorization: `Bearer ${accessToken}`

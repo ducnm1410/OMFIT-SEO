@@ -21,6 +21,7 @@ import { LeonardoService } from './services/leonardoService';
 import { WordpressMcpService } from './services/wordpressMcpService';
 import { disconnectGoogleAds } from './services/keywordResearchService';
 import { supabase } from './lib/supabase';
+import { getAuthenticatedSession } from './lib/authSession.mjs';
 import {
   ensureBrandProfile,
   deleteDraftArticle,
@@ -116,11 +117,21 @@ export function App() {
   }, [isSidebarCollapsed]);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    let cancelled = false;
+    void getAuthenticatedSession(supabase.auth)
+      .then((currentSession) => {
+        if (!cancelled) setSession(currentSession);
+      })
+      .catch(() => {
+        if (!cancelled) setSession(null);
+      });
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
     });
-    return () => authListener.subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const [settings] = useState<ApiSettings>({

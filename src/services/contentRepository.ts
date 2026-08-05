@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getAuthenticatedUserId } from '../lib/authSession.mjs';
 import type {
   ArticleSource,
   BrandAsset,
@@ -243,9 +244,7 @@ function isMissingEditorialSettingsColumn(error: any) {
 }
 
 async function requireUserId() {
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) throw new Error('Phiên đăng nhập đã hết hạn.');
-  return data.user.id;
+  return getAuthenticatedUserId(supabase.auth);
 }
 
 export async function ensureBrandProfile(): Promise<BrandProfile> {

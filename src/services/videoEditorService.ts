@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getAuthenticatedUserId } from '../lib/authSession.mjs';
 import type { GeneratedVideo } from '../types';
 import { ApiClientError, authenticatedFetch } from './apiClient';
 
@@ -70,9 +71,7 @@ export async function prepareSourceVideo(file: File): Promise<PreparedSourceVide
   }
   if (file.size > maxVideoBytes) throw new Error('Video vượt quá giới hạn 100 MB.');
 
-  const { data: userData } = await supabase.auth.getUser();
-  const ownerId = userData.user?.id;
-  if (!ownerId) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+  const ownerId = await getAuthenticatedUserId(supabase.auth);
   const extension = mimeType === 'video/quicktime'
     ? 'mov'
     : mimeType === 'video/webm' ? 'webm' : 'mp4';
@@ -140,9 +139,7 @@ export async function generateVideoEdit(options: {
 }
 
 export async function loadVideoLibrary(limit = 30): Promise<GeneratedVideo[]> {
-  const { data: userData } = await supabase.auth.getUser();
-  const ownerId = userData.user?.id;
-  if (!ownerId) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+  const ownerId = await getAuthenticatedUserId(supabase.auth);
   const { data, error } = await supabase
     .from('video_assets')
     .select('*')

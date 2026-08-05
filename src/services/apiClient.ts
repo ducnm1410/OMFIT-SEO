@@ -1,4 +1,7 @@
 import { supabase } from '../lib/supabase';
+import {
+  getAuthenticatedAccessToken
+} from '../lib/authSession.mjs';
 
 export class ApiClientError<TPayload = Record<string, unknown>> extends Error {
   readonly status: number;
@@ -22,13 +25,19 @@ export class ApiClientError<TPayload = Record<string, unknown>> extends Error {
 }
 
 export async function authenticatedFetch(path: string, init: RequestInit = {}) {
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-  const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${accessToken}`);
-  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, { ...init, headers, credentials: 'same-origin' });
+  const sendRequest = async (accessToken: string) => {
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${accessToken}`);
+    if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+    return fetch(path, { ...init, headers, credentials: 'same-origin' });
+  };
+
+  let accessToken = await getAuthenticatedAccessToken(supabase.auth);
+  let response = await sendRequest(accessToken);
+  if (response.status === 401) {
+    accessToken = await getAuthenticatedAccessToken(supabase.auth, { forceRefresh: true });
+    response = await sendRequest(accessToken);
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new ApiClientError(
