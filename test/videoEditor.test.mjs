@@ -5,7 +5,9 @@ import test from 'node:test';
 import {
   buildGeminiVideoEditRequest,
   createVideoEditorTicket,
+  friendlyGoogleApiError,
   GEMINI_VIDEO_EDITOR_MODEL,
+  isGoogleFileNotFoundError,
   normalizeOwnedVideoInputPath,
   VIDEO_EDITOR_JOB_TICKET_TTL_MS,
   VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS,
@@ -13,6 +15,14 @@ import {
   VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS,
   verifyVideoEditorTicket
 } from '../server/geminiVideoEditor.mjs';
+
+test('AI Video Editor chuẩn hóa lỗi Files API 404 và không hiện JSON thô', () => {
+  const error = new Error('{"error":{"message":"","code":404,"status":"Not Found"}}');
+  assert.equal(isGoogleFileNotFoundError(error), true);
+  const message = friendlyGoogleApiError(error);
+  assert.match(message, /không còn tìm thấy tệp video/i);
+  assert.doesNotMatch(message, /\{"error"/);
+});
 
 test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉnh sửa', () => {
   const first = buildGeminiVideoEditRequest({
@@ -111,6 +121,13 @@ test('UI tải video trực tiếp lên Supabase và API dùng start/poll thay v
   assert.match(route, /timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS/);
   assert.match(route, /\.eq\('owner_id', ownerId\)/);
   assert.match(route, /VIDEO_EDITOR_OUTPUT_BUCKET/);
+  const previousAssetLookup = route.slice(
+    route.indexOf("const previousAssetId"),
+    route.indexOf("const promptEn")
+  );
+  assert.doesNotMatch(previousAssetLookup, /\.eq\('owner_id', ownerId\)/);
+  assert.match(route, /isGoogleFileNotFoundError/);
+  assert.match(route, /uploadGoogleSource/);
   assert.match(migration, /create table if not exists public\.video_assets/i);
   assert.match(migration, /video_assets_owner_select/);
   assert.match(migration, /omfit-video-inputs/);
@@ -119,4 +136,15 @@ test('UI tải video trực tiếp lên Supabase và API dùng start/poll thay v
   assert.match(app, /const AIVideoEditor = lazy/);
   assert.match(app, /activeTab === 'videoeditor'/);
   assert.match(sidebar, /id: 'videoeditor'/);
+});
+
+test('lịch sử video dùng chung cho người dùng nội bộ', async () => {
+  const [service, migration] = await Promise.all([
+    readFile(new URL('../src/services/videoEditorService.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../supabase/migrations/202608050003_shared_internal_history.sql', import.meta.url), 'utf8')
+  ]);
+  const loadHistory = service.slice(service.indexOf('export async function loadVideoLibrary'));
+  assert.doesNotMatch(loadHistory, /\.eq\('owner_id'/);
+  assert.match(migration, /video_assets_internal_history_select/);
+  assert.match(migration, /is_internal_profile_user/);
 });

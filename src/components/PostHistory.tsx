@@ -83,16 +83,28 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
       <button
         type="button"
         onClick={() => {
-          onSelectArticleForEdit(article);
+          onSelectArticleForEdit(article.sharedFromAnotherUser
+            ? {
+                ...article,
+                id: crypto.randomUUID(),
+                ownerId: undefined,
+                sharedFromAnotherUser: false,
+                status: 'draft',
+                wpPostId: undefined,
+                wpPostUrl: undefined,
+                createdAt: new Date().toISOString(),
+                updatedAt: undefined
+              }
+            : article);
           setActiveTab('editor');
         }}
         className="grid h-9 w-9 place-items-center rounded-lg border border-[#0879D9]/25 bg-[#F0F9FF] text-[#0879D9] transition hover:bg-[#0879D9] hover:text-white"
         aria-label={`Xem và chỉnh sửa ${article.title}`}
-        title="Xem và chỉnh sửa"
+        title={article.sharedFromAnotherUser ? 'Sao chép vào tài khoản này để chỉnh sửa' : 'Xem và chỉnh sửa'}
       >
         <Edit3 className="h-4 w-4" />
       </button>
-      {article.status === 'draft' && (
+      {article.status === 'draft' && !article.sharedFromAnotherUser && (
         <button
           type="button"
           onClick={() => {
@@ -147,6 +159,11 @@ export const PostHistory: React.FC<PostHistoryProps> = ({
                 <article key={article.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   {renderTitle(article)}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {article.sharedFromAnotherUser && (
+                      <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">
+                        Lịch sử dùng chung
+                      </span>
+                    )}
                     <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${
                       article.status === 'published'
                         ? 'border-[#0879D9]/30 bg-[#0879D9]/10 text-[#0879D9]'

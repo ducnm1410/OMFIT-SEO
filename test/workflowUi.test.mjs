@@ -56,7 +56,11 @@ test('Image Studio tải lịch sử Supabase và chỉ gắn ảnh vào bài kh
   );
 
   assert.match(repository, /export async function loadMediaLibrary/);
-  assert.match(repository, /\.from\('media_assets'\)[\s\S]*?\.eq\('owner_id', ownerId\)/);
+  const loadMediaLibrary = repository.slice(
+    repository.indexOf('export async function loadMediaLibrary'),
+    repository.indexOf('export async function deleteDraftArticle')
+  );
+  assert.doesNotMatch(loadMediaLibrary, /\.eq\('owner_id'/);
   assert.match(repository, /\.not\('public_url', 'is', null\)/);
   assert.match(repository, /\.order\('created_at', \{ ascending: false \}\)/);
   assert.match(studio, /Lịch sử hình ảnh/);
@@ -65,6 +69,29 @@ test('Image Studio tải lịch sử Supabase và chỉ gắn ảnh vào bài kh
   assert.doesNotMatch(generateFlow, /onSetFeaturedImage|onInsertInline/);
   assert.match(app, /onSetFeaturedImage=\{selectedArticle \? handleImageGenerated : undefined\}/);
   assert.doesNotMatch(`${studio}\n${publisher}`, /LEONARDO GPT IMAGE 2/);
+});
+
+test('lịch sử nội bộ được chia sẻ nhưng bài của người khác được sao chép trước khi sửa', async () => {
+  const [repository, history, migration, server] = await Promise.all([
+    readFile(new URL('../src/services/contentRepository.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/PostHistory.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../supabase/migrations/202608050003_shared_internal_history.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../server/index.mjs', import.meta.url), 'utf8')
+  ]);
+  assert.match(repository, /sharedFromAnotherUser/);
+  assert.match(history, /Lịch sử dùng chung/);
+  assert.match(history, /crypto\.randomUUID\(\)/);
+  assert.match(history, /!article\.sharedFromAnotherUser/);
+  assert.match(migration, /articles_internal_history_select/);
+  assert.match(migration, /media_assets_internal_history_select/);
+  assert.match(migration, /article_sources_internal_history_select/);
+
+  const resolveMedia = server.slice(
+    server.indexOf('async function resolveOwnedMediaAsset'),
+    server.indexOf('async function getOwnedPublishMediaState')
+  );
+  assert.doesNotMatch(resolveMedia, /\.eq\('owner_id', ownerId\)/);
+  assert.match(resolveMedia, /buildOwnedPublicStorageUrl\(data\.owner_id/);
 });
 
 test('sau khi Gemini trả bài, UI chuyển editor trước khi chờ lưu nền hoàn tất', async () => {

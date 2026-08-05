@@ -139,17 +139,16 @@ export async function generateVideoEdit(options: {
 }
 
 export async function loadVideoLibrary(limit = 30): Promise<GeneratedVideo[]> {
-  const ownerId = await getAuthenticatedUserId(supabase.auth);
   const { data, error } = await supabase
     .from('video_assets')
     .select('*')
-    .eq('owner_id', ownerId)
     .eq('status', 'approved')
     .order('created_at', { ascending: false })
     .limit(Math.max(1, Math.min(100, Math.round(limit))));
   if (error) throw error;
   return (data || []).map((row) => ({
     id: row.id,
+    ownerId: row.owner_id || undefined,
     url: row.public_url,
     interactionId: row.provider_interaction_id,
     parentAssetId: row.parent_asset_id || undefined,

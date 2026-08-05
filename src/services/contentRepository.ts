@@ -155,6 +155,7 @@ function mapImage(row: any): GeneratedImage {
     : undefined;
   return {
     id: row.id,
+    ownerId: row.owner_id || undefined,
     url: row.public_url || row.source_url || '',
     prompt: row.prompt || '',
     altText: row.alt_text || '',
@@ -205,13 +206,15 @@ function mapArticleSource(row: any): ArticleSource {
   };
 }
 
-function mapArticle(row: any): GeneratedArticle {
+function mapArticle(row: any, currentOwnerId?: string): GeneratedArticle {
   const relations = Array.isArray(row.article_media) ? row.article_media : [];
   const media = relations
     .map((relation: any) => relation.media_assets ? { ...mapImage(relation.media_assets), role: relation.role } : null)
     .filter(Boolean) as GeneratedImage[];
   return {
     id: row.id,
+    ownerId: row.owner_id || undefined,
+    sharedFromAnotherUser: Boolean(currentOwnerId && row.owner_id && row.owner_id !== currentOwnerId),
     title: row.title,
     slug: row.slug,
     metaTitle: row.meta_title || '',
@@ -450,6 +453,7 @@ export async function uploadBrandAsset(
 }
 
 export async function loadArticles(): Promise<GeneratedArticle[]> {
+  const ownerId = await requireUserId();
   const { data, error } = await supabase
     .from('articles')
     .select('*, article_media(role, sort_order, media_assets(*)), article_sources(*)')
@@ -464,19 +468,17 @@ export async function loadArticles(): Promise<GeneratedArticle[]> {
       .select('*, article_media(role, sort_order, media_assets(*))')
       .order('updated_at', { ascending: false });
     if (legacyError) throw legacyError;
-    return (legacyData || []).map(mapArticle);
+    return (legacyData || []).map((row) => mapArticle(row, ownerId));
   }
   if (error) throw error;
-  return (data || []).map(mapArticle);
+  return (data || []).map((row) => mapArticle(row, ownerId));
 }
 
 export async function loadMediaLibrary(limit = 60): Promise<GeneratedImage[]> {
-  const ownerId = await requireUserId();
   const safeLimit = Math.max(1, Math.min(100, Math.round(limit)));
   const { data, error } = await supabase
     .from('media_assets')
     .select('*')
-    .eq('owner_id', ownerId)
     .eq('status', 'approved')
     .eq('bucket', 'omfit-public-assets')
     .not('public_url', 'is', null)

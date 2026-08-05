@@ -75,6 +75,8 @@ export interface ContentBrief {
 
 export interface GeneratedArticle {
   id: string;
+  ownerId?: string;
+  sharedFromAnotherUser?: boolean;
   title: string;
   slug: string;
   metaTitle: string;
@@ -102,6 +104,7 @@ export type ImageAspectRatio = '1:1' | '2:3' | '3:2' | '16:9' | '9:16';
 
 export interface GeneratedImage {
   id: string;
+  ownerId?: string;
   url: string;
   prompt: string;
   altText: string;
@@ -123,6 +126,7 @@ export interface GeneratedImage {
 
 export interface GeneratedVideo {
   id: string;
+  ownerId?: string;
   url: string;
   interactionId: string;
   parentAssetId?: string;

@@ -3,9 +3,12 @@ import {
   buildGeminiVideoEditRequest,
   createVideoEditorTicket,
   extractVideoFromInteraction,
+  friendlyGoogleApiError,
   GEMINI_VIDEO_EDITOR_MODEL,
+  isGoogleFileNotFoundError,
   normalizeOwnedVideoInputPath,
   verifyVideoEditorTicket,
+  VIDEO_EDITOR_FILE_RECOVERY_LIMIT,
   VIDEO_EDITOR_JOB_TICKET_TTL_MS,
   VIDEO_EDITOR_MAX_BYTES,
   VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS,
@@ -18,6 +21,13 @@ import {
 } from './geminiVideoEditor.mjs';
 
 class VideoNotReadyError extends Error {}
+
+function sourceFileMissingError() {
+  const error = new Error('Google Gemini không còn tìm thấy tệp video. Hãy chọn lại video nguồn và thử lại.');
+  error.statusCode = 410;
+  error.code = 'video_editor_source_missing';
+  return error;
+}
 
 function normalizedState(value) {
   return String(value?.name || value || '').trim().toUpperCase();
@@ -104,10 +114,18 @@ async function materializeVideo(extracted, apiKey, ai) {
   }
   const fileMatch = url.pathname.match(/\/(files\/[a-zA-Z0-9_-]+)$/);
   if (!fileMatch) throw new Error('Gemini trả về mã tệp video không hợp lệ.');
-  const googleFile = await ai.files.get({
-    name: fileMatch[1],
-    config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
-  });
+  let googleFile;
+  try {
+    googleFile = await ai.files.get({
+      name: fileMatch[1],
+      config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
+    });
+  } catch (error) {
+    if (isGoogleFileNotFoundError(error)) {
+      throw new VideoNotReadyError('Video output is not visible yet.');
+    }
+    throw error;
+  }
   const fileState = normalizedState(googleFile.state);
   if (fileState === 'FAILED') throw new Error('Gemini không thể hoàn tất tệp video đầu ra.');
   if (fileState !== 'ACTIVE') throw new VideoNotReadyError('Video output is still processing.');
@@ -125,6 +143,39 @@ async function materializeVideo(extracted, apiKey, ai) {
   }
   if (!result.ok) throw new Error(`Không thể tải video Gemini (${result.status}).`);
   return Buffer.from(await result.arrayBuffer());
+}
+
+async function uploadGoogleSource(supabase, ai, storagePath, mimeType, preparedSourceFile) {
+  let sourceFile = preparedSourceFile;
+  if (!sourceFile) {
+    const { data, error: downloadError } = await supabase.storage
+      .from(VIDEO_EDITOR_SOURCE_BUCKET)
+      .download(storagePath);
+    if (downloadError || !data) {
+      throw new Error(`Không thể đọc video nguồn: ${downloadError?.message || 'tệp rỗng'}`);
+    }
+    sourceFile = data;
+  }
+  if (sourceFile.size > VIDEO_EDITOR_MAX_BYTES) {
+    const error = new Error('Video nguồn vượt quá giới hạn 100 MB.');
+    error.statusCode = 413;
+    error.code = 'video_editor_source_too_large';
+    throw error;
+  }
+  const googleFile = await ai.files.upload({
+    file: new Blob([await sourceFile.arrayBuffer()], { type: mimeType }),
+    config: {
+      mimeType,
+      httpOptions: { timeout: VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS }
+    }
+  });
+  if (!googleFile?.name || !googleFile?.uri) {
+    const error = new Error('Google Gemini không trả về mã tệp video nguồn hợp lệ.');
+    error.statusCode = 502;
+    error.code = 'video_editor_source_upload_invalid';
+    throw error;
+  }
+  return googleFile;
 }
 
 async function persistCompletedVideo(supabase, ownerId, job, interaction, apiKey, ai) {
@@ -230,12 +281,6 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           .from(VIDEO_EDITOR_SOURCE_BUCKET)
           .download(storagePath);
         if (downloadError || !sourceFile) throw new Error(`Không thể đọc video nguồn: ${downloadError?.message || 'tệp rỗng'}`);
-        if (sourceFile.size > VIDEO_EDITOR_MAX_BYTES) {
-          const error = new Error('Video nguồn vượt quá giới hạn 100 MB.');
-          error.statusCode = 413;
-          error.code = 'video_editor_source_too_large';
-          throw error;
-        }
         const requestedMimeType = String(request.body?.mimeType || '').split(';')[0].trim().toLowerCase();
         const storedMimeType = String(sourceFile.type || '').split(';')[0].trim().toLowerCase();
         const mimeType = VIDEO_EDITOR_MIME_TYPES.has(storedMimeType)
@@ -247,13 +292,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           error.code = 'video_editor_source_type_invalid';
           throw error;
         }
-        const googleFile = await ai.files.upload({
-          file: new Blob([await sourceFile.arrayBuffer()], { type: mimeType }),
-          config: {
-            mimeType,
-            httpOptions: { timeout: VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS }
-          }
-        });
+        const googleFile = await uploadGoogleSource(supabase, ai, storagePath, mimeType, sourceFile);
         const sourceTicket = createVideoEditorTicket({
           version: 1,
           kind: 'source',
@@ -263,6 +302,7 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           googleFileUri: googleFile.uri,
           sourceStoragePath: storagePath,
           mimeType,
+          fileRecoveryCount: 0,
           originalFileName: String(request.body?.fileName || 'video-source').slice(0, 200)
         }, ticketSecret(getEnv));
         const state = normalizedState(googleFile.state);
@@ -282,14 +322,30 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           VIDEO_EDITOR_SOURCE_TICKET_TTL_MS,
           getEnv
         );
-        const googleFile = await ai.files.get({
-          name: sourceJob.googleFileName,
-          config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
-        });
+        let googleFile;
+        try {
+          googleFile = await ai.files.get({
+            name: sourceJob.googleFileName,
+            config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
+          });
+        } catch (error) {
+          if (!isGoogleFileNotFoundError(error)) throw error;
+          const recoveryCount = Number(sourceJob.fileRecoveryCount || 0) + 1;
+          if (recoveryCount > VIDEO_EDITOR_FILE_RECOVERY_LIMIT) throw sourceFileMissingError();
+          googleFile = await uploadGoogleSource(
+            supabase,
+            ai,
+            sourceJob.sourceStoragePath,
+            sourceJob.mimeType
+          );
+          sourceJob.fileRecoveryCount = recoveryCount;
+          sourceJob.googleFileName = googleFile.name;
+        }
         const state = normalizedState(googleFile.state);
         if (state === 'FAILED') throw new Error('Gemini không thể xử lý video nguồn.');
         const refreshedTicket = createVideoEditorTicket({
           ...sourceJob,
+          googleFileName: googleFile.name || sourceJob.googleFileName,
           googleFileUri: googleFile.uri || sourceJob.googleFileUri
         }, ticketSecret(getEnv));
         return response.status(state === 'ACTIVE' ? 200 : 202).json({
@@ -322,7 +378,6 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
             .from('video_assets')
             .select('*')
             .eq('id', previousAssetId)
-            .eq('owner_id', ownerId)
             .eq('status', 'approved')
             .maybeSingle();
           if (error) throw new Error(`Không thể đọc video trước: ${error.message}`);
@@ -341,10 +396,16 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
             VIDEO_EDITOR_SOURCE_TICKET_TTL_MS,
             getEnv
           );
-          const googleFile = await ai.files.get({
-            name: sourceJob.googleFileName,
-            config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
-          });
+          let googleFile;
+          try {
+            googleFile = await ai.files.get({
+              name: sourceJob.googleFileName,
+              config: { httpOptions: { timeout: VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS } }
+            });
+          } catch (error) {
+            if (isGoogleFileNotFoundError(error)) throw sourceFileMissingError();
+            throw error;
+          }
           if (normalizedState(googleFile.state) !== 'ACTIVE') {
             const error = new Error('Video nguồn chưa xử lý xong.');
             error.statusCode = 409;
@@ -434,11 +495,13 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
       error.code = 'video_editor_operation_invalid';
       throw error;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Không thể xử lý video.';
+      const message = error?.statusCode
+        ? (error instanceof Error ? error.message : 'Không thể xử lý video.')
+        : friendlyGoogleApiError(error);
       const rateLimited = /quota|rate|429/i.test(message);
       return response.status(error?.statusCode || (rateLimited ? 429 : 502)).json({
         error: message,
-        code: error?.code || fallbackCode
+        code: typeof error?.code === 'string' ? error.code : fallbackCode
       });
     }
   });

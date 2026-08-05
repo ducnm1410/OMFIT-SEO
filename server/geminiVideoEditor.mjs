@@ -9,12 +9,56 @@ export const VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 export const VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 export const VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
 export const VIDEO_EDITOR_MAX_BYTES = 100 * 1024 * 1024;
+export const VIDEO_EDITOR_FILE_RECOVERY_LIMIT = 2;
 
 export const VIDEO_EDITOR_MIME_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
   'video/webm'
 ]);
+
+function parseJsonError(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  if (!normalized.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(normalized);
+    return parsed?.error && typeof parsed.error === 'object' ? parsed.error : parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeGoogleApiError(error) {
+  const parsed = parseJsonError(error?.message);
+  const rawStatus = error?.statusCode
+    ?? error?.status
+    ?? parsed?.code
+    ?? (typeof error?.code === 'number' ? error.code : undefined);
+  const status = Number(rawStatus) || undefined;
+  const parsedMessage = String(parsed?.message || '').trim();
+  const rawMessage = String(error?.message || '').trim();
+  const message = parsedMessage || (parseJsonError(rawMessage) ? '' : rawMessage);
+  return { status, message };
+}
+
+export function isGoogleFileNotFoundError(error) {
+  return normalizeGoogleApiError(error).status === 404;
+}
+
+export function friendlyGoogleApiError(error) {
+  const { status, message } = normalizeGoogleApiError(error);
+  if (status === 404) {
+    return 'Google Gemini không còn tìm thấy tệp video. Hệ thống đã thử tải lại nhưng chưa thành công.';
+  }
+  if (status === 429) {
+    return 'Google Gemini đang giới hạn lượt xử lý hoặc tài khoản đã hết quota. Vui lòng thử lại sau.';
+  }
+  if (status === 401 || status === 403) {
+    return 'GEMINI_API_KEY không hợp lệ hoặc chưa được cấp quyền dùng AI Video Editor.';
+  }
+  return message || 'Google Gemini không thể xử lý video ở thời điểm này.';
+}
 
 export function normalizeOwnedVideoInputPath(ownerId, bucket, storagePath) {
   const normalizedOwnerId = String(ownerId || '').trim().toLowerCase();

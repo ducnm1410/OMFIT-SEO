@@ -235,6 +235,17 @@ async function requireSupabaseUser(request, response, next) {
       return response.status(401).json({ error: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.' });
     }
     request.supabaseUser = await userResponse.json();
+    const authenticatedUserId = String(request.supabaseUser?.id || '');
+    const { data: internalProfile, error: profileError } = await getSupabaseAdmin()
+      .from('profiles')
+      .select('id,role')
+      .or(`auth_user_id.eq.${authenticatedUserId},and(auth_user_id.is.null,id.eq.${authenticatedUserId})`)
+      .limit(1)
+      .maybeSingle();
+    if (profileError || !internalProfile || !['admin', 'editor'].includes(String(internalProfile.role || ''))) {
+      return response.status(403).json({ error: 'Tài khoản không thuộc workspace nội bộ OMFIT.' });
+    }
+    request.internalProfile = internalProfile;
     return next();
   } catch {
     return response.status(503).json({ error: 'Không thể xác thực phiên đăng nhập lúc này.' });
@@ -2442,9 +2453,8 @@ async function resolveOwnedMediaAsset(ownerId, image, config) {
   }
   const { data, error } = await getSupabaseAdmin()
     .from('media_assets')
-    .select('id,bucket,storage_path,file_name,mime_type,bytes,status')
+    .select('id,owner_id,bucket,storage_path,file_name,mime_type,bytes,status')
     .eq('id', mediaId)
-    .eq('owner_id', ownerId)
     .maybeSingle();
   if (error || !data || data.status === 'failed') {
     throw new ApiError(403, 'Bạn không có quyền sử dụng ảnh này.', 'wordpress_media_forbidden');
@@ -2452,7 +2462,7 @@ async function resolveOwnedMediaAsset(ownerId, image, config) {
   if (Number(data.bytes || 0) > wordpressMediaMaxBytes) {
     throw new ApiError(413, 'Ảnh vượt quá giới hạn 10 MB.', 'wordpress_media_too_large');
   }
-  const sourceUrl = buildOwnedPublicStorageUrl(ownerId, data.bucket, data.storage_path);
+  const sourceUrl = buildOwnedPublicStorageUrl(data.owner_id, data.bucket, data.storage_path);
   if (!sourceUrl) {
     throw new ApiError(400, 'Nguồn ảnh không thuộc kho OMFIT.', 'wordpress_media_source_invalid');
   }
@@ -2460,7 +2470,6 @@ async function resolveOwnedMediaAsset(ownerId, image, config) {
     .from('wordpress_media_mappings')
     .select('attachment_id,slug,source_url,site_url')
     .eq('media_id', data.id)
-    .eq('owner_id', ownerId)
     .eq('site_url', config.siteUrl)
     .maybeSingle();
   if (mappingError) {
@@ -2495,8 +2504,7 @@ async function getOwnedPublishMediaState(ownerId, article, config) {
 
   const { data, error } = await getSupabaseAdmin()
     .from('media_assets')
-    .select('id,bucket,storage_path,file_name,mime_type,status')
-    .eq('owner_id', ownerId)
+    .select('id,owner_id,bucket,storage_path,file_name,mime_type,status')
     .in('id', mediaIds);
   if (error) {
     throw new ApiError(502, 'Không thể kiểm tra quyền sử dụng ảnh.', 'wordpress_media_lookup_failed');
@@ -2505,7 +2513,6 @@ async function getOwnedPublishMediaState(ownerId, article, config) {
   const { data: mappings, error: mappingsError } = await getSupabaseAdmin()
     .from('wordpress_media_mappings')
     .select('media_id,source_url')
-    .eq('owner_id', ownerId)
     .eq('site_url', config.siteUrl)
     .in('media_id', mediaIds);
   if (mappingsError) {
@@ -2523,7 +2530,7 @@ async function getOwnedPublishMediaState(ownerId, article, config) {
   (data || []).forEach((asset) => {
     if (asset.status === 'failed') return;
     const urls = new Set();
-    const publicUrl = buildOwnedPublicStorageUrl(ownerId, asset.bucket, asset.storage_path);
+    const publicUrl = buildOwnedPublicStorageUrl(asset.owner_id, asset.bucket, asset.storage_path);
     if (publicUrl) urls.add(publicUrl);
     const wordpressUrl = mappingByMediaId.get(String(asset.id));
     if (wordpressUrl) urls.add(wordpressUrl);
