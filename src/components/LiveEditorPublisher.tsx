@@ -18,7 +18,23 @@ import {
   Tag,
   ImageIcon,
   ArrowRight,
-  AlertTriangle
+  AlertTriangle,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Eraser,
+  Italic,
+  Link2,
+  List as ListIcon,
+  ListOrdered,
+  Maximize2,
+  Minimize2,
+  Quote,
+  Redo2,
+  Underline,
+  Undo2,
+  Unlink
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import type {
@@ -73,12 +89,64 @@ const sanitizeArticleHtml = (html: string) => DOMPurify.sanitize(html, {
 
 interface VisualArticleEditorProps {
   html: string;
+  title: string;
   onChange: (html: string) => void;
+  onTitleChange: (title: string) => void;
+  onInsertImage: () => void;
+  featuredImagePreview: React.ReactNode;
+  auditNotes: React.ReactNode;
+  isFullscreen: boolean;
+  setFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-const VisualArticleEditor: React.FC<VisualArticleEditorProps> = ({ html, onChange }) => {
+interface EditorToolbarButtonProps {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+const EditorToolbarButton: React.FC<EditorToolbarButtonProps> = ({ label, onClick, children }) => (
+  <button
+    type="button"
+    className="article-editor-toolbar__button"
+    aria-label={label}
+    title={label}
+    onMouseDown={(event) => event.preventDefault()}
+    onClick={onClick}
+  >
+    {children}
+  </button>
+);
+
+function normalizeEditorLink(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('/')) return trimmed;
+  const candidate = /^[a-z][a-z\d+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(candidate);
+    return ['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+const VisualArticleEditor: React.FC<VisualArticleEditorProps> = ({
+  html,
+  title,
+  onChange,
+  onTitleChange,
+  onInsertImage,
+  featuredImagePreview,
+  auditNotes,
+  isFullscreen,
+  setFullscreen
+}) => {
   const editorRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const isFocusedRef = useRef(false);
+  const isTitleFocusedRef = useRef(false);
+  const selectedRangeRef = useRef<Range | null>(null);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -86,34 +154,196 @@ const VisualArticleEditor: React.FC<VisualArticleEditorProps> = ({ html, onChang
     editor.innerHTML = html;
   }, [html]);
 
+  useEffect(() => {
+    const titleEditor = titleRef.current;
+    if (!titleEditor || isTitleFocusedRef.current || titleEditor.textContent === title) return;
+    titleEditor.textContent = title;
+  }, [title]);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullscreen, setFullscreen]);
+
+  const rememberSelection = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) {
+      selectedRangeRef.current = range.cloneRange();
+    }
+  };
+
+  const restoreSelection = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    const range = selectedRangeRef.current;
+    if (!editor || !selection || !range) return;
+    editor.focus();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  const syncEditorHtml = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const nextHtml = sanitizeArticleHtml(editor.innerHTML);
+    if (nextHtml !== editor.innerHTML) editor.innerHTML = nextHtml;
+    onChange(nextHtml);
+  };
+
   const handleInput = (event: React.FormEvent<HTMLDivElement>) => {
     const nextHtml = sanitizeArticleHtml(event.currentTarget.innerHTML);
     if (nextHtml !== event.currentTarget.innerHTML) {
       event.currentTarget.innerHTML = nextHtml;
     }
     onChange(nextHtml);
+    rememberSelection();
+  };
+
+  const executeCommand = (command: string, value?: string) => {
+    restoreSelection();
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
+    syncEditorHtml();
+    rememberSelection();
+  };
+
+  const applyTextAlignment = (alignment: 'left' | 'center' | 'right') => {
+    restoreSelection();
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    const commonAncestor = range.commonAncestorContainer instanceof HTMLElement
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement;
+    const block = commonAncestor?.closest('p, h2, h3, h4, blockquote, li, div');
+    if (!block || block === editor || !editor.contains(block)) return;
+    block.classList.remove('has-text-align-center', 'has-text-align-right');
+    if (alignment !== 'left') block.classList.add(`has-text-align-${alignment}`);
+    syncEditorHtml();
+    rememberSelection();
+  };
+
+  const handleCreateLink = () => {
+    rememberSelection();
+    const input = window.prompt('Nhập liên kết muốn chèn:', 'https://');
+    if (input === null) return;
+    const href = normalizeEditorLink(input);
+    if (!href) {
+      window.alert('Liên kết không hợp lệ. Hãy dùng URL http, https, mailto hoặc tel.');
+      return;
+    }
+    executeCommand('createLink', href);
   };
 
   return (
-    <div
-      ref={editorRef}
-      className="article-visual-editor"
-      contentEditable
-      suppressContentEditableWarning
-      role="textbox"
-      aria-label="Nội dung bài viết có thể chỉnh sửa trực quan"
-      aria-multiline="true"
-      onFocus={() => {
-        isFocusedRef.current = true;
-      }}
-      onBlur={() => {
-        isFocusedRef.current = false;
-      }}
-      onInput={handleInput}
-      onClick={(event) => {
-        if ((event.target as HTMLElement).closest('a')) event.preventDefault();
-      }}
-    />
+    <div className={`article-visual-editor-shell ${isFullscreen ? 'article-visual-editor-shell--fullscreen' : ''}`}>
+      <div className="article-editor-toolbar" role="toolbar" aria-label="Công cụ chỉnh sửa bài viết">
+        <select
+          className="article-editor-toolbar__select"
+          aria-label="Định dạng đoạn văn"
+          defaultValue=""
+          onChange={(event) => {
+            executeCommand('formatBlock', `<${event.target.value}>`);
+            event.currentTarget.value = '';
+          }}
+        >
+          <option value="" disabled>Định dạng</option>
+          <option value="p">Đoạn văn</option>
+          <option value="h2">Tiêu đề 2</option>
+          <option value="h3">Tiêu đề 3</option>
+          <option value="blockquote">Trích dẫn</option>
+        </select>
+        <span className="article-editor-toolbar__group" aria-label="Kiểu chữ">
+          <EditorToolbarButton label="In đậm" onClick={() => executeCommand('bold')}><Bold className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="In nghiêng" onClick={() => executeCommand('italic')}><Italic className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Gạch chân" onClick={() => executeCommand('underline')}><Underline className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Xóa định dạng" onClick={() => executeCommand('removeFormat')}><Eraser className="h-4 w-4" /></EditorToolbarButton>
+        </span>
+        <span className="article-editor-toolbar__group" aria-label="Danh sách và trích dẫn">
+          <EditorToolbarButton label="Danh sách dấu đầu dòng" onClick={() => executeCommand('insertUnorderedList')}><ListIcon className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Danh sách đánh số" onClick={() => executeCommand('insertOrderedList')}><ListOrdered className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Trích dẫn" onClick={() => executeCommand('formatBlock', '<blockquote>')}><Quote className="h-4 w-4" /></EditorToolbarButton>
+        </span>
+        <span className="article-editor-toolbar__group" aria-label="Căn chỉnh">
+          <EditorToolbarButton label="Căn trái" onClick={() => applyTextAlignment('left')}><AlignLeft className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Căn giữa" onClick={() => applyTextAlignment('center')}><AlignCenter className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Căn phải" onClick={() => applyTextAlignment('right')}><AlignRight className="h-4 w-4" /></EditorToolbarButton>
+        </span>
+        <span className="article-editor-toolbar__group" aria-label="Liên kết và lịch sử">
+          <EditorToolbarButton label="Chèn ảnh" onClick={onInsertImage}><ImageIcon className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Chèn liên kết" onClick={handleCreateLink}><Link2 className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Xóa liên kết" onClick={() => executeCommand('unlink')}><Unlink className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Hoàn tác" onClick={() => executeCommand('undo')}><Undo2 className="h-4 w-4" /></EditorToolbarButton>
+          <EditorToolbarButton label="Làm lại" onClick={() => executeCommand('redo')}><Redo2 className="h-4 w-4" /></EditorToolbarButton>
+        </span>
+        <span className="article-editor-toolbar__status">Tự động lưu</span>
+        <EditorToolbarButton
+          label={isFullscreen ? 'Thoát toàn màn hình' : 'Mở toàn màn hình'}
+          onClick={() => setFullscreen((current) => !current)}
+        >
+          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </EditorToolbarButton>
+      </div>
+
+      <div className="article-preview article-preview--editing bg-[#233968] rounded-2xl border border-[#40558A] min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
+        <h1
+          ref={titleRef}
+          className="article-visual-title"
+          contentEditable="plaintext-only"
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label="Tiêu đề bài viết"
+          onFocus={() => {
+            isTitleFocusedRef.current = true;
+          }}
+          onBlur={() => {
+            isTitleFocusedRef.current = false;
+          }}
+          onInput={(event) => onTitleChange(event.currentTarget.textContent || '')}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            editorRef.current?.focus();
+          }}
+        />
+        {featuredImagePreview}
+        <div
+          ref={editorRef}
+          className="article-visual-editor"
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label="Nội dung bài viết có thể chỉnh sửa trực quan"
+          aria-multiline="true"
+          onFocus={() => {
+            isFocusedRef.current = true;
+          }}
+          onBlur={() => {
+            isFocusedRef.current = false;
+          }}
+          onInput={handleInput}
+          onMouseUp={rememberSelection}
+          onKeyUp={rememberSelection}
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest('a')) event.preventDefault();
+          }}
+        />
+        {auditNotes}
+      </div>
+    </div>
   );
 };
 
@@ -135,6 +365,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
   const [sources, setSources] = useState<ArticleSource[]>(article?.sources || []);
   const [postStatus, setPostStatus] = useState<'draft' | 'publish'>('publish');
   const [activeView, setActiveView] = useState<ArticleEditorView>('visual');
+  const [isVisualEditorFullscreen, setIsVisualEditorFullscreen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishLogs, setPublishLogs] = useState<string[]>([]);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -158,6 +389,7 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     setPublishAudit(null);
     setReviewerConfirmed(false);
     setPublishResult(null);
+    setIsVisualEditorFullscreen(false);
     lastAutosavedPayloadRef.current = JSON.stringify({
       title: article.title,
       metaTitle: article.metaTitle,
@@ -572,6 +804,44 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
     }
   };
 
+  const featuredImagePreview = article.featuredImage ? (
+    <figure className="mb-6 text-center">
+      <img
+        src={article.featuredImage.url}
+        alt={article.featuredImage.altText}
+        width={featuredImageDimensions.width}
+        height={featuredImageDimensions.height}
+        loading="lazy"
+        decoding="async"
+        sizes="(max-width: 768px) 100vw, 768px"
+        className="w-full h-80 object-cover rounded-2xl border border-slate-200 shadow-sm mx-auto"
+      />
+      <figcaption className="text-xs text-slate-500 italic mt-2">
+        {article.featuredImage.altText}
+      </figcaption>
+    </figure>
+  ) : null;
+
+  const auditNotes = previewIssues.length > 0 ? (
+    <aside className="seo-audit-notes" aria-label="Các mục cần kiểm tra trước khi xuất bản">
+      <div className="seo-audit-notes__header">
+        <span className="seo-audit-notes__icon" aria-hidden="true">
+          <AlertTriangle className="h-4 w-4" />
+        </span>
+        <div className="seo-audit-notes__heading">
+          <span className="seo-audit-notes__eyebrow">Kiểm tra SEO</span>
+          <strong>Các mục cần kiểm tra trước khi xuất bản</strong>
+        </div>
+        <span className="seo-audit-notes__count">
+          {previewIssues.length} mục
+        </span>
+      </div>
+      <ul>
+        {previewIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}
+      </ul>
+    </aside>
+  ) : null;
+
   return (
     <div className="ui-page space-y-6">
       <PublishResultDialog
@@ -943,7 +1213,10 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setActiveView('visual')}
+                onClick={() => {
+                  setActiveView('visual');
+                  setIsVisualEditorFullscreen(false);
+                }}
                 aria-pressed={activeView === 'visual'}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
                   activeView === 'visual'
@@ -955,7 +1228,10 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setActiveView('code')}
+                onClick={() => {
+                  setActiveView('code');
+                  setIsVisualEditorFullscreen(false);
+                }}
                 aria-pressed={activeView === 'code'}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
                   activeView === 'code'
@@ -1002,52 +1278,24 @@ export const LiveEditorPublisher: React.FC<LiveEditorPublisherProps> = ({
               aria-label="Mã HTML của bài viết"
               className="w-full p-4 rounded-xl bg-[#F8FAFC] border border-slate-200 text-[#071827] font-mono text-xs focus:outline-none focus:border-[#0879D9]"
             />
+          ) : activeView === 'edit' ? (
+            <VisualArticleEditor
+              html={sanitizedPreviewHtml}
+              title={title}
+              onChange={setContentHtml}
+              onTitleChange={setTitle}
+              onInsertImage={() => bodyImageInputRef.current?.click()}
+              featuredImagePreview={featuredImagePreview}
+              auditNotes={auditNotes}
+              isFullscreen={isVisualEditorFullscreen}
+              setFullscreen={setIsVisualEditorFullscreen}
+            />
           ) : (
-            <div className={`article-preview bg-[#233968] rounded-2xl border border-[#40558A] min-h-[450px] prose-custom overflow-y-auto max-h-[680px] ${
-              activeView === 'edit' ? 'article-preview--editing' : ''
-            }`}>
+            <div className="article-preview bg-[#233968] rounded-2xl border border-[#40558A] min-h-[450px] prose-custom overflow-y-auto max-h-[680px]">
               <h1>{title}</h1>
-              {article.featuredImage && (
-                <figure className="mb-6 text-center">
-                  <img
-                    src={article.featuredImage.url}
-                    alt={article.featuredImage.altText}
-                    width={featuredImageDimensions.width}
-                    height={featuredImageDimensions.height}
-                    loading="lazy"
-                    decoding="async"
-                    sizes="(max-width: 768px) 100vw, 768px"
-                    className="w-full h-80 object-cover rounded-2xl border border-slate-200 shadow-sm mx-auto"
-                  />
-                  <figcaption className="text-xs text-slate-500 italic mt-2">
-                    {article.featuredImage.altText}
-                  </figcaption>
-                </figure>
-              )}
-              {activeView === 'edit' ? (
-                <VisualArticleEditor html={sanitizedPreviewHtml} onChange={setContentHtml} />
-              ) : (
-                <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewHtml }} />
-              )}
-              {previewIssues.length > 0 && (
-                <aside className="seo-audit-notes" aria-label="Các mục cần kiểm tra trước khi xuất bản">
-                  <div className="seo-audit-notes__header">
-                    <span className="seo-audit-notes__icon" aria-hidden="true">
-                      <AlertTriangle className="h-4 w-4" />
-                    </span>
-                    <div className="seo-audit-notes__heading">
-                      <span className="seo-audit-notes__eyebrow">Kiểm tra SEO</span>
-                      <strong>Các mục cần kiểm tra trước khi xuất bản</strong>
-                    </div>
-                    <span className="seo-audit-notes__count">
-                      {previewIssues.length} mục
-                    </span>
-                  </div>
-                  <ul>
-                    {previewIssues.map((issue) => <li key={issue.code}>{issue.message}</li>)}
-                  </ul>
-                </aside>
-              )}
+              {featuredImagePreview}
+              <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewHtml }} />
+              {auditNotes}
             </div>
           )}
         </div>

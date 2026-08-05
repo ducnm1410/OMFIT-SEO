@@ -215,6 +215,31 @@ test('trình xuất bản có ba chế độ xem, sửa HTML và sửa bài tr�
   assert.match(css, /\.article-visual-editor:focus/);
 });
 
+test('chế độ sửa bài hỗ trợ toàn màn hình và thanh công cụ kiểu WordPress', async () => {
+  const [publisher, css] = await Promise.all([
+    readFile(new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/index.css', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(publisher, /isVisualEditorFullscreen/);
+  assert.match(publisher, /Mở toàn màn hình/);
+  assert.match(publisher, /Thoát toàn màn hình/);
+  assert.match(publisher, /event\.key === 'Escape'/);
+  assert.match(publisher, /document\.execCommand\(command, false, value\)/);
+  assert.match(publisher, /has-text-align-center/);
+  assert.match(publisher, /has-text-align-right/);
+  assert.match(publisher, /Định dạng đoạn văn/);
+  assert.match(publisher, /In đậm/);
+  assert.match(publisher, /Danh sách đánh số/);
+  assert.match(publisher, /label="Chèn ảnh"/);
+  assert.match(publisher, /Chèn liên kết/);
+  assert.match(publisher, /aria-label="Tiêu đề bài viết"/);
+  assert.match(css, /\.article-visual-editor-shell--fullscreen/);
+  assert.match(css, /height:\s*100dvh/);
+  assert.match(css, /\.article-editor-toolbar/);
+  assert.match(css, /\.has-text-align-center/);
+});
+
 test('sau khi publish tự hậu kiểm Google discovery và đồng bộ lại kho internal link', async () => {
   const publisher = await readFile(
     new URL('../src/components/LiveEditorPublisher.tsx', import.meta.url),
