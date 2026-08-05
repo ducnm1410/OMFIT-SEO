@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import {
   buildGeminiVideoEditRequest,
+  buildGoogleFileUploadConfig,
   calculateVideoTelemetry,
   createVideoEditorTicket,
   extractVideoFromInteraction,
@@ -173,13 +174,22 @@ async function uploadGoogleSource(supabase, ai, storagePath, mimeType, preparedS
     error.code = 'video_editor_source_too_large';
     throw error;
   }
-  const googleFile = await ai.files.upload({
-    file: new Blob([await sourceFile.arrayBuffer()], { type: mimeType }),
-    config: {
-      mimeType,
-      httpOptions: { timeout: VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS }
+  const sourceBlob = new Blob([await sourceFile.arrayBuffer()], { type: mimeType });
+  let googleFile;
+  try {
+    googleFile = await ai.files.upload({
+      file: sourceBlob,
+      config: buildGoogleFileUploadConfig(mimeType, sourceBlob.size)
+    });
+  } catch (error) {
+    if (isGoogleFileNotFoundError(error)) {
+      const uploadError = new Error('Google Gemini chưa nhận được video nguồn. Vui lòng thử tải lại sau.');
+      uploadError.statusCode = 502;
+      uploadError.code = 'video_editor_source_upload_not_found';
+      throw uploadError;
     }
-  });
+    throw error;
+  }
   if (!googleFile?.name || !googleFile?.uri) {
     const error = new Error('Google Gemini không trả về mã tệp video nguồn hợp lệ.');
     error.statusCode = 502;

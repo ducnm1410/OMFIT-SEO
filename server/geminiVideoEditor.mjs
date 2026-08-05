@@ -28,6 +28,32 @@ export const VIDEO_EDITOR_IMAGE_MIME_TYPES = new Set([
   'image/webp'
 ]);
 
+export function buildGoogleFileUploadConfig(mimeType, sizeBytes) {
+  const normalizedMimeType = String(mimeType || '').trim().toLowerCase();
+  const normalizedSizeBytes = Number(sizeBytes);
+  if (!normalizedMimeType || !Number.isFinite(normalizedSizeBytes) || normalizedSizeBytes < 0) {
+    throw new TypeError('Google file upload requires a MIME type and file size.');
+  }
+
+  // @google/genai replaces its resumable-upload defaults when request-level
+  // httpOptions are supplied. Preserve those required headers while keeping
+  // the longer Railway transfer timeout.
+  return {
+    mimeType: normalizedMimeType,
+    httpOptions: {
+      apiVersion: '',
+      timeout: VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'start',
+        'X-Goog-Upload-Header-Content-Length': String(normalizedSizeBytes),
+        'X-Goog-Upload-Header-Content-Type': normalizedMimeType
+      }
+    }
+  };
+}
+
 function parseJsonError(value) {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();

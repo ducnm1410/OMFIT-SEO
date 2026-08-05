@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   buildGeminiVideoEditRequest,
+  buildGoogleFileUploadConfig,
   calculateVideoTelemetry,
   createVideoEditorTicket,
   friendlyGoogleApiError,
@@ -24,6 +25,20 @@ test('AI Video Editor chuẩn hóa lỗi Files API 404 và không hiện JSON th
   const message = friendlyGoogleApiError(error);
   assert.match(message, /không còn tìm thấy tệp video/i);
   assert.doesNotMatch(message, /\{"error"/);
+});
+
+test('upload Gemini Files giữ resumable headers khi tăng timeout trên Railway', () => {
+  const config = buildGoogleFileUploadConfig('video/mp4', 984_870);
+  assert.equal(config.mimeType, 'video/mp4');
+  assert.equal(config.httpOptions.apiVersion, '');
+  assert.equal(config.httpOptions.timeout, VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS);
+  assert.deepEqual(config.httpOptions.headers, {
+    'Content-Type': 'application/json',
+    'X-Goog-Upload-Protocol': 'resumable',
+    'X-Goog-Upload-Command': 'start',
+    'X-Goog-Upload-Header-Content-Length': '984870',
+    'X-Goog-Upload-Header-Content-Type': 'video/mp4'
+  });
 });
 
 test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉnh sửa', () => {
