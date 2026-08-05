@@ -518,22 +518,10 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           resolution,
           aspectRatio
         };
-        let interaction;
-        try {
-          interaction = await ai.interactions.create(
-            buildGeminiVideoEditRequest({ ...requestOptions, includeResolution: true }),
-            { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
-          );
-        } catch (error) {
-          if (generationMode === 'edit-video' && /resolution|invalid|unknown|400|argument/i.test(String(error?.message || ''))) {
-            interaction = await ai.interactions.create(
-              buildGeminiVideoEditRequest({ ...requestOptions, includeResolution: false }),
-              { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
-            );
-          } else {
-            throw error;
-          }
-        }
+        const interaction = await ai.interactions.create(
+          buildGeminiVideoEditRequest(requestOptions),
+          { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
+        );
         if (!interaction?.id) throw new Error('Gemini không trả về mã interaction.');
         const jobTicket = createVideoEditorTicket({
           version: 1,

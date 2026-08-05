@@ -128,11 +128,8 @@ export function buildGeminiVideoEditRequest({
   imageData,
   mimeType = 'video/mp4',
   previousInteractionId,
-  resolution = '720p',
-  aspectRatio = '16:9',
-  includeResolution = true
+  aspectRatio = '16:9'
 }) {
-  const mediaResolution = resolution === '1080p' ? 'ultra_high' : 'high';
   const input = previousInteractionId
     ? prompt
     : mode === 'text-to-video'
@@ -146,17 +143,17 @@ export function buildGeminiVideoEditRequest({
         {
           type: 'document',
           uri: fileUri,
-          mime_type: mimeType,
-          ...(includeResolution ? { resolution: mediaResolution } : {})
+          mime_type: mimeType
         },
         { type: 'text', text: prompt }
       ];
 
-  const task = previousInteractionId || mode === 'continue'
-    ? 'edit'
-    : mode === 'image-to-video'
-      ? 'image_to_video'
-      : mode === 'text-to-video' ? 'text_to_video' : 'edit';
+  // Gemini's uploaded-video edit flow infers the task from the File API URI.
+  // Forcing `task: edit` currently makes the provider validate the document as
+  // if it were an inline video and reject it with "Exactly one input video".
+  const task = mode === 'image-to-video'
+    ? 'image_to_video'
+    : mode === 'text-to-video' ? 'text_to_video' : null;
 
   return {
     model: GEMINI_VIDEO_EDITOR_MODEL,
@@ -168,7 +165,7 @@ export function buildGeminiVideoEditRequest({
       delivery: 'uri',
       aspect_ratio: aspectRatio === '9:16' ? '9:16' : '16:9'
     },
-    generation_config: { video_config: { task } },
+    ...(task ? { generation_config: { video_config: { task } } } : {}),
     ...(previousInteractionId ? { previous_interaction_id: previousInteractionId } : {})
   };
 }

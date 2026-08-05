@@ -56,9 +56,15 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
     delivery: 'uri',
     aspect_ratio: '16:9'
   });
-  assert.equal(first.generation_config.video_config.task, 'edit');
-  assert.equal(first.input[0].type, 'document');
-  assert.equal(first.input[0].resolution, 'ultra_high');
+  assert.equal(first.generation_config, undefined);
+  assert.deepEqual(first.input, [
+    {
+      type: 'document',
+      uri: 'https://generativelanguage.googleapis.com/v1beta/files/source',
+      mime_type: 'video/mp4'
+    },
+    { type: 'text', text: 'Make the lighting cinematic' }
+  ]);
 
   const chained = buildGeminiVideoEditRequest({
     prompt: 'Add light rain',
@@ -67,7 +73,7 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
   });
   assert.equal(chained.input, 'Add light rain');
   assert.equal(chained.previous_interaction_id, 'v1_previous');
-  assert.equal(chained.generation_config.video_config.task, 'edit');
+  assert.equal(chained.generation_config, undefined);
 });
 
 test('AI Video Editor hỗ trợ text, ảnh và tỷ lệ dọc/ngang đúng schema Gemini Omni', () => {
