@@ -5,7 +5,7 @@ export const VIDEO_EDITOR_SOURCE_BUCKET = 'omfit-video-inputs';
 export const VIDEO_EDITOR_OUTPUT_BUCKET = 'omfit-video-assets';
 export const VIDEO_EDITOR_SOURCE_TICKET_TTL_MS = 47 * 60 * 60 * 1000;
 export const VIDEO_EDITOR_JOB_TICKET_TTL_MS = 2 * 60 * 60 * 1000;
-export const VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+export const VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 export const VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 export const VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
 export const VIDEO_EDITOR_MAX_BYTES = 100 * 1024 * 1024;
@@ -135,6 +135,7 @@ export function buildGeminiVideoEditRequest({
   previousInteractionId,
   aspectRatio = '16:9'
 }) {
+  const synchronousEdit = Boolean(previousInteractionId) || mode === 'edit-video' || mode === 'continue';
   const input = previousInteractionId
     ? prompt
     : mode === 'text-to-video'
@@ -146,15 +147,13 @@ export function buildGeminiVideoEditRequest({
           ]
         : [
         {
-          type: 'video',
+          type: 'document',
           uri: fileUri,
           mime_type: mimeType
         },
         { type: 'text', text: prompt }
       ];
 
-  // The provider validates edit inputs by content type. A File API URI must be
-  // sent as `video`; `document` is accepted initially but fails in the worker.
   const task = mode === 'image-to-video'
     ? 'image_to_video'
     : mode === 'text-to-video' ? 'text_to_video' : null;
@@ -163,10 +162,10 @@ export function buildGeminiVideoEditRequest({
     model: GEMINI_VIDEO_EDITOR_MODEL,
     input,
     store: true,
-    background: true,
+    ...(!synchronousEdit ? { background: true } : {}),
     response_format: {
       type: 'video',
-      delivery: 'uri',
+      ...(!synchronousEdit ? { delivery: 'uri' } : {}),
       aspect_ratio: aspectRatio === '9:16' ? '9:16' : '16:9'
     },
     ...(task ? { generation_config: { video_config: { task } } } : {}),

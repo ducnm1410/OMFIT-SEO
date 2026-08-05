@@ -304,7 +304,7 @@ export const AIVideoEditor: React.FC = () => {
     setElapsed(0);
     setPhase('rendering');
     const submittedPrompt = promptVi.trim();
-    addLog(`Đã gửi yêu cầu “${submittedPrompt}”. Gemini đang render background…`);
+    addLog(`Đã gửi yêu cầu “${submittedPrompt}”. Gemini đang render; hệ thống sẽ tự chuyển sang kiểm tra định kỳ nếu cần…`);
     try {
       const video = await generateVideoEdit({
         promptVi: submittedPrompt,
@@ -606,7 +606,7 @@ export const AIVideoEditor: React.FC = () => {
                 <div className="flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-800">
                   <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
                   <div>
-                    <p className="text-sm font-bold">Gemini đang render video background</p>
+                    <p className="text-sm font-bold">Gemini đang render video</p>
                     <p className="mt-0.5 text-xs font-medium">Đã trôi qua {formatElapsed(elapsed)} · có thể mất vài phút</p>
                   </div>
                 </div>

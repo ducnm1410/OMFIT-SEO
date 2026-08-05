@@ -50,7 +50,7 @@ test('AI Video Editor chuẩn hóa URI Files API và gửi đúng loại video',
   assert.equal(canonicalGoogleFileUri({ name: '../files/unsafe' }), '');
 });
 
-test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉnh sửa', () => {
+test('AI Video Editor sửa video đồng bộ và hỗ trợ chuỗi chỉnh sửa', () => {
   const first = buildGeminiVideoEditRequest({
     prompt: 'Make the lighting cinematic',
     fileUri: 'https://generativelanguage.googleapis.com/v1beta/files/source',
@@ -58,17 +58,16 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
     resolution: '1080p'
   });
   assert.equal(first.model, GEMINI_VIDEO_EDITOR_MODEL);
-  assert.equal(first.background, true);
+  assert.equal(first.background, undefined);
   assert.equal(first.store, true);
   assert.deepEqual(first.response_format, {
     type: 'video',
-    delivery: 'uri',
     aspect_ratio: '16:9'
   });
   assert.equal(first.generation_config, undefined);
   assert.deepEqual(first.input, [
     {
-      type: 'video',
+      type: 'document',
       uri: 'https://generativelanguage.googleapis.com/v1beta/files/source',
       mime_type: 'video/mp4'
     },
@@ -82,6 +81,7 @@ test('AI Video Editor tạo background interaction và hỗ trợ chuỗi chỉn
   });
   assert.equal(chained.input, 'Add light rain');
   assert.equal(chained.previous_interaction_id, 'v1_previous');
+  assert.equal(chained.background, undefined);
   assert.equal(chained.generation_config, undefined);
 });
 
@@ -92,6 +92,7 @@ test('AI Video Editor hỗ trợ text, ảnh và tỷ lệ dọc/ngang đúng sc
     aspectRatio: '9:16'
   });
   assert.equal(textRequest.input, 'A calm Pilates studio');
+  assert.equal(textRequest.background, true);
   assert.equal(textRequest.response_format.aspect_ratio, '9:16');
   assert.equal(textRequest.generation_config.video_config.task, 'text_to_video');
 
@@ -129,9 +130,9 @@ test('telemetry video tính thời lượng MP4 và chi phí từ usage Gemini',
   assert.ok(telemetry.estimatedCostUsd > 1);
 });
 
-test('Railway cho phép Video Editor render 60 phút và transfer tối đa 10 phút', async () => {
+test('Railway cho phép Video Editor render đồng bộ 10 phút, poll 60 phút và transfer 10 phút', async () => {
   assert.equal(VIDEO_EDITOR_JOB_TICKET_TTL_MS, 2 * 60 * 60 * 1000);
-  assert.equal(VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS, 5 * 60 * 1000);
+  assert.equal(VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS, 10 * 60 * 1000);
   assert.equal(VIDEO_EDITOR_POLL_REQUEST_TIMEOUT_MS, 2 * 60 * 1000);
   assert.equal(VIDEO_EDITOR_MEDIA_TRANSFER_TIMEOUT_MS, 10 * 60 * 1000);
   const [service, route] = await Promise.all([
@@ -203,7 +204,8 @@ test('UI tải video trực tiếp lên Supabase và API dùng start/poll thay v
   assert.match(service, /operation: 'start'/);
   assert.match(service, /operation: 'poll'/);
   assert.doesNotMatch(service, /readAsDataURL|videoBase64/);
-  assert.match(route, /background: true|buildGeminiVideoEditRequest/);
+  assert.match(route, /interactionStatus === 'completed'/);
+  assert.match(route, /buildGeminiVideoEditRequest/);
   assert.match(route, /:download/);
   assert.match(route, /timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS/);
   assert.match(route, /\.eq\('owner_id', ownerId\)/);

@@ -532,6 +532,29 @@ export function registerVideoEditorRoute({ app, requireSupabaseUser, getSupabase
           { timeout_ms: VIDEO_EDITOR_PROVIDER_REQUEST_TIMEOUT_MS }
         );
         if (!interaction?.id) throw new Error('Gemini không trả về mã interaction.');
+        const interactionStatus = String(interaction.status || '').toLowerCase();
+        if (interactionStatus === 'completed') {
+          const video = await persistCompletedVideo(supabase, ownerId, {
+            interactionId: interaction.id,
+            parentAssetId: parentAsset?.id || null,
+            sourceStoragePath: sourceJob?.sourceStoragePath || parentAsset?.source_storage_path || null,
+            sourceMimeType: sourceJob?.mimeType || parentAsset?.metadata?.sourceMimeType || null,
+            promptVi,
+            promptEn,
+            resolution,
+            aspectRatio,
+            generationMode,
+            renderStartedAt,
+            issuedAt: renderStartedAt
+          }, interaction, apiKey, ai);
+          return response.json(video);
+        }
+        if (['failed', 'cancelled', 'incomplete'].includes(interactionStatus)) {
+          const error = new Error(`Gemini kết thúc interaction với trạng thái ${interactionStatus}.`);
+          error.statusCode = 502;
+          error.code = 'video_editor_generation_failed';
+          throw error;
+        }
         const jobTicket = createVideoEditorTicket({
           version: 1,
           kind: 'edit',
