@@ -1,5 +1,8 @@
 export const AUTH_SESSION_REFRESH_BUFFER_SECONDS = 90;
 
+const refreshRequests = new WeakMap();
+const clearSessionRequests = new WeakMap();
+
 export class AuthSessionExpiredError extends Error {
   constructor() {
     super('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
@@ -9,10 +12,41 @@ export class AuthSessionExpiredError extends Error {
 }
 
 async function clearLocalSession(auth) {
+  const existingRequest = clearSessionRequests.get(auth);
+  if (existingRequest) return existingRequest;
+
+  const request = (async () => {
+    try {
+      await auth.signOut({ scope: 'local' });
+    } catch {
+      // The local auth state will also be cleared by the next successful login.
+    }
+  })();
+  clearSessionRequests.set(auth, request);
   try {
-    await auth.signOut({ scope: 'local' });
-  } catch {
-    // The local auth state will also be cleared by the next successful login.
+    return await request;
+  } finally {
+    if (clearSessionRequests.get(auth) === request) clearSessionRequests.delete(auth);
+  }
+}
+
+async function refreshSession(auth) {
+  const existingRequest = refreshRequests.get(auth);
+  if (existingRequest) return existingRequest;
+
+  const request = (async () => {
+    try {
+      const refreshed = await auth.refreshSession();
+      return refreshed?.data?.session?.access_token ? refreshed.data.session : null;
+    } catch {
+      return null;
+    }
+  })();
+  refreshRequests.set(auth, request);
+  try {
+    return await request;
+  } finally {
+    if (refreshRequests.get(auth) === request) refreshRequests.delete(auth);
   }
 }
 
@@ -44,12 +78,8 @@ export async function getAuthenticatedSession(
   );
   if (!forceRefresh && session?.access_token && !expiresSoon) return session;
 
-  try {
-    const refreshed = await auth.refreshSession();
-    if (refreshed?.data?.session?.access_token) return refreshed.data.session;
-  } catch {
-    // A still-valid access token can be used until its actual expiry.
-  }
+  const refreshedSession = await refreshSession(auth);
+  if (refreshedSession) return refreshedSession;
 
   if (!forceRefresh && hasUnexpiredToken(session, nowSeconds)) return session;
 

@@ -39,6 +39,7 @@ import {
 import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
 import { registerVideoEditorRoute } from './videoEditorRoute.mjs';
 import { registerInternalProfileAuthRoute } from './internalProfileAuth.mjs';
+import { normalizeRuntimeEnvValue } from '../src/lib/runtimeEnv.mjs';
 
 dotenv.config({ override: true, quiet: true });
 
@@ -60,7 +61,7 @@ const oauthSessionCookie = 'omfit_google_ads_session';
 const oauthStateMaxAgeMs = 10 * 60 * 1000;
 
 function getEnv(name, fallback = '') {
-  return String(process.env[name] ?? fallback).trim();
+  return normalizeRuntimeEnvValue(process.env[name] ?? fallback);
 }
 
 let supabaseAdminClient;
@@ -211,8 +212,8 @@ function saveOAuthSession(request, response, payload) {
 }
 
 async function requireSupabaseUser(request, response, next) {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
+  const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('VITE_SUPABASE_ANON_KEY');
   const authorization = String(request.headers.authorization || '');
   const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
 

@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { normalizeRuntimeEnvValue } from './runtimeEnv.mjs';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = normalizeRuntimeEnvValue(import.meta.env.VITE_SUPABASE_URL);
+const supabaseAnonKey = normalizeRuntimeEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY.');

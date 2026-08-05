@@ -109,6 +109,47 @@ test('query Supabase 401 refresh session rồi chạy lại đúng một lần',
   assert.deepEqual(auth.calls, ['getSession', 'refreshSession']);
 });
 
+test('nhiều query 401 đồng thời chỉ refresh session một lần', async () => {
+  let releaseRefresh;
+  const refreshGate = new Promise((resolve) => {
+    releaseRefresh = resolve;
+  });
+  const auth = createAuth({
+    currentSession: {
+      access_token: 'rejected-token',
+      expires_at: 2_000,
+      user: { id: 'user-1' }
+    },
+    refreshedSession: {
+      access_token: 'replacement-token',
+      expires_at: 3_000,
+      user: { id: 'user-1' }
+    }
+  });
+  const originalRefreshSession = auth.refreshSession;
+  auth.refreshSession = async () => {
+    await refreshGate;
+    return originalRefreshSession();
+  };
+  const queryCalls = [0, 0, 0, 0];
+  const requests = queryCalls.map((_, index) => withAuthenticatedSupabaseRetry(auth, async () => {
+    queryCalls[index] += 1;
+    return queryCalls[index] === 1
+      ? { data: null, error: { status: 401, code: 'UNAUTHORIZED_INVALID_API_KEY' } }
+      : { data: ['restored'], error: null };
+  }));
+
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseRefresh();
+  const results = await Promise.all(requests);
+
+  assert.deepEqual(results.map((result) => result.data), [
+    ['restored'], ['restored'], ['restored'], ['restored']
+  ]);
+  assert.equal(auth.calls.filter((call) => call === 'refreshSession').length, 1);
+  assert.deepEqual(queryCalls, [2, 2, 2, 2]);
+});
+
 test('refresh token hết hạn sẽ xóa session local và yêu cầu đăng nhập lại', async () => {
   const auth = createAuth({
     currentSession: null,
