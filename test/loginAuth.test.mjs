@@ -46,6 +46,35 @@ test('frontend gửi số điện thoại tới API profile và dùng token mộ
   assert.deepEqual(otpCalls, [{ token_hash: 'one-time-hash', type: 'magiclink' }]);
 });
 
+test('hai thiết bị đăng nhập độc lập bằng hai magic token và không phụ thuộc session cũ', async () => {
+  let requestNumber = 0;
+  const verifiedTokens = [];
+  const createAuth = (device) => ({
+    async verifyOtp(payload) {
+      verifiedTokens.push({ device, ...payload });
+      return { data: { session: { access_token: `${device}-session` } }, error: null };
+    }
+  });
+  const fakeFetch = async () => {
+    requestNumber += 1;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { tokenHash: `token-${requestNumber}`, verificationType: 'magiclink' };
+      }
+    };
+  };
+
+  await signInInternalUser(createAuth('device-a'), '0912345678', 'same-password', fakeFetch);
+  await signInInternalUser(createAuth('device-b'), '0912345678', 'same-password', fakeFetch);
+
+  assert.deepEqual(verifiedTokens, [
+    { device: 'device-a', token_hash: 'token-1', type: 'magiclink' },
+    { device: 'device-b', token_hash: 'token-2', type: 'magiclink' }
+  ]);
+});
+
 test('login không che lỗi hệ thống thành lỗi sai mật khẩu', async () => {
   const networkError = { code: 'request_timeout', message: 'Request timed out' };
   const auth = { async verifyOtp() { return { error: null }; } };
@@ -156,8 +185,9 @@ test('backend từ chối profile sai mật khẩu và giới hạn brute force'
 
 test('migration hash password profiles và khóa anon khỏi dữ liệu đăng nhập', async () => {
   const { readFile } = await import('node:fs/promises');
-  const [migration, server] = await Promise.all([
+  const [migration, enforcementMigration, server] = await Promise.all([
     readFile(new URL('../supabase/migrations/202608050002_secure_profile_login.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../supabase/migrations/202608090001_enforce_profile_password_hash.sql', import.meta.url), 'utf8'),
     readFile(new URL('../server/index.mjs', import.meta.url), 'utf8')
   ]);
   assert.match(migration, /extensions\.crypt\(password, extensions\.gen_salt\('bf', 11\)\)/);
@@ -166,5 +196,7 @@ test('migration hash password profiles và khóa anon khỏi dữ liệu đăng 
   assert.match(migration, /verify_internal_profile_credentials/);
   assert.match(migration, /revoke all on function[\s\S]*from public, anon, authenticated/i);
   assert.match(migration, /grant execute on function[\s\S]*to service_role/i);
+  assert.match(enforcementMigration, /before insert or update of password on public\.profiles/i);
+  assert.match(enforcementMigration, /new\.password := extensions\.crypt/i);
   assert.match(server, /registerInternalProfileAuthRoute/);
 });
