@@ -13,7 +13,8 @@ import {
   Settings2,
   X,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Layers
 } from 'lucide-react';
 import type { ActiveTab } from '../types';
 
@@ -55,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       label: 'Nội dung',
       items: [
+        { id: 'bannerad', label: 'Banner Ad', icon: Layers, badge: 'Mới' },
         { id: 'videoeditor', label: 'AI Video Editor', icon: Film, badge: 'Mới' },
         { id: 'history', label: 'Lịch sử bài viết', icon: History, badge: '' }
       ]

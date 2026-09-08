@@ -38,6 +38,7 @@ import {
 } from './leonardoImageGeneration.mjs';
 import { runPostPublishSeoChecks } from './postPublishSeo.mjs';
 import { registerVideoEditorRoute } from './videoEditorRoute.mjs';
+import { registerBannerAdsRoutes } from './bannerAdsRoute.mjs';
 import { registerInternalProfileAuthRoute } from './internalProfileAuth.mjs';
 import { startMediaRetentionScheduler } from './mediaRetention.mjs';
 import { normalizeRuntimeEnvValue } from '../src/lib/runtimeEnv.mjs';
@@ -256,6 +257,7 @@ async function requireSupabaseUser(request, response, next) {
 
 registerInternalProfileAuthRoute({ app, getSupabaseAdmin });
 registerVideoEditorRoute({ app, requireSupabaseUser, getSupabaseAdmin, getEnv });
+registerBannerAdsRoutes({ app, requireSupabaseUser, getSupabaseAdmin, getEnv });
 
 function formatSearchVolume(value) {
   const number = Number(value || 0);

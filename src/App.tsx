@@ -48,6 +48,8 @@ const SeoContentGenerator = lazy(() => import('./components/SeoContentGenerator'
   .then((module) => ({ default: module.SeoContentGenerator })));
 const ImageStudio = lazy(() => import('./components/ImageStudio')
   .then((module) => ({ default: module.ImageStudio })));
+const BannerAds = lazy(() => import('./components/BannerAds')
+  .then((module) => ({ default: module.BannerAds })));
 const AIVideoEditor = lazy(() => import('./components/AIVideoEditor')
   .then((module) => ({ default: module.AIVideoEditor })));
 const LiveEditorPublisher = lazy(() => import('./components/LiveEditorPublisher')
@@ -93,7 +95,7 @@ export function App() {
   const [session, setSession] = useState<Session | null>();
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'videoeditor', 'editor', 'history', 'settings'];
+    const allowedTabs: ActiveTab[] = ['overview', 'keywords', 'generator', 'imagestudio', 'bannerad', 'videoeditor', 'editor', 'history', 'settings'];
     if (allowedTabs.includes(requestedTab as ActiveTab)) return requestedTab as ActiveTab;
     return allowedTabs.includes(initialWorkflow.activeTab as ActiveTab)
       ? initialWorkflow.activeTab as ActiveTab
@@ -595,6 +597,8 @@ export function App() {
               onInsertInline={selectedArticle ? handleInlineImage : undefined}
             />
           )}
+
+          {activeTab === 'bannerad' && <BannerAds />}
 
           {activeTab === 'videoeditor' && <AIVideoEditor />}
 

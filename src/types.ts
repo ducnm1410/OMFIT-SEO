@@ -259,8 +259,56 @@ export interface ApiSettings {
   defaultAuthor: string;
 }
 
-export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'videoeditor' | 'editor' | 'history' | 'settings';
+export type ActiveTab = 'overview' | 'keywords' | 'generator' | 'imagestudio' | 'bannerad' | 'videoeditor' | 'editor' | 'history' | 'settings';
 
 export type SeoWorkflowStep = 1 | 2 | 3 | 4;
 
 export type WorkflowSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+export type BannerAspectRatio = '1:1' | '16:9' | '9:16' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '21:9';
+export type BannerQuality = '1k' | '2k' | '4k';
+export type BannerMode = 'single' | 'batch' | 'resize' | 'localize' | 'history';
+
+export interface BatchSet {
+  competitor: { id: string; dataUrl: string } | null;
+  character: { id: string; dataUrl: string } | null;
+  keyMessage: string;
+  redraw3D: boolean;
+}
+
+export interface BatchResult {
+  setIndex: number;
+  status: 'pending' | 'generating' | 'success' | 'error' | 'skipped';
+  imageUrl?: string;
+  promptUsed?: string;
+  error?: string;
+}
+
+export interface ResizeResult {
+  size: string;
+  status: 'pending' | 'generating' | 'success' | 'error';
+  imageUrl?: string;
+  error?: string;
+}
+
+export interface LocalizeResult {
+  originalImageUrl: string;
+  status: 'pending' | 'processing' | 'success' | 'error';
+  clonedImageUrl?: string;
+  detectedText?: string;
+  translatedText?: string;
+  error?: string;
+}
+
+export interface BannerAdAsset {
+  id: string;
+  ownerId?: string;
+  url: string;
+  prompt?: string;
+  keyMessage?: string;
+  size: string;
+  quality: string;
+  mode: string;
+  createdAt: string;
+}
+
