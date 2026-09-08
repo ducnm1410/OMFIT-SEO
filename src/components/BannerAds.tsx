@@ -76,7 +76,6 @@ export function BannerAds() {
   const [singleKeyMessage, setSingleKeyMessage] = useState('');
   const [singleRatio, setSingleRatio] = useState<BannerAspectRatio>('16:9');
   const [singleQuality, setSingleQuality] = useState<BannerQuality>('1k');
-  const [singleRedraw3D, setSingleRedraw3D] = useState(false);
   const [singleLoading, setSingleLoading] = useState(false);
   const [singleResult, setSingleResult] = useState<{ imageUrl: string; promptUsed: string } | null>(null);
   const [singleError, setSingleError] = useState<string | null>(null);
@@ -85,9 +84,9 @@ export function BannerAds() {
 
   // ── Batch Mode State ──────────────────────────────────────────────────────
   const [batchSets, setBatchSets] = useState<BatchSet[]>([
-    { competitor: null, character: null, keyMessage: '', redraw3D: false },
-    { competitor: null, character: null, keyMessage: '', redraw3D: false },
-    { competitor: null, character: null, keyMessage: '', redraw3D: false }
+    { competitor: null, character: null, keyMessage: '' },
+    { competitor: null, character: null, keyMessage: '' },
+    { competitor: null, character: null, keyMessage: '' }
   ]);
   const [activeBatchIndex, setActiveBatchIndex] = useState(0);
   const [batchRatio, setBatchRatio] = useState<BannerAspectRatio>('16:9');
@@ -178,8 +177,7 @@ export function BannerAds() {
         keyMessage: singleKeyMessage.trim(),
         language: 'Vietnamese',
         size: singleRatio,
-        quality: singleQuality,
-        redraw3D: singleRedraw3D
+        quality: singleQuality
       });
       setSingleResult(response);
     } catch (err: any) {
@@ -232,8 +230,7 @@ export function BannerAds() {
         batchSets: batchSets.map((s) => ({
           competitorRef: s.competitor?.dataUrl || null,
           character: s.character?.dataUrl || null,
-          keyMessage: s.keyMessage.trim(),
-          redraw3D: s.redraw3D
+          keyMessage: s.keyMessage.trim()
         })),
         size: batchRatio,
         quality: batchQuality,
@@ -251,7 +248,7 @@ export function BannerAds() {
     if (batchSets.length >= 5) return;
     setBatchSets((prev) => [
       ...prev,
-      { competitor: null, character: null, keyMessage: '', redraw3D: false }
+      { competitor: null, character: null, keyMessage: '' }
     ]);
     setActiveBatchIndex(batchSets.length);
   };
@@ -383,19 +380,7 @@ export function BannerAds() {
             }`}
           >
             <Zap className="h-3.5 w-3.5" />
-            Banner đơn
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveMode('batch')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
-              activeMode === 'batch'
-                ? 'bg-white text-[#0879D9] shadow-sm'
-                : 'text-slate-600 hover:text-[#17191D]'
-            }`}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Hàng loạt (Multi)
+            Tạo banner
           </button>
           <button
             type="button"
@@ -419,7 +404,19 @@ export function BannerAds() {
             }`}
           >
             <ScanText className="h-3.5 w-3.5" />
-            Bản địa hóa chữ
+            Thay chữ / Dịch
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMode('batch')}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+              activeMode === 'batch'
+                ? 'bg-white text-[#0879D9] shadow-sm'
+                : 'text-slate-600 hover:text-[#17191D]'
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Tạo hàng loạt
           </button>
           <button
             type="button"
@@ -566,46 +563,22 @@ export function BannerAds() {
                 </div>
               </div>
 
-              {/* Quality Selector & 3D Toggle */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Chất lượng hiển thị
-                  </label>
-                  <select
-                    value={singleQuality}
-                    onChange={(e) => setSingleQuality(e.target.value as BannerQuality)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-[#0879D9]"
-                  >
-                    {QUALITY_TIERS.map((q) => (
-                      <option key={q.id} value={q.id}>
-                        {q.label} ({q.desc})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                  <div>
-                    <span className="block text-xs font-semibold text-slate-800">
-                      Chế độ Redraw 3D
-                    </span>
-                    <span className="text-[10px] text-slate-500">Tăng chiều sâu & ánh sáng</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSingleRedraw3D(!singleRedraw3D)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      singleRedraw3D ? 'bg-[#0879D9]' : 'bg-slate-300'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        singleRedraw3D ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
+              {/* Quality Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Chất lượng hiển thị
+                </label>
+                <select
+                  value={singleQuality}
+                  onChange={(e) => setSingleQuality(e.target.value as BannerQuality)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-[#0879D9]"
+                >
+                  {QUALITY_TIERS.map((q) => (
+                    <option key={q.id} value={q.id}>
+                      {q.label} ({q.desc})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {singleError && (
@@ -624,12 +597,12 @@ export function BannerAds() {
                 {singleLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>AI Art Director đang tạo Banner…</span>
+                    <span>Đang tạo…</span>
                   </>
                 ) : (
                   <>
                     <Wand2 className="h-4 w-4" />
-                    <span>Tạo Banner AI</span>
+                    <span>Tạo</span>
                   </>
                 )}
               </button>

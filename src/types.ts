@@ -273,7 +273,6 @@ export interface BatchSet {
   competitor: { id: string; dataUrl: string } | null;
   character: { id: string; dataUrl: string } | null;
   keyMessage: string;
-  redraw3D: boolean;
 }
 
 export interface BatchResult {

@@ -190,8 +190,7 @@ export function registerBannerAdsRoutes({ app, requireSupabaseUser, getSupabaseA
         keyMessage = '',
         language = 'Vietnamese',
         size = '16:9',
-        quality = '1k',
-        redraw3D = false
+        quality = '1k'
       } = request.body || {};
 
       if (!competitorRef && !character && !keyMessage.trim()) {
@@ -235,7 +234,6 @@ I want to generate a premium, high-converting banner ad.
 ${competitorRef ? '- Image 1 is the Layout/Composition Reference banner.' : ''}
 ${character ? '- Image 2 is the Subject/Character/Model reference.' : ''}
 ${keyMessage ? `- The Key Message / Headline text to place prominently on the banner is: "${keyMessage}" in ${language}.` : ''}
-${redraw3D ? '- Style enhancement: render subjects with refined 3D lighting, crisp sculptural details, and vivid volumetric depth.' : ''}
 Dimensions target: ${size} (${dimensions.w}x${dimensions.h}).
 
 YOUR TASK:

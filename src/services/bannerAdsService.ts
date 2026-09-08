@@ -12,7 +12,6 @@ export interface SingleBannerParams {
   language?: string;
   size: string;
   quality: string;
-  redraw3D?: boolean;
 }
 
 export interface SingleBannerResponse {
@@ -25,7 +24,6 @@ export interface BatchBannerParams {
     competitorRef?: string | null;
     character?: string | null;
     keyMessage: string;
-    redraw3D?: boolean;
   }>;
   size: string;
   quality: string;
