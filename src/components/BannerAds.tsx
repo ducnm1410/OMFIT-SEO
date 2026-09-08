@@ -348,89 +348,87 @@ export function BannerAds() {
     return matchesSearch && matchesRatio;
   });
 
+  const bannerModes: Array<{
+    id: BannerMode;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: number;
+  }> = [
+    { id: 'single', label: 'Tạo banner', icon: Zap },
+    { id: 'resize', label: 'Đổi kích thước', icon: Maximize2 },
+    { id: 'localize', label: 'Thay chữ / Dịch', icon: ScanText },
+    { id: 'batch', label: 'Tạo hàng loạt', icon: Layers },
+    { id: 'history', label: 'Thư viện', icon: History, badge: historyItems.length > 0 ? historyItems.length : undefined }
+  ];
+
   return (
     <div className="space-y-6">
       {/* ── Studio Header ─────────────────────────────────────────────────── */}
-      <div className="ui-panel flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#0879D9]/10 text-[#0879D9]">
+      <div className="ui-panel space-y-4 p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#0879D9]/15 to-[#0879D9]/5 text-[#0879D9] border border-[#0879D9]/20 shadow-sm">
               <Layers className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-[#17191D]">
-                Banner Ad Studio
-              </h1>
-              <p className="text-xs font-medium text-slate-500">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight text-[#17191D]">
+                  Banner Ad Studio
+                </h1>
+                <span className="hidden sm:inline-flex items-center rounded-full bg-[#0879D9]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#0879D9] border border-[#0879D9]/20">
+                  AI Ads Suite
+                </span>
+              </div>
+              <p className="text-xs font-medium text-slate-500 mt-0.5">
                 Tạo banner quảng cáo đa kênh & chuyển đổi cao theo nhận diện thương hiệu OMFIT
               </p>
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
+              <FileCheck className="h-3.5 w-3.5 text-[#0879D9]" />
+              <span>{historyItems.length} banner trong kho</span>
+            </span>
+          </div>
         </div>
 
         {/* Mode Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1">
-          <button
-            type="button"
-            onClick={() => setActiveMode('single')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
-              activeMode === 'single'
-                ? 'bg-white text-[#0879D9] shadow-sm'
-                : 'text-slate-600 hover:text-[#17191D]'
-            }`}
-          >
-            <Zap className="h-3.5 w-3.5" />
-            Tạo banner
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveMode('resize')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
-              activeMode === 'resize'
-                ? 'bg-white text-[#0879D9] shadow-sm'
-                : 'text-slate-600 hover:text-[#17191D]'
-            }`}
-          >
-            <Maximize2 className="h-3.5 w-3.5" />
-            Đổi kích thước
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveMode('localize')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
-              activeMode === 'localize'
-                ? 'bg-white text-[#0879D9] shadow-sm'
-                : 'text-slate-600 hover:text-[#17191D]'
-            }`}
-          >
-            <ScanText className="h-3.5 w-3.5" />
-            Thay chữ / Dịch
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveMode('batch')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
-              activeMode === 'batch'
-                ? 'bg-white text-[#0879D9] shadow-sm'
-                : 'text-slate-600 hover:text-[#17191D]'
-            }`}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Tạo hàng loạt
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveMode('history')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
-              activeMode === 'history'
-                ? 'bg-white text-[#0879D9] shadow-sm'
-                : 'text-slate-600 hover:text-[#17191D]'
-            }`}
-          >
-            <History className="h-3.5 w-3.5" />
-            Thư viện
-          </button>
-        </div>
+        <nav
+          aria-label="Chế độ Banner Studio"
+          className="flex items-center gap-1.5 overflow-x-auto no-scrollbar rounded-xl border border-slate-200/80 bg-slate-100/90 p-1.5"
+        >
+          {bannerModes.map((mode) => {
+            const Icon = mode.icon;
+            const isActive = activeMode === mode.id;
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => setActiveMode(mode.id)}
+                className={`flex flex-1 min-w-fit items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-xs font-bold transition-all duration-150 ${
+                  isActive
+                    ? 'bg-white text-[#0879D9] shadow-sm ring-1 ring-slate-200/80'
+                    : 'text-slate-600 hover:bg-white/60 hover:text-[#17191D]'
+                }`}
+              >
+                <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-[#0879D9]' : 'text-slate-400'}`} />
+                <span>{mode.label}</span>
+                {typeof mode.badge === 'number' && (
+                  <span
+                    className={`ml-1 inline-flex items-center justify-center rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      isActive
+                        ? 'bg-[#0879D9]/10 text-[#0879D9]'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {mode.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       {/* ── MODE 1: SINGLE BANNER GENERATION ─────────────────────────────── */}
