@@ -3824,6 +3824,16 @@ app.post('/api/keywords/analyze', requireSupabaseUser, async (request, response)
   }
 });
 
+// Mọi path /api/* không khớp route nào phải trả JSON. Nếu để rơi xuống handler
+// 404 mặc định của Express, client sẽ nhận về trang HTML ("<!DOCTYPE html> Cannot
+// POST /api/...") và chỉ thấy lỗi parse thay vì biết là gọi sai đường dẫn/method.
+app.use('/api', (request, response) => {
+  return response.status(404).json({
+    error: `Không tìm thấy API: ${request.method} ${request.baseUrl}${request.path}`,
+    code: 'api_route_not_found'
+  });
+});
+
 if (!process.env.VERCEL && (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production')) {
   const distributionDirectory = fileURLToPath(new URL('../dist/', import.meta.url));
   app.use(express.static(distributionDirectory));
