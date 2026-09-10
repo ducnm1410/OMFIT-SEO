@@ -9,12 +9,13 @@ import {
 } from './leonardoImageGeneration.mjs';
 import {
   capsOf,
+  DEFAULT_IMAGE_MODEL,
   GPT_IMAGE,
   isImageModel,
   resolveResolution
 } from '../src/lib/imageModels.mjs';
 
-const DEFAULT_MODEL_ID = GPT_IMAGE;
+const DEFAULT_MODEL_ID = DEFAULT_IMAGE_MODEL;
 
 // Model chạy bước "Art Director": Gemini đọc ảnh tham chiếu rồi viết prompt tiếng
 // Anh cho model sinh ảnh. Nhiệt độ thấp để prompt bám sát ảnh gốc thay vì sáng tác.

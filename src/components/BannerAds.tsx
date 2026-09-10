@@ -11,6 +11,7 @@ import {
   X,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   Loader2,
   Check,
   Sparkles,
@@ -46,9 +47,11 @@ import { ButtonContent } from './ButtonContent';
 import { compressImageFile, estimateDataUrlBytes, formatBytes } from '../utils/imageCompression';
 import {
   capsOf,
+  DEFAULT_IMAGE_MODEL,
   GPT_IMAGE,
   IMAGE_MODEL_CAPS,
   IMAGE_MODEL_ORDER,
+  NANO_BANANA,
   supportedTiers
 } from '../lib/imageModels.mjs';
 
@@ -94,6 +97,19 @@ function qualityOptions(model: string, size: string) {
       desc: dim ? `${dim.w}x${dim.h}` : ''
     };
   });
+}
+
+/** Dấu chấm than cạnh mỗi nút điều khiển, rê chuột vào hiện giải thích. */
+function ControlHint({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex shrink-0">
+      <AlertCircle className="h-3.5 w-3.5 cursor-help text-slate-400 transition group-hover:text-[#0879D9]" />
+      {/* Neo theo mép phải: cụm nút nằm sát cạnh phải panel, canh giữa sẽ bị tràn */}
+      <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 hidden w-64 rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-medium leading-relaxed text-white shadow-xl group-hover:block">
+        {text}
+      </span>
+    </span>
+  );
 }
 
 export function BannerAds() {
@@ -151,7 +167,7 @@ export function BannerAds() {
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
 
   // ── Model State (dùng chung cho mọi chế độ) ───────────────────────────────
-  const [imageModel, setImageModel] = useState<string>(GPT_IMAGE);
+  const [imageModel, setImageModel] = useState<string>(DEFAULT_IMAGE_MODEL);
   const [imageQuality, setImageQuality] = useState<string>('MEDIUM');
   const modelCaps = capsOf(imageModel);
 
@@ -501,14 +517,16 @@ export function BannerAds() {
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Model áp dụng cho mọi chế độ: tạo mới, đổi kích thước, thay chữ */}
-            <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-[#0879D9]" />
-              <span className="text-[11px] font-semibold text-slate-500">Model</span>
+            <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
+              <Sparkles className="h-4 w-4 shrink-0 text-[#0879D9]" />
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Model
+              </span>
               <select
+                aria-label="Model AI sinh ảnh"
                 value={imageModel}
                 onChange={(e) => setImageModel(e.target.value)}
-                title={modelCaps.hint}
-                className="bg-transparent text-xs font-bold text-[#17191D] outline-none"
+                className="cursor-pointer bg-transparent text-xs font-bold text-[#17191D] outline-none"
               >
                 {IMAGE_MODEL_ORDER.map((id: string) => (
                   <option key={id} value={id}>
@@ -516,17 +534,23 @@ export function BannerAds() {
                   </option>
                 ))}
               </select>
-            </label>
+              <ControlHint
+                text={`Model AI sinh ảnh, áp dụng cho mọi chế độ. ${IMAGE_MODEL_CAPS[NANO_BANANA].label}: ${IMAGE_MODEL_CAPS[NANO_BANANA].hint}. ${IMAGE_MODEL_CAPS[GPT_IMAGE].label}: ${IMAGE_MODEL_CAPS[GPT_IMAGE].hint}.`}
+              />
+            </div>
 
             {/* Chỉ hiện với model có tham số chất lượng render riêng */}
             {modelCaps.renderQualities && (
-              <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
-                <Sliders className="h-3.5 w-3.5 text-[#0879D9]" />
-                <span className="text-[11px] font-semibold text-slate-500">Render</span>
+              <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
+                <Sliders className="h-4 w-4 shrink-0 text-[#0879D9]" />
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Render
+                </span>
                 <select
+                  aria-label="Mức render của model"
                   value={imageQuality}
                   onChange={(e) => setImageQuality(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-[#17191D] outline-none"
+                  className="cursor-pointer bg-transparent text-xs font-bold text-[#17191D] outline-none"
                 >
                   {modelCaps.renderQualities.map((q: { label: string; value: string }) => (
                     <option key={q.value} value={q.value}>
@@ -534,11 +558,12 @@ export function BannerAds() {
                     </option>
                   ))}
                 </select>
-              </label>
+                <ControlHint text={`Mức render riêng của ${modelCaps.label}: càng cao thì chi tiết và chữ càng sắc nét, đổi lại lâu hơn và tốn nhiều credit hơn. Không ảnh hưởng tới kích thước ảnh — kích thước chọn ở mục "Chất lượng hiển thị".`} />
+              </div>
             )}
 
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
-              <FileCheck className="h-3.5 w-3.5 text-[#0879D9]" />
+            <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600">
+              <FileCheck className="h-4 w-4 shrink-0 text-[#0879D9]" />
               <span>{historyItems.length} banner trong kho</span>
             </span>
           </div>

@@ -11,8 +11,8 @@
 export const NANO_BANANA = 'nano-banana-2';
 export const GPT_IMAGE = 'gpt-image-2';
 
-/** Thứ tự model hiển thị trên UI */
-export const IMAGE_MODEL_ORDER = [GPT_IMAGE, NANO_BANANA];
+/** Thứ tự model hiển thị trên UI — mặc định đứng đầu */
+export const IMAGE_MODEL_ORDER = [NANO_BANANA, GPT_IMAGE];
 
 /** Thứ tự tier từ nhỏ đến lớn — dùng khi phải hạ độ phân giải cho hợp model */
 export const QUALITY_TIERS = ['1k', '2k', '4k'];
@@ -91,8 +91,9 @@ export const IMAGE_MODEL_CAPS = {
   }
 };
 
-/** Model lạ (client cũ, API key gọi thẳng) rơi về gpt-image-2 */
-export const capsOf = (model) => IMAGE_MODEL_CAPS[model] || IMAGE_MODEL_CAPS[GPT_IMAGE];
+/** Model lạ (client cũ, API key gọi thẳng) rơi về model mặc định */
+export const DEFAULT_IMAGE_MODEL = NANO_BANANA;
+export const capsOf = (model) => IMAGE_MODEL_CAPS[model] || IMAGE_MODEL_CAPS[DEFAULT_IMAGE_MODEL];
 
 export const isImageModel = (model) => typeof model === 'string' && !!IMAGE_MODEL_CAPS[model];
 
