@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
-  Copy,
   Check,
   Sparkles,
   RefreshCw,
@@ -107,10 +106,9 @@ export function BannerAds() {
   const [singleRatio, setSingleRatio] = useState<BannerAspectRatio>('16:9');
   const [singleQuality, setSingleQuality] = useState<BannerQuality>('1k');
   const [singleLoading, setSingleLoading] = useState(false);
-  const [singleResult, setSingleResult] = useState<{ imageUrl: string; promptUsed: string } | null>(null);
+  const [singleResult, setSingleResult] = useState<{ imageUrl: string } | null>(null);
   const [singleError, setSingleError] = useState<string | null>(null);
   const [singleSaved, setSingleSaved] = useState(false);
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   // ── Batch Mode State ──────────────────────────────────────────────────────
   const [batchSets, setBatchSets] = useState<BatchSet[]>([
@@ -142,7 +140,7 @@ export function BannerAds() {
   const [localizeLanguage, setLocalizeLanguage] = useState('Vietnamese');
   const [localizeScanning, setLocalizeScanning] = useState(false);
   const [localizeLoading, setLocalizeLoading] = useState(false);
-  const [localizeResult, setLocalizeResult] = useState<{ imageUrl: string; promptUsed?: string } | null>(null);
+  const [localizeResult, setLocalizeResult] = useState<{ imageUrl: string } | null>(null);
   const [localizeError, setLocalizeError] = useState<string | null>(null);
 
   // ── History Mode State ────────────────────────────────────────────────────
@@ -285,7 +283,6 @@ export function BannerAds() {
     try {
       await saveBannerToAssets({
         imageUrl: singleResult.imageUrl,
-        prompt: singleResult.promptUsed,
         keyMessage: singleKeyMessage,
         size: singleRatio,
         quality: singleQuality,
@@ -295,12 +292,6 @@ export function BannerAds() {
     } catch (err: any) {
       alert(err.message || 'Không thể lưu vào thư viện.');
     }
-  };
-
-  const handleCopyPrompt = (prompt: string) => {
-    navigator.clipboard.writeText(prompt);
-    setCopiedPrompt(true);
-    setTimeout(() => setCopiedPrompt(false), 2000);
   };
 
   // ── Batch Mode Handlers ───────────────────────────────────────────────────
@@ -458,10 +449,10 @@ export function BannerAds() {
 
   // Filtered history
   const filteredHistory = historyItems.filter((item) => {
+    // Chỉ tìm theo thông điệp: prompt không còn được gửi về client
     const matchesSearch =
       !historySearch ||
-      item.keyMessage?.toLowerCase().includes(historySearch.toLowerCase()) ||
-      item.prompt?.toLowerCase().includes(historySearch.toLowerCase());
+      item.keyMessage?.toLowerCase().includes(historySearch.toLowerCase());
     const matchesRatio =
       historyRatioFilter === 'all' || item.size === historyRatioFilter;
     return matchesSearch && matchesRatio;
@@ -856,32 +847,7 @@ export function BannerAds() {
                         )}
                       </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleCopyPrompt(singleResult.promptUsed)}
-                      className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-[#0879D9] transition"
-                    >
-                      {copiedPrompt ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
-                          <span className="text-emerald-600">Đã sao chép prompt</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" />
-                          <span>Sao chép Prompt AI</span>
-                        </>
-                      )}
-                    </button>
                   </div>
-
-                  {singleResult.promptUsed && (
-                    <div className="rounded-lg bg-slate-50 p-2.5 text-[11px] text-slate-600 border border-slate-200/60">
-                      <span className="font-semibold text-slate-700">Art Director Prompt: </span>
-                      <span className="italic">{singleResult.promptUsed}</span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

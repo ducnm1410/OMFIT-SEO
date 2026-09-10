@@ -22,6 +22,29 @@ const ART_DIRECTOR_MODEL = 'gemini-2.5-pro';
 const ART_DIRECTOR_TEMPERATURE = 0.2;
 const ART_DIRECTOR_MAX_CHARS = 950;
 
+// Prompt là know-how nội bộ nên không trả về client, nhưng vẫn cần lưu kèm ảnh
+// khi user bấm "Lưu vào kho". Giữ tạm trong bộ nhớ tiến trình, khoá theo URL ảnh
+// mà chính server vừa sinh ra — client không tự đặt được khoá này.
+const PROMPT_CACHE_TTL_MS = 60 * 60 * 1000;
+const PROMPT_CACHE_MAX_ENTRIES = 500;
+const promptByImageUrl = new Map();
+
+function rememberPrompt(imageUrl, prompt) {
+  if (!imageUrl || !prompt) return;
+  // Map giữ thứ tự chèn nên phần tử đầu tiên là cũ nhất
+  while (promptByImageUrl.size >= PROMPT_CACHE_MAX_ENTRIES) {
+    promptByImageUrl.delete(promptByImageUrl.keys().next().value);
+  }
+  promptByImageUrl.set(imageUrl, { prompt, expiresAt: Date.now() + PROMPT_CACHE_TTL_MS });
+}
+
+function takeRememberedPrompt(imageUrl) {
+  const entry = promptByImageUrl.get(imageUrl);
+  if (!entry) return '';
+  promptByImageUrl.delete(imageUrl);
+  return entry.expiresAt > Date.now() ? entry.prompt : '';
+}
+
 function resolveModelId(model) {
   return isImageModel(model) ? String(model) : DEFAULT_MODEL_ID;
 }
@@ -383,9 +406,10 @@ export function registerBannerAdsRoutes({ app, requireSupabaseUser, getSupabaseA
         imageQuality
       });
 
+      rememberPrompt(imageUrl, englishPrompt);
+
       return response.json({
         imageUrl,
-        promptUsed: englishPrompt,
         dimensions,
         modelUsed: modelId
       });
@@ -460,11 +484,11 @@ export function registerBannerAdsRoutes({ app, requireSupabaseUser, getSupabaseA
             imageQuality
           });
 
+          rememberPrompt(url, prompt);
           results.push({
             setIndex: i,
             status: 'success',
-            imageUrl: url,
-            promptUsed: prompt
+            imageUrl: url
           });
         } catch (err) {
           results.push({
@@ -663,7 +687,9 @@ Output ONLY the final English prompt. MAXIMUM 800 CHARACTERS.`;
         imageQuality
       });
 
-      return response.json({ imageUrl, promptUsed: prompt });
+      rememberPrompt(imageUrl, prompt);
+
+      return response.json({ imageUrl });
     } catch (error) {
       console.error('[POST /api/banner-ads/localize error]:', error);
       return response.status(500).json({ error: error.message || 'Không thể bản địa hóa banner.' });
@@ -691,7 +717,6 @@ Output ONLY the final English prompt. MAXIMUM 800 CHARACTERS.`;
           id: item.id,
           ownerId: item.owner_id,
           url: item.public_url || item.source_url,
-          prompt: item.prompt,
           keyMessage: item.metadata?.keyMessage || item.alt_text,
           size: item.metadata?.size || '16:9',
           quality: item.metadata?.quality || '1k',
@@ -711,11 +736,14 @@ Output ONLY the final English prompt. MAXIMUM 800 CHARACTERS.`;
     try {
       const supabase = getSupabaseAdmin();
       const ownerId = request.supabaseUser.id;
-      const { imageUrl, prompt = '', keyMessage = '', size = '16:9', quality = '1k', mode = 'single' } = request.body || {};
+      const { imageUrl, keyMessage = '', size = '16:9', quality = '1k', mode = 'single' } = request.body || {};
 
       if (!imageUrl) {
         return response.status(400).json({ error: 'Vui lòng cung cấp URL ảnh banner.' });
       }
+
+      // Prompt lấy từ cache của chính server, không nhận từ request body
+      const prompt = takeRememberedPrompt(imageUrl);
 
       const fileName = `omfit-banner-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.png`;
       const storagePath = `${ownerId}/banners/${fileName}`;
@@ -782,7 +810,6 @@ Output ONLY the final English prompt. MAXIMUM 800 CHARACTERS.`;
           id: asset.id,
           ownerId: asset.owner_id,
           url: asset.public_url,
-          prompt: asset.prompt,
           keyMessage: asset.metadata?.keyMessage,
           size: asset.metadata?.size,
           quality: asset.metadata?.quality,
