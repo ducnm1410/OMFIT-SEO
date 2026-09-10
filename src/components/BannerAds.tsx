@@ -45,6 +45,13 @@ import {
 } from '../services/bannerAdsService';
 import { ButtonContent } from './ButtonContent';
 import { compressImageFile, estimateDataUrlBytes, formatBytes } from '../utils/imageCompression';
+import {
+  capsOf,
+  GPT_IMAGE,
+  IMAGE_MODEL_CAPS,
+  IMAGE_MODEL_ORDER,
+  supportedTiers
+} from '../lib/imageModels.mjs';
 
 /**
  * NGÂN SÁCH ẢNH CHO MỖI REQUEST BANNER ADS.
@@ -76,13 +83,19 @@ const ASPECT_RATIOS: Array<{
   { id: '21:9', label: '21:9 UltraWide', tag: 'Cover Banner', ratio: 'w-20 h-9' }
 ];
 
-// Kích thước thật do Leonardo quyết định (xem LEONARDO_RESOLUTIONS trong
-// server/bannerAdsRoute.mjs). Cạnh dài tối đa API hỗ trợ là 3808px.
-const QUALITY_TIERS: Array<{ id: BannerQuality; label: string; desc: string }> = [
-  { id: '1k', label: '1K Standard', desc: 'cạnh dài 1024 - 1584px (Nhanh)' },
-  { id: '2k', label: '2K High Def', desc: 'cạnh dài 2048 - 3200px (Cân bằng)' },
-  { id: '4k', label: 'Ultra HD', desc: 'cạnh dài 3264 - 3808px (Sắc nét nhất)' }
-];
+// Mức chất lượng phụ thuộc model đang chọn: mỗi model có bảng độ phân giải riêng
+// (src/lib/imageModels.mjs — dùng chung với server để hai bên không lệch nhau).
+function qualityOptions(model: string, size: string) {
+  const caps = capsOf(model);
+  return supportedTiers(model, size).map((tier: string) => {
+    const dim = caps.resolutions[size]?.[tier];
+    return {
+      id: tier as BannerQuality,
+      label: caps.tierLabels[tier] || tier.toUpperCase(),
+      desc: dim ? `${dim.w}x${dim.h}` : ''
+    };
+  });
+}
 
 export function BannerAds() {
   const [activeMode, setActiveMode] = useState<BannerMode>('single');
@@ -139,9 +152,32 @@ export function BannerAds() {
   const [historyRatioFilter, setHistoryRatioFilter] = useState('all');
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
 
+  // ── Model State (dùng chung cho mọi chế độ) ───────────────────────────────
+  const [imageModel, setImageModel] = useState<string>(GPT_IMAGE);
+  const [imageQuality, setImageQuality] = useState<string>('MEDIUM');
+  const modelCaps = capsOf(imageModel);
+
   // ── Upload State (dùng chung cho mọi chế độ) ──────────────────────────────
   const [uploadingCount, setUploadingCount] = useState(0);
   const isUploading = uploadingCount > 0;
+
+  // Đổi model hoặc tỉ lệ có thể làm mức chất lượng đang chọn không còn hợp lệ
+  // (mỗi model một bảng độ phân giải) -> nắn về tier cao nhất còn dùng được.
+  useEffect(() => {
+    const clamp = (
+      ratio: BannerAspectRatio,
+      current: BannerQuality,
+      apply: (next: BannerQuality) => void
+    ) => {
+      const allowed = supportedTiers(imageModel, ratio) as BannerQuality[];
+      if (allowed.length > 0 && !allowed.includes(current)) {
+        apply(allowed[allowed.length - 1]);
+      }
+    };
+    clamp(singleRatio, singleQuality, setSingleQuality);
+    clamp(batchRatio, batchQuality, setBatchQuality);
+    clamp('16:9', resizeQuality, setResizeQuality);
+  }, [imageModel, singleRatio, singleQuality, batchRatio, batchQuality, resizeQuality]);
 
   // Load history when entering History tab
   useEffect(() => {
@@ -232,7 +268,9 @@ export function BannerAds() {
         keyMessage: singleKeyMessage.trim(),
         language: 'Vietnamese',
         size: singleRatio,
-        quality: singleQuality
+        quality: singleQuality,
+        model: imageModel,
+        imageQuality
       });
       setSingleResult(response);
     } catch (err: any) {
@@ -297,7 +335,9 @@ export function BannerAds() {
         })),
         size: batchRatio,
         quality: batchQuality,
-        seed: seedNum
+        seed: seedNum,
+        model: imageModel,
+        imageQuality
       });
       setBatchResults(res.results);
     } catch (err: any) {
@@ -351,7 +391,9 @@ export function BannerAds() {
         imageData: resizeImage.dataUrl,
         sizes: resizeSelectedSizes,
         quality: resizeQuality,
-        seed: seedNum
+        seed: seedNum,
+        model: imageModel,
+        imageQuality
       });
       setResizeResults(res.results);
     } catch (err: any) {
@@ -402,7 +444,9 @@ export function BannerAds() {
       const res = await localizeBanner({
         imageData: localizeImage.dataUrl,
         targetText: localizeTargetText.trim(),
-        targetLanguage: localizeLanguage
+        targetLanguage: localizeLanguage,
+        model: imageModel,
+        imageQuality
       });
       setLocalizeResult(res);
     } catch (err: any) {
@@ -463,7 +507,44 @@ export function BannerAds() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Model áp dụng cho mọi chế độ: tạo mới, đổi kích thước, thay chữ */}
+            <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-[#0879D9]" />
+              <span className="text-[11px] font-semibold text-slate-500">Model</span>
+              <select
+                value={imageModel}
+                onChange={(e) => setImageModel(e.target.value)}
+                title={modelCaps.hint}
+                className="bg-transparent text-xs font-bold text-[#17191D] outline-none"
+              >
+                {IMAGE_MODEL_ORDER.map((id: string) => (
+                  <option key={id} value={id}>
+                    {IMAGE_MODEL_CAPS[id].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Chỉ hiện với model có tham số chất lượng render riêng */}
+            {modelCaps.renderQualities && (
+              <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                <Sliders className="h-3.5 w-3.5 text-[#0879D9]" />
+                <span className="text-[11px] font-semibold text-slate-500">Render</span>
+                <select
+                  value={imageQuality}
+                  onChange={(e) => setImageQuality(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-[#17191D] outline-none"
+                >
+                  {modelCaps.renderQualities.map((q: { label: string; value: string }) => (
+                    <option key={q.value} value={q.value}>
+                      {q.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
               <FileCheck className="h-3.5 w-3.5 text-[#0879D9]" />
               <span>{historyItems.length} banner trong kho</span>
@@ -649,7 +730,7 @@ export function BannerAds() {
                   onChange={(e) => setSingleQuality(e.target.value as BannerQuality)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-[#0879D9]"
                 >
-                  {QUALITY_TIERS.map((q) => (
+                  {qualityOptions(imageModel, singleRatio).map((q) => (
                     <option key={q.id} value={q.id}>
                       {q.label} ({q.desc})
                     </option>
@@ -1018,9 +1099,9 @@ export function BannerAds() {
                         onChange={(e) => setBatchQuality(e.target.value as BannerQuality)}
                         className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium"
                       >
-                        {QUALITY_TIERS.map((q) => (
+                        {qualityOptions(imageModel, batchRatio).map((q) => (
                           <option key={q.id} value={q.id}>
-                            {q.label}
+                            {q.label} ({q.desc})
                           </option>
                         ))}
                       </select>

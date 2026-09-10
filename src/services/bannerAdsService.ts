@@ -5,7 +5,15 @@ import type {
   ResizeResult
 } from '../types';
 
-export interface SingleBannerParams {
+/** Model sinh ảnh + mức render, dùng chung cho mọi luồng banner. */
+export interface BannerModelParams {
+  /** Id model Leonardo, xem src/lib/imageModels.mjs */
+  model?: string;
+  /** Chỉ có tác dụng với model khai báo renderQualities (gpt-image-2) */
+  imageQuality?: string;
+}
+
+export interface SingleBannerParams extends BannerModelParams {
   competitorRef?: string | null;
   character?: string | null;
   keyMessage: string;
@@ -17,9 +25,10 @@ export interface SingleBannerParams {
 export interface SingleBannerResponse {
   imageUrl: string;
   promptUsed: string;
+  modelUsed?: string;
 }
 
-export interface BatchBannerParams {
+export interface BatchBannerParams extends BannerModelParams {
   batchSets: Array<{
     competitorRef?: string | null;
     character?: string | null;
@@ -35,7 +44,7 @@ export interface BatchBannerResponse {
   seed?: number;
 }
 
-export interface ResizeBannerParams {
+export interface ResizeBannerParams extends BannerModelParams {
   imageData: string;
   sizes: string[];
   quality: string;
@@ -52,7 +61,7 @@ export interface ScanTextResponse {
   suggestedTranslation?: string;
 }
 
-export interface LocalizeBannerParams {
+export interface LocalizeBannerParams extends BannerModelParams {
   imageData: string;
   targetText: string;
   targetLanguage: string;
@@ -76,7 +85,8 @@ export async function generateSingleBanner(params: SingleBannerParams): Promise<
   });
   return {
     imageUrl: data.imageUrl || data.imageBase64,
-    promptUsed: data.promptUsed || ''
+    promptUsed: data.promptUsed || '',
+    modelUsed: data.modelUsed
   };
 }
 

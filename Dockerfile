@@ -27,7 +27,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 COPY server ./server
-COPY src/lib/runtimeEnv.mjs ./src/lib/runtimeEnv.mjs
+# Các module .mjs trong src/lib được cả server lẫn bundle web dùng chung
+# (runtimeEnv, imageModels...). Copy cả thư mục để thêm file mới không phải sửa
+# Dockerfile — quên copy là server chết ngay lúc khởi động.
+COPY src/lib/*.mjs ./src/lib/
 
 EXPOSE 8787
 

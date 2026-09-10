@@ -5,34 +5,35 @@ import {
   extractLeonardoGenerationId,
   leonardoGenerationStatusEndpoint,
   LEONARDO_GENERATION_ENDPOINT,
-  LEONARDO_IMAGE_MODEL,
   LEONARDO_INIT_IMAGE_ENDPOINT
 } from './leonardoImageGeneration.mjs';
+import {
+  capsOf,
+  GPT_IMAGE,
+  isImageModel,
+  resolveResolution
+} from '../src/lib/imageModels.mjs';
 
-// Leonardo chỉ chấp nhận width/height nằm trong danh sách cố định của API v2;
-// gửi số tuỳ ý sẽ bị trả về VALIDATION_ERROR. Mọi giá trị dưới đây đã được đối chiếu
-// với danh sách đó, chọn kích thước lớn nhất còn đúng tỉ lệ cho mỗi mức chất lượng.
-// Lưu ý: cạnh dài tối đa Leonardo hỗ trợ là 3808px, nên mức '4k' thực tế là ~3.5K.
-const LEONARDO_RESOLUTIONS = {
-  '1:1':  { '1k': { w: 1024, h: 1024 }, '2k': { w: 2048, h: 2048 }, '4k': { w: 3584, h: 3584 } },
-  '2:3':  { '1k': { w: 848, h: 1264 }, '2k': { w: 1696, h: 2560 }, '4k': { w: 2336, h: 3504 } },
-  '3:2':  { '1k': { w: 1264, h: 848 }, '2k': { w: 2560, h: 1696 }, '4k': { w: 3808, h: 2560 } },
-  '3:4':  { '1k': { w: 896, h: 1200 }, '2k': { w: 1856, h: 2448 }, '4k': { w: 2448, h: 3264 } },
-  '4:3':  { '1k': { w: 1200, h: 896 }, '2k': { w: 2560, h: 1920 }, '4k': { w: 3808, h: 2880 } },
-  '4:5':  { '1k': { w: 928, h: 1152 }, '2k': { w: 1856, h: 2336 }, '4k': { w: 2880, h: 3584 } },
-  '5:4':  { '1k': { w: 1152, h: 928 }, '2k': { w: 2336, h: 1856 }, '4k': { w: 3584, h: 2880 } },
-  '9:16': { '1k': { w: 768, h: 1376 }, '2k': { w: 1376, h: 2448 }, '4k': { w: 2016, h: 3584 } },
-  '16:9': { '1k': { w: 1376, h: 768 }, '2k': { w: 2880, h: 1632 }, '4k': { w: 3584, h: 2016 } },
-  '21:9': { '1k': { w: 1584, h: 672 }, '2k': { w: 3200, h: 1376 }, '4k': { w: 3808, h: 1632 } }
-};
+const DEFAULT_MODEL_ID = GPT_IMAGE;
 
-const DEFAULT_MODEL_ID = LEONARDO_IMAGE_MODEL;
+// Model chạy bước "Art Director": Gemini đọc ảnh tham chiếu rồi viết prompt tiếng
+// Anh cho model sinh ảnh. Nhiệt độ thấp để prompt bám sát ảnh gốc thay vì sáng tác.
+const ART_DIRECTOR_MODEL = 'gemini-2.5-pro';
+const ART_DIRECTOR_TEMPERATURE = 0.2;
+const ART_DIRECTOR_MAX_CHARS = 950;
 
-function resolveDimensions(size = '16:9', quality = '1k') {
-  const normSize = String(size || '16:9').trim();
-  const normQuality = String(quality || '1k').trim().toLowerCase();
-  const sizeMap = LEONARDO_RESOLUTIONS[normSize] || LEONARDO_RESOLUTIONS['16:9'];
-  return sizeMap[normQuality] || sizeMap['1k'] || { w: 1376, h: 768 };
+function resolveModelId(model) {
+  return isImageModel(model) ? String(model) : DEFAULT_MODEL_ID;
+}
+
+// resolveResolution tự nắn về vùng hợp lệ của model — lớp phòng thủ cho client cũ,
+// UI đã lọc sẵn các tier không dùng được.
+function resolveDimensions(size = '16:9', quality = '1k', model = DEFAULT_MODEL_ID) {
+  return resolveResolution(
+    resolveModelId(model),
+    String(size || '16:9').trim(),
+    String(quality || '1k').trim().toLowerCase()
+  );
 }
 
 async function uploadInitImageToLeonardo(dataUrl, apiKey) {
@@ -109,6 +110,121 @@ async function pollLeonardoGeneration(generationId, apiKey, maxAttempts = 35, in
   throw new Error('Quá thời gian chờ Leonardo xử lý ảnh.');
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// ART DIRECTOR — port nguyên văn bộ prompt của tính năng /creative bên
+// gssea-gamehub (api/routes/generateCreative.ts). Gemini đọc ảnh tham chiếu rồi
+// viết prompt tiếng Anh cho model sinh ảnh, thay vì nhét thẳng thông điệp của
+// user vào Leonardo. Nhánh được chọn theo tổ hợp (ảnh layout, ảnh chủ thể,
+// thông điệp) vì mỗi tổ hợp là một tác vụ khác hẳn nhau: tráo chủ thể, thay
+// chữ, giữ nguyên, hay dựng mới.
+//
+// Bốn nhánh đầu giữ nguyên 100% văn bản gốc. Nhánh cuối (dựng mới từ đầu) bên
+// gamehub viết cho banner game nên đã đổi sang bối cảnh OMFIT.
+// ════════════════════════════════════════════════════════════════════════════
+function buildArtDirectorInstruction({ hasCompetitor, hasCharacter, hasKeyMessage, keyMessage, language, modelId }) {
+  if (hasCompetitor && hasCharacter && hasKeyMessage) {
+    return `You are an elite Creative Director. I am providing you with 2 images: Image 1 (Reference Banner) and Image 2 (My Character).
+        YOUR TASK: Write a highly detailed, 500-1000 character English prompt for an AI Image Generator (${modelId} model) to perform a PERFECT CHARACTER SWAP AND TEXT REPLACEMENT.
+
+        CRITICAL INSTRUCTIONS:
+        1. BACKGROUND & LAYOUT: Analyze Image 1 deeply. Describe EVERY background element (scenery, objects, lighting, color palette, decorative elements). State: "PRESERVE the entire background, layout, and all visual elements EXACTLY as shown."
+        2. CHARACTER SWAP: Analyze Image 2. Describe my character in extreme detail (appearance, outfit, pose, art style). Instruct: "REMOVE the original character from the scene and INSERT this exact character in the same position, maintaining the same scale and pose orientation."
+        3. TEXT REPLACEMENT: Identify ALL text visible in Image 1. Instruct: "REPLACE all existing text with this exact new text: '${keyMessage}'. Write this text in ${language} language. Use the EXACT SAME typography style, color, effects (glow/shadow/outline), size, and position as the original text."
+        4. BLENDING: "Seamlessly blend the new character and text into the existing scene using identical lighting and color grading."
+
+        Output ONLY the final English prompt as a single cohesive paragraph. No labels, no bullet points. MAXIMUM 800 CHARACTERS. Do NOT exceed 800 characters or the system will crash.`;
+  }
+
+  if (hasCompetitor && hasCharacter && !hasKeyMessage) {
+    return `You are an elite Creative Director. I am providing you with 2 images: Image 1 (Reference Banner) and Image 2 (Character Reference).
+        YOUR TASK: Write a highly detailed English prompt for an AI Image Generator (${modelId} model) to perform a PERFECT CHARACTER SWAP ONLY.
+
+        CRITICAL INSTRUCTIONS:
+        1. BACKGROUND, LAYOUT & TEXT: Analyze Image 1 deeply. Describe EVERY element including background scenery, objects, lighting, color palette, ALL TEXT/TYPOGRAPHY, and decorative elements. State: "PRESERVE the ENTIRE background, layout, ALL existing text, typography, and every visual element EXACTLY unchanged."
+        2. CHARACTER SWAP: Analyze Image 2 (the character). Describe the character in extreme detail (appearance, outfit, pose, hair, accessories). Instruct: "REMOVE all original characters from the scene and INSERT this exact character from Image 2 in the same position, maintaining the same scale and facing direction."
+        3. BLENDING: "Seamlessly blend the new character into the existing scene. Match the original lighting, shadows, and color grading perfectly."
+
+        Output ONLY the final English prompt as a single cohesive paragraph. MAXIMUM 800 CHARACTERS. Do NOT exceed 800 characters or the system will crash.`;
+  }
+
+  if (hasCompetitor && !hasCharacter && !hasKeyMessage) {
+    return `You are an elite Creative Director. I have provided a Reference Banner image.
+          YOUR TASK: Write a highly detailed English prompt for an AI Image Generator (${modelId} model) to perform a PERFECT RECREATION AND RESIZING.
+
+          CRITICAL INSTRUCTIONS:
+          1. FULL PRESERVATION of ASSETS: Analyze the image deeply. Describe EVERY element including background scenery, characters, objects, lighting, color palette, decorative elements, and ANY existing text/typography EXACTLY as they appear. Use the exact same design language.
+          2. STRICT REPLICATION OF VISUALS & TEXT: State explicitly: "PRESERVE ALL existing text, fonts, objects, and visual styles EXACTLY 100% unchanged. Do NOT redesign, do NOT modify, do NOT delete or translate any text regardless of language settings."
+          3. SMART LAYOUT REARRANGEMENT: We are creating a new aspect ratio for this design. Instruct: "You have the freedom to SMARTLY REARRANGE the layout and spacing to perfectly fit the new dimensions. However, the core composition, visual hierarchy, and graphics must remain identical to the original."
+
+          Output ONLY the final English prompt as a single cohesive paragraph. No labels, no bullet points. MAXIMUM 800 CHARACTERS.`;
+  }
+
+  if (hasCompetitor && !hasCharacter && hasKeyMessage) {
+    return `You are an elite Creative Director. I have provided a Reference Banner image.
+          YOUR TASK: Write a highly detailed English prompt for an AI Image Generator (${modelId} model) to perform a PERFECT TEXT REPLACEMENT AND LAYOUT ADAPTATION.
+
+          CRITICAL INSTRUCTIONS:
+          1. ASSET PRESERVATION: Analyze the image deeply. Describe EVERY element including background scenery, characters, objects, lighting, color palette, and decorative elements. State: "PRESERVE all original visual assets EXACTLY as shown. Do NOT redesign the graphics."
+          2. TEXT REPLACEMENT: Identify ALL text visible. Instruct: "REPLACE all existing text with exactly: '${keyMessage}' written in ${language} language. Use the EXACT SAME typography style, color, effects, and visual weight."
+          3. SMART LAYOUT REARRANGEMENT: Instruct: "You have permission to SMARTLY REARRANGE the layout and spacing of elements to perfectly fit the new target dimensions. Keep the core composition intact but adapt it flawlessly for the new aspect ratio."
+
+          Output ONLY the final English prompt as a single cohesive paragraph. No labels, no bullet points. MAXIMUM 800 CHARACTERS.`;
+  }
+
+  return `You are an elite Art Director for OMFIT Pilates & Wellness. I have provided subject references.
+        YOUR TASK: Write a highly detailed English prompt to create a new premium promotional banner from scratch.
+        1. Create an elegant, cinematic background suitable for a modern pilates & wellness studio advertisement.
+        2. Place my subject prominently in the center.
+        ${hasKeyMessage ? `3. Write the exact text '${keyMessage}' in ${language} language prominently at the top center with clean modern typography.` : '3. Add appropriate wellness marketing text with clean modern typography.'}
+        Output ONLY the prompt string. MAXIMUM 800 CHARACTERS. Do NOT exceed 800 characters.`;
+}
+
+function toInlineImagePart(dataUrl) {
+  const mimeType = dataUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/)?.[1] || 'image/jpeg';
+  const data = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+  return { inlineData: { data, mimeType } };
+}
+
+/**
+ * Bước 1 của luồng tạo banner: Gemini viết prompt cho model sinh ảnh.
+ * Lỗi ở bước này không làm hỏng cả request — rơi về prompt dự phòng để user vẫn
+ * nhận được ảnh, chỉ kém bám ảnh tham chiếu hơn.
+ */
+async function runArtDirector({ geminiApiKey, competitorRef, character, keyMessage, language, modelId, fallbackPrompt }) {
+  if (!geminiApiKey) return fallbackPrompt;
+
+  const instruction = buildArtDirectorInstruction({
+    hasCompetitor: !!competitorRef,
+    hasCharacter: !!character,
+    hasKeyMessage: !!keyMessage?.trim(),
+    keyMessage: keyMessage?.trim() || '',
+    language,
+    modelId
+  });
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const contents = [instruction];
+    if (competitorRef) contents.push(toInlineImagePart(competitorRef));
+    if (character) contents.push(toInlineImagePart(character));
+
+    const draft = await ai.models.generateContent({
+      model: ART_DIRECTOR_MODEL,
+      contents,
+      config: { temperature: ART_DIRECTOR_TEMPERATURE }
+    });
+
+    const englishPrompt = (draft?.text || '').trim();
+    if (!englishPrompt) throw new Error('Art Director trả về rỗng.');
+    return englishPrompt.length > ART_DIRECTOR_MAX_CHARS
+      ? `${englishPrompt.slice(0, ART_DIRECTOR_MAX_CHARS)}...`
+      : englishPrompt;
+  } catch (err) {
+    console.warn('[Art Director fallback]:', err.message);
+    return fallbackPrompt;
+  }
+}
+
 async function generateWithLeonardo({
   apiKey,
   prompt,
@@ -116,38 +232,48 @@ async function generateWithLeonardo({
   height,
   bannerInitId,
   characterInitId,
-  seed
+  seed,
+  model,
+  imageQuality
 }) {
+  const modelId = resolveModelId(model);
+  const caps = capsOf(modelId);
+
   const genBody = {
-    model: DEFAULT_MODEL_ID,
+    model: modelId,
     parameters: {
-      prompt: prompt.slice(0, 1400),
+      prompt: prompt.slice(0, caps.maxPrompt),
       width,
       height,
       quantity: 1,
-      prompt_enhance: 'OFF',
-      quality: 'MEDIUM'
+      prompt_enhance: 'OFF'
     },
     public: false
   };
+
+  // Chỉ gpt-image-2 có tham số chất lượng render; nano-banana-2 không nhận.
+  if (caps.renderQualities) {
+    const allowed = caps.renderQualities.map((q) => q.value);
+    const requested = String(imageQuality || '').toUpperCase();
+    genBody.parameters.quality = allowed.includes(requested)
+      ? requested
+      : (allowed.includes('MEDIUM') ? 'MEDIUM' : allowed[0]);
+  }
 
   if (typeof seed === 'number' && !Number.isNaN(seed)) {
     genBody.parameters.seed = seed;
   }
 
+  // gpt-image-2 không dùng `strength` cho image reference (caps.refStrength = null)
+  const buildRef = (id) => {
+    const ref = { image: { id, type: 'UPLOADED' } };
+    if (caps.refStrength) ref.strength = caps.refStrength;
+    return ref;
+  };
+
   const imageRefs = [];
-  if (bannerInitId) {
-    imageRefs.push({
-      image: { id: bannerInitId, type: 'UPLOADED' },
-      strength: 'HIGH'
-    });
-  }
-  if (characterInitId) {
-    imageRefs.push({
-      image: { id: characterInitId, type: 'UPLOADED' },
-      strength: 'HIGH'
-    });
-  }
+  if (bannerInitId) imageRefs.push(buildRef(bannerInitId));
+  if (characterInitId) imageRefs.push(buildRef(characterInitId));
 
   if (imageRefs.length > 0) {
     genBody.parameters.guidances = {
@@ -207,81 +333,29 @@ export function registerBannerAdsRoutes({ app, requireSupabaseUser, getSupabaseA
         keyMessage = '',
         language = 'Vietnamese',
         size = '16:9',
-        quality = '1k'
+        quality = '1k',
+        model,
+        imageQuality
       } = request.body || {};
 
       if (!competitorRef && !character && !keyMessage.trim()) {
         return response.status(400).json({ error: 'Vui lòng cung cấp ít nhất 1 ảnh mẫu hoặc thông điệp banner.' });
       }
 
-      const dimensions = resolveDimensions(size, quality);
+      const modelId = resolveModelId(model);
+      const dimensions = resolveDimensions(size, quality, modelId);
 
-      // Art Director prompt generation via Gemini
-      let englishPrompt = `AAA high-end marketing promotional banner for OMFIT Pilates & Wellness. Aspect ratio ${size}. Professional lighting, balanced composition, modern minimalist luxury studio aesthetic.`;
-      
-      if (geminiApiKey) {
-        try {
-          const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-          const parts = [];
-
-          if (competitorRef) {
-            const raw = competitorRef.replace(/^data:image\/[a-z]+;base64,/, '');
-            const mime = competitorRef.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/)?.[1] || 'image/png';
-            parts.push({
-              inlineData: {
-                data: raw,
-                mimeType: mime
-              }
-            });
-          }
-
-          if (character) {
-            const raw = character.replace(/^data:image\/[a-z]+;base64,/, '');
-            const mime = character.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/)?.[1] || 'image/png';
-            parts.push({
-              inlineData: {
-                data: raw,
-                mimeType: mime
-              }
-            });
-          }
-
-          const promptInstructions = `You are an elite Creative Director & Graphic Designer for OMFIT PILATES & WELLNESS.
-I want to generate a premium, high-converting banner ad.
-${competitorRef ? '- Image 1 is the Layout/Composition Reference banner.' : ''}
-${character ? '- Image 2 is the Subject/Character/Model reference.' : ''}
-${keyMessage ? `- The Key Message / Headline text to place prominently on the banner is: "${keyMessage}" in ${language}.` : ''}
-Dimensions target: ${size} (${dimensions.w}x${dimensions.h}).
-
-YOUR TASK:
-Write a highly detailed single-paragraph English prompt for an AI Image Generator to create this promotional banner.
-Focus on:
-1. Composition, clean modern typography placement for "${keyMessage}", luxury pilates reformer / wellness setting.
-2. Natural cinematic lighting, clean harmonious colors (navy, electric sky blue, clean whites and warm neutrals).
-3. Cohesive blend between subject and background.
-
-Output ONLY the prompt text, under 800 characters.`;
-
-          parts.push({ text: promptInstructions });
-
-          const model = ai.getGenerativeModel ? ai.getGenerativeModel({ model: 'gemini-1.5-flash' }) : ai.models;
-          const result = await (ai.models?.generateContent
-            ? ai.models.generateContent({ model: 'gemini-2.5-flash', contents: parts })
-            : model.generateContent({ contents: parts }));
-
-          const text = result?.response?.text ? result.response.text() : result?.text;
-          if (text && text.trim()) {
-            englishPrompt = text.trim();
-          }
-        } catch (err) {
-          console.warn('[Gemini Art Director Prompt fallback]:', err.message);
-          if (keyMessage.trim()) {
-            englishPrompt += ` Feature bold typography: "${keyMessage}".`;
-          }
-        }
-      } else if (keyMessage.trim()) {
-        englishPrompt += ` Prominently display headline: "${keyMessage}".`;
-      }
+      // BƯỚC 1: Art Director viết prompt tiếng Anh từ ảnh tham chiếu
+      const fallbackPrompt = `AAA high-end marketing promotional banner for OMFIT Pilates & Wellness. Aspect ratio ${size}. Professional lighting, balanced composition, modern minimalist luxury studio aesthetic.${keyMessage.trim() ? ` Prominently display headline: "${keyMessage.trim()}".` : ''}`;
+      const englishPrompt = await runArtDirector({
+        geminiApiKey,
+        competitorRef,
+        character,
+        keyMessage,
+        language,
+        modelId,
+        fallbackPrompt
+      });
 
       // Upload references to Leonardo
       let bannerInitId = null;
@@ -304,13 +378,16 @@ Output ONLY the prompt text, under 800 characters.`;
         width: dimensions.w,
         height: dimensions.h,
         bannerInitId,
-        characterInitId
+        characterInitId,
+        model: modelId,
+        imageQuality
       });
 
       return response.json({
         imageUrl,
         promptUsed: englishPrompt,
-        dimensions
+        dimensions,
+        modelUsed: modelId
       });
     } catch (error) {
       console.error('[POST /api/banner-ads/generate-single error]:', error);
@@ -332,6 +409,9 @@ Output ONLY the prompt text, under 800 characters.`;
         batchSets = [],
         size = '16:9',
         quality = '1k',
+        language = 'Vietnamese',
+        model,
+        imageQuality,
         seed
       } = request.body || {};
 
@@ -339,7 +419,8 @@ Output ONLY the prompt text, under 800 characters.`;
         return response.status(400).json({ error: 'Vui lòng cung cấp danh sách bộ banner.' });
       }
 
-      const dimensions = resolveDimensions(size, quality);
+      const modelId = resolveModelId(model);
+      const dimensions = resolveDimensions(size, quality, modelId);
       const results = [];
 
       for (let i = 0; i < batchSets.length; i++) {
@@ -350,8 +431,17 @@ Output ONLY the prompt text, under 800 characters.`;
         }
 
         try {
-          let prompt = `Premium promotional banner for OMFIT Pilates. Aspect ratio ${size}. ${item.keyMessage ? `Headline: "${item.keyMessage}".` : ''} High resolution, cinematic wellness studio lighting.`;
-          
+          // Mỗi bộ chạy Art Director riêng vì tổ hợp ảnh/thông điệp của từng bộ khác nhau
+          const prompt = await runArtDirector({
+            geminiApiKey,
+            competitorRef: item.competitorRef,
+            character: item.character,
+            keyMessage: item.keyMessage,
+            language,
+            modelId,
+            fallbackPrompt: `Premium promotional banner for OMFIT Pilates. Aspect ratio ${size}. ${item.keyMessage ? `Headline: "${item.keyMessage}".` : ''} High resolution, cinematic wellness studio lighting.`
+          });
+
           let bInit = null;
           let cInit = null;
           if (item.competitorRef) bInit = await uploadInitImageToLeonardo(item.competitorRef, leonardoApiKey);
@@ -365,7 +455,9 @@ Output ONLY the prompt text, under 800 characters.`;
             height: dimensions.h,
             bannerInitId: bInit,
             characterInitId: cInit,
-            seed
+            seed,
+            model: modelId,
+            imageQuality
           });
 
           results.push({
@@ -398,7 +490,7 @@ Output ONLY the prompt text, under 800 characters.`;
         return response.status(503).json({ error: 'Chưa cấu hình Leonardo API Key.' });
       }
 
-      const { imageData, sizes = [], quality = '1k', seed } = request.body || {};
+      const { imageData, sizes = [], quality = '1k', seed, model, imageQuality } = request.body || {};
       if (!imageData) {
         return response.status(400).json({ error: 'Vui lòng cung cấp ảnh banner gốc.' });
       }
@@ -409,19 +501,26 @@ Output ONLY the prompt text, under 800 characters.`;
       const bannerInitId = await uploadInitImageToLeonardo(imageData, leonardoApiKey);
       if (bannerInitId) await new Promise(r => setTimeout(r, 6000));
 
+      const modelId = resolveModelId(model);
+
+      // Prompt cố định (port từ resizeBanner.ts bên gssea-gamehub): resize là tác vụ
+      // giữ nguyên nội dung nên không cần Gemini viết lại prompt cho từng size.
+      const RESIZE_PROMPT = 'Resize and adapt this banner image to the new aspect ratio. Keep the exact same visual content, style, colors, text, characters, and composition. Maintain all elements faithfully while adapting the layout to fit the new dimensions naturally.';
+
       const results = [];
       for (const targetSize of sizes) {
-        const dim = resolveDimensions(targetSize, quality);
-        const prompt = `Recreate and adapt this OMFIT promotional banner perfectly for ${targetSize} aspect ratio. Preserve all key subjects, layout harmony, and modern wellness aesthetic without distortion.`;
+        const dim = resolveDimensions(targetSize, quality, modelId);
 
         try {
           const url = await generateWithLeonardo({
             apiKey: leonardoApiKey,
-            prompt,
+            prompt: RESIZE_PROMPT,
             width: dim.w,
             height: dim.h,
             bannerInitId,
-            seed
+            seed,
+            model: modelId,
+            imageQuality
           });
           results.push({ size: targetSize, status: 'success', imageUrl: url });
         } catch (err) {
@@ -453,13 +552,26 @@ Output ONLY the prompt text, under 800 characters.`;
       const mime = imageData.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/)?.[1] || 'image/png';
 
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-      const prompt = `You are an expert OCR and localization engine.
-Transcribe ALL visible text, headlines, subtitles, and CTAs in this banner with 100% precision.
+      // Port từ scanBanner.ts bên gssea-gamehub, giữ nguyên bộ RULES; phần output
+      // đổi sang object để giữ hợp đồng sẵn có với UI (kèm luôn bản dịch gợi ý).
+      const prompt = `You are a precision OCR scanner. Analyze this banner/advertisement image.
+
+YOUR TASK: Identify and extract ALL visible text in the image.
+
+RULES:
+1. Extract EVERY piece of text you can see, no matter how small.
+2. Preserve the EXACT text as written (including capitalization, punctuation, special characters).
+3. If text is in a non-English language, transcribe it exactly as shown.
+4. Separate each distinct text element.
+
 Return a JSON object formatted as:
 {
-  "detectedText": "exact text in image",
+  "detectedText": "every text element found, one per line, exactly as written",
   "suggestedTranslation": "natural Vietnamese translation suitable for an OMFIT fitness/wellness banner"
-}`;
+}
+
+If you cannot detect any text, return empty strings for both fields.
+Return ONLY the JSON object, no additional text or explanation.`;
 
       const contents = [
         { inlineData: { data: raw, mimeType: mime } },
@@ -467,9 +579,10 @@ Return a JSON object formatted as:
       ];
 
       const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: ART_DIRECTOR_MODEL,
         contents,
-        config: { responseMimeType: 'application/json' }
+        // temperature thấp cho OCR: cần đọc đúng chữ, không cần sáng tạo
+        config: { responseMimeType: 'application/json', temperature: 0.1 }
       });
 
       const responseText = result.text || '';
@@ -492,23 +605,62 @@ Return a JSON object formatted as:
         return response.status(503).json({ error: 'Chưa cấu hình Leonardo API Key.' });
       }
 
-      const { imageData, targetText, targetLanguage = 'Vietnamese', size = '16:9', quality = '1k' } = request.body || {};
+      const {
+        imageData,
+        targetText,
+        targetLanguage = 'Vietnamese',
+        size = '16:9',
+        quality = '1k',
+        model,
+        imageQuality
+      } = request.body || {};
       if (!imageData || !targetText) {
         return response.status(400).json({ error: 'Vui lòng cung cấp ảnh và văn bản thay thế.' });
       }
 
-      const dim = resolveDimensions(size, quality);
+      const geminiApiKey = getEnv('GEMINI_API_KEY') || getEnv('GOOGLE_API_KEY');
+      const modelId = resolveModelId(model);
+      const dim = resolveDimensions(size, quality, modelId);
+
+      // Prompt dự phòng chính là prompt gốc của cloneBanner.ts khi Gemini lỗi.
+      let prompt = `Recreate this exact banner image. PRESERVE all background, characters, and layout. REPLACE the main text with: '${targetText}'. Match the original typography perfectly.`;
+
+      if (geminiApiKey) {
+        // Port từ cloneBanner.ts bên gssea-gamehub — nhánh "TEXT REPLACEMENT ONLY"
+        const promptEngineerPrompt = `You are an elite Art Director. I am providing you with a Reference Banner Image.
+YOUR TASK: Write a highly detailed, 300-800 character English prompt for an AI Image Generator (${modelId} model) to perform a PERFECT TEXT REPLACEMENT ONLY.
+
+CRITICAL INSTRUCTIONS:
+1. BACKGROUND, CHARACTERS & LAYOUT: Analyze the provided image deeply. Explicitly state: "PRESERVE the entire background, characters, layout, and all visual elements EXACTLY as shown."
+2. TYPOGRAPHY & TEXT REPLACEMENT: "REPLACE the original text with: '${targetText}'. Use the EXACT SAME typography style, color, 3D effects, size, and position." Write the new text in ${targetLanguage}.
+
+Output ONLY the final English prompt. MAXIMUM 800 CHARACTERS.`;
+
+        try {
+          const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+          const engineered = await ai.models.generateContent({
+            model: ART_DIRECTOR_MODEL,
+            contents: [promptEngineerPrompt, toInlineImagePart(imageData)],
+            config: { temperature: ART_DIRECTOR_TEMPERATURE }
+          });
+          const text = (engineered?.text || '').trim();
+          if (text) prompt = text;
+        } catch (err) {
+          console.warn('[Localize prompt engineer fallback]:', err.message);
+        }
+      }
+
       const bannerInitId = await uploadInitImageToLeonardo(imageData, leonardoApiKey);
       if (bannerInitId) await new Promise(r => setTimeout(r, 6000));
-
-      const prompt = `Recreate this exact banner image. PRESERVE the entire background, lighting, subjects, and layout. REPLACE the main headline text with: "${targetText}" in ${targetLanguage}. Match typography, color, and visual hierarchy perfectly.`;
 
       const imageUrl = await generateWithLeonardo({
         apiKey: leonardoApiKey,
         prompt,
         width: dim.w,
         height: dim.h,
-        bannerInitId
+        bannerInitId,
+        model: modelId,
+        imageQuality
       });
 
       return response.json({ imageUrl, promptUsed: prompt });

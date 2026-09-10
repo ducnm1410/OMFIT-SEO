@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('Railway dùng Docker Node 22 và không chạy npm ci qua Nixpacks cache', async () => {
@@ -29,8 +29,33 @@ test('Railway dùng Docker Node 22 và không chạy npm ci qua Nixpacks cache',
   assert.doesNotMatch(dockerfile, /^ARG SUPABASE_SERVICE_ROLE_KEY$/m);
   assert.match(dockerfile, /Missing required build variable/);
   assert.match(dockerfile, /COPY --from=build \/app\/dist \.\/dist/);
-  assert.match(dockerfile, /COPY src\/lib\/runtimeEnv\.mjs \.\/src\/lib\/runtimeEnv\.mjs/);
+  assert.match(dockerfile, /COPY src\/lib\/\*\.mjs \.\/src\/lib\//);
   assert.match(dockerfile, /CMD \["npm", "start"\]/);
   assert.match(dockerignore, /^node_modules$/m);
   assert.match(dockerignore, /^\.env\.\*$/m);
+});
+
+// Runtime image chỉ copy `server/` và `src/lib/*.mjs`; server import thêm module
+// nào ngoài hai chỗ đó là container crash ngay lúc khởi động, mà build vẫn xanh.
+test('mọi module src/lib mà server import đều nằm trong runtime image', async () => {
+  const serverDirectory = new URL('../server/', import.meta.url);
+  const dockerfile = await readFile(new URL('../Dockerfile', import.meta.url), 'utf8');
+  const copiesEverySharedModule = /COPY src\/lib\/\*\.mjs \.\/src\/lib\//.test(dockerfile);
+
+  const serverFiles = (await readdir(serverDirectory)).filter((name) => name.endsWith('.mjs'));
+  const imported = new Set();
+  for (const name of serverFiles) {
+    const source = await readFile(new URL(name, serverDirectory), 'utf8');
+    for (const match of source.matchAll(/from '\.\.\/src\/lib\/([\w.-]+\.mjs)'/g)) {
+      imported.add(match[1]);
+    }
+  }
+
+  assert.ok(imported.size > 0, 'không tìm thấy import nào từ src/lib — regex có thể đã lỗi thời');
+  for (const moduleName of imported) {
+    assert.ok(
+      copiesEverySharedModule || dockerfile.includes(`COPY src/lib/${moduleName}`),
+      `Dockerfile chưa copy src/lib/${moduleName} vào runtime image`
+    );
+  }
 });
