@@ -279,6 +279,7 @@ export interface BatchResult {
   setIndex: number;
   status: 'pending' | 'generating' | 'success' | 'error' | 'skipped';
   imageUrl?: string;
+  promptUsed?: string;
   error?: string;
 }
 
@@ -302,6 +303,7 @@ export interface BannerAdAsset {
   id: string;
   ownerId?: string;
   url: string;
+  prompt?: string;
   keyMessage?: string;
   size: string;
   quality: string;

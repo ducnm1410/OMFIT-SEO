@@ -24,6 +24,7 @@ export interface SingleBannerParams extends BannerModelParams {
 
 export interface SingleBannerResponse {
   imageUrl: string;
+  promptUsed: string;
   modelUsed?: string;
 }
 
@@ -70,6 +71,7 @@ export interface LocalizeBannerParams extends BannerModelParams {
 
 export interface SaveBannerParams {
   imageUrl: string;
+  prompt?: string;
   keyMessage?: string;
   size?: string;
   quality?: string;
@@ -83,6 +85,7 @@ export async function generateSingleBanner(params: SingleBannerParams): Promise<
   });
   return {
     imageUrl: data.imageUrl || data.imageBase64,
+    promptUsed: data.promptUsed || '',
     modelUsed: data.modelUsed
   };
 }
@@ -120,13 +123,14 @@ export async function scanBannerText(imageData: string): Promise<ScanTextRespons
   };
 }
 
-export async function localizeBanner(params: LocalizeBannerParams): Promise<{ imageUrl: string }> {
+export async function localizeBanner(params: LocalizeBannerParams): Promise<{ imageUrl: string; promptUsed?: string }> {
   const data = await authenticatedFetch('/api/banner-ads/localize', {
     method: 'POST',
     body: JSON.stringify(params)
   });
   return {
-    imageUrl: data.imageUrl || data.imageBase64
+    imageUrl: data.imageUrl || data.imageBase64,
+    promptUsed: data.promptUsed
   };
 }
 

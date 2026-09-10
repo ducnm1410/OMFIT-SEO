@@ -106,7 +106,7 @@ export function BannerAds() {
   const [singleRatio, setSingleRatio] = useState<BannerAspectRatio>('16:9');
   const [singleQuality, setSingleQuality] = useState<BannerQuality>('1k');
   const [singleLoading, setSingleLoading] = useState(false);
-  const [singleResult, setSingleResult] = useState<{ imageUrl: string } | null>(null);
+  const [singleResult, setSingleResult] = useState<{ imageUrl: string; promptUsed: string } | null>(null);
   const [singleError, setSingleError] = useState<string | null>(null);
   const [singleSaved, setSingleSaved] = useState(false);
 
@@ -140,7 +140,7 @@ export function BannerAds() {
   const [localizeLanguage, setLocalizeLanguage] = useState('Vietnamese');
   const [localizeScanning, setLocalizeScanning] = useState(false);
   const [localizeLoading, setLocalizeLoading] = useState(false);
-  const [localizeResult, setLocalizeResult] = useState<{ imageUrl: string } | null>(null);
+  const [localizeResult, setLocalizeResult] = useState<{ imageUrl: string; promptUsed?: string } | null>(null);
   const [localizeError, setLocalizeError] = useState<string | null>(null);
 
   // ── History Mode State ────────────────────────────────────────────────────
@@ -283,6 +283,7 @@ export function BannerAds() {
     try {
       await saveBannerToAssets({
         imageUrl: singleResult.imageUrl,
+        prompt: singleResult.promptUsed,
         keyMessage: singleKeyMessage,
         size: singleRatio,
         quality: singleQuality,
@@ -449,10 +450,10 @@ export function BannerAds() {
 
   // Filtered history
   const filteredHistory = historyItems.filter((item) => {
-    // Chỉ tìm theo thông điệp: prompt không còn được gửi về client
     const matchesSearch =
       !historySearch ||
-      item.keyMessage?.toLowerCase().includes(historySearch.toLowerCase());
+      item.keyMessage?.toLowerCase().includes(historySearch.toLowerCase()) ||
+      item.prompt?.toLowerCase().includes(historySearch.toLowerCase());
     const matchesRatio =
       historyRatioFilter === 'all' || item.size === historyRatioFilter;
     return matchesSearch && matchesRatio;
