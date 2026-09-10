@@ -1,20 +1,32 @@
 import { GoogleGenAI } from '@google/genai';
 import crypto from 'node:crypto';
+import {
+  extractLeonardoErrorMessage,
+  extractLeonardoGenerationId,
+  leonardoGenerationStatusEndpoint,
+  LEONARDO_GENERATION_ENDPOINT,
+  LEONARDO_IMAGE_MODEL,
+  LEONARDO_INIT_IMAGE_ENDPOINT
+} from './leonardoImageGeneration.mjs';
 
+// Leonardo chỉ chấp nhận width/height nằm trong danh sách cố định của API v2;
+// gửi số tuỳ ý sẽ bị trả về VALIDATION_ERROR. Mọi giá trị dưới đây đã được đối chiếu
+// với danh sách đó, chọn kích thước lớn nhất còn đúng tỉ lệ cho mỗi mức chất lượng.
+// Lưu ý: cạnh dài tối đa Leonardo hỗ trợ là 3808px, nên mức '4k' thực tế là ~3.5K.
 const LEONARDO_RESOLUTIONS = {
-  '1:1': { '1k': { w: 1024, h: 1024 }, '2k': { w: 2048, h: 2048 }, '4k': { w: 4096, h: 4096 } },
-  '2:3': { '1k': { w: 848, h: 1264 }, '2k': { w: 1696, h: 2528 }, '4k': { w: 3392, h: 5056 } },
-  '3:2': { '1k': { w: 1264, h: 848 }, '2k': { w: 2528, h: 1696 }, '4k': { w: 5056, h: 3392 } },
-  '3:4': { '1k': { w: 896, h: 1200 }, '2k': { w: 1792, h: 2400 }, '4k': { w: 3584, h: 4800 } },
-  '4:3': { '1k': { w: 1200, h: 896 }, '2k': { w: 2400, h: 1792 }, '4k': { w: 4800, h: 3584 } },
-  '4:5': { '1k': { w: 928, h: 1152 }, '2k': { w: 1856, h: 2304 }, '4k': { w: 3712, h: 4608 } },
-  '5:4': { '1k': { w: 1152, h: 928 }, '2k': { w: 2304, h: 1856 }, '4k': { w: 4608, h: 3712 } },
-  '9:16': { '1k': { w: 768, h: 1376 }, '2k': { w: 1536, h: 2752 }, '4k': { w: 3072, h: 5504 } },
-  '16:9': { '1k': { w: 1376, h: 768 }, '2k': { w: 2752, h: 1536 }, '4k': { w: 5504, h: 3072 } },
-  '21:9': { '1k': { w: 1584, h: 672 }, '2k': { w: 3168, h: 1344 }, '4k': { w: 6336, h: 2688 } }
+  '1:1':  { '1k': { w: 1024, h: 1024 }, '2k': { w: 2048, h: 2048 }, '4k': { w: 3584, h: 3584 } },
+  '2:3':  { '1k': { w: 848, h: 1264 }, '2k': { w: 1696, h: 2560 }, '4k': { w: 2336, h: 3504 } },
+  '3:2':  { '1k': { w: 1264, h: 848 }, '2k': { w: 2560, h: 1696 }, '4k': { w: 3808, h: 2560 } },
+  '3:4':  { '1k': { w: 896, h: 1200 }, '2k': { w: 1856, h: 2448 }, '4k': { w: 2448, h: 3264 } },
+  '4:3':  { '1k': { w: 1200, h: 896 }, '2k': { w: 2560, h: 1920 }, '4k': { w: 3808, h: 2880 } },
+  '4:5':  { '1k': { w: 928, h: 1152 }, '2k': { w: 1856, h: 2336 }, '4k': { w: 2880, h: 3584 } },
+  '5:4':  { '1k': { w: 1152, h: 928 }, '2k': { w: 2336, h: 1856 }, '4k': { w: 3584, h: 2880 } },
+  '9:16': { '1k': { w: 768, h: 1376 }, '2k': { w: 1376, h: 2448 }, '4k': { w: 2016, h: 3584 } },
+  '16:9': { '1k': { w: 1376, h: 768 }, '2k': { w: 2880, h: 1632 }, '4k': { w: 3584, h: 2016 } },
+  '21:9': { '1k': { w: 1584, h: 672 }, '2k': { w: 3200, h: 1376 }, '4k': { w: 3808, h: 1632 } }
 };
 
-const DEFAULT_MODEL_ID = 'gpt-image-2';
+const DEFAULT_MODEL_ID = LEONARDO_IMAGE_MODEL;
 
 function resolveDimensions(size = '16:9', quality = '1k') {
   const normSize = String(size || '16:9').trim();
@@ -29,7 +41,7 @@ async function uploadInitImageToLeonardo(dataUrl, apiKey) {
     const extMatch = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,/);
     const ext = extMatch ? extMatch[1].replace('jpeg', 'jpg') : 'jpg';
 
-    const initRes = await fetch('https://cloud.leonardo.ai/api/rest/v1/init-image', {
+    const initRes = await fetch(LEONARDO_INIT_IMAGE_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -75,7 +87,7 @@ async function pollLeonardoGeneration(generationId, apiKey, maxAttempts = 35, in
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
     try {
-      const res = await fetch(`https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`, {
+      const res = await fetch(leonardoGenerationStatusEndpoint(generationId), {
         headers: { Accept: 'application/json', Authorization: `Bearer ${apiKey}` }
       });
       if (!res.ok) continue;
@@ -143,7 +155,7 @@ async function generateWithLeonardo({
     };
   }
 
-  const res = await fetch('https://cloud.leonardo.ai/api/v2/generations', {
+  const res = await fetch(LEONARDO_GENERATION_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -165,9 +177,14 @@ async function generateWithLeonardo({
     throw new Error(json.error || json.message || `Lỗi gọi Leonardo API (${res.status})`);
   }
 
-  const generationId = json.sdGenerationJob?.generationId || json.generationId;
+  const generationId = extractLeonardoGenerationId(json);
   if (!generationId) {
-    throw new Error('Không nhận được mã tác vụ sinh ảnh từ Leonardo.');
+    const providerMessage = extractLeonardoErrorMessage(json);
+    throw new Error(
+      providerMessage
+        ? `Leonardo từ chối yêu cầu: ${providerMessage}`
+        : 'Không nhận được mã tác vụ sinh ảnh từ Leonardo.'
+    );
   }
 
   return await pollLeonardoGeneration(generationId, apiKey);

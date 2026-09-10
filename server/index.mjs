@@ -29,6 +29,11 @@ import {
 import {
   buildLeonardoGenerationRequest,
   createLeonardoGenerationTicket,
+  extractLeonardoErrorMessage,
+  extractLeonardoGenerationId,
+  leonardoGenerationStatusEndpoint,
+  LEONARDO_GENERATION_ENDPOINT,
+  LEONARDO_INIT_IMAGE_ENDPOINT,
   LEONARDO_GENERATION_TICKET_TTL_MS,
   LEONARDO_IMAGE_MODEL,
   LEONARDO_MEDIA_DOWNLOAD_TIMEOUT_MS,
@@ -1890,7 +1895,7 @@ async function findPersistedLeonardoGeneration(supabase, ownerId, generationId) 
 
 async function pollLeonardoGeneration(apiKey, generationId) {
   const pollResponse = await fetch(
-    `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
+    leonardoGenerationStatusEndpoint(generationId),
     {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS)
@@ -2102,7 +2107,7 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       const extension = mimeType.includes('jpeg') || mimeType.includes('jpg')
         ? 'jpg'
         : mimeType.includes('webp') ? 'webp' : 'png';
-      const initResponse = await fetch('https://cloud.leonardo.ai/api/rest/v1/init-image', {
+      const initResponse = await fetch(LEONARDO_INIT_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -2160,7 +2165,7 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
           ? `Visual reference: use the supplied image ${referenceAsset.name} for composition, lighting, color palette and visual direction. Do not copy any text, watermark or logo visible in the reference unless the prompt explicitly requests it.`
         : 'Do not invent or add a brand logo unless explicitly requested.'
     ].join('\n').slice(0, 9999);
-    const generationResponse = await fetch('https://cloud.leonardo.ai/api/rest/v2/generations', {
+    const generationResponse = await fetch(LEONARDO_GENERATION_ENDPOINT, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -2179,18 +2184,9 @@ app.post('/api/images/generate', requireSupabaseUser, async (request, response) 
       throw new ApiError(502, `Leonardo trả về lỗi ${generationResponse.status}: ${detail.slice(0, 300)}`, 'leonardo_failed');
     }
     const generationPayload = await generationResponse.json();
-    const generationId = generationPayload?.generate?.generationId
-      || generationPayload?.generationId
-      || generationPayload?.generation_id
-      || generationPayload?.id
-      || generationPayload?.data?.generate?.generationId
-      || generationPayload?.data?.generationId
-      || generationPayload?.data?.generation_id
-      || generationPayload?.data?.id
-      || generationPayload?.sdGenerationJob?.generationId;
+    const generationId = extractLeonardoGenerationId(generationPayload);
     if (!generationId) {
-      const detail = generationPayload?.error?.message
-        || generationPayload?.message
+      const detail = extractLeonardoErrorMessage(generationPayload)
         || JSON.stringify(generationPayload || {}).slice(0, 400);
       throw new ApiError(
         502,

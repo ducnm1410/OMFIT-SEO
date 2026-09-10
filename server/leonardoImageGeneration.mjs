@@ -1,6 +1,30 @@
 import crypto from 'node:crypto';
 
 export const LEONARDO_IMAGE_MODEL = 'gpt-image-2';
+
+// Endpoint Leonardo dùng chung cho mọi tính năng. Bắt buộc có segment "/rest":
+// gọi thẳng /api/v2/... sẽ bị Cloudflare của Leonardo trả về trang HTML 403.
+export const LEONARDO_GENERATION_ENDPOINT = 'https://cloud.leonardo.ai/api/rest/v2/generations';
+export const LEONARDO_INIT_IMAGE_ENDPOINT = 'https://cloud.leonardo.ai/api/rest/v1/init-image';
+
+export function leonardoGenerationStatusEndpoint(generationId) {
+  return `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`;
+}
+
+/** Response của Leonardo đổi shape tuỳ model/phiên bản nên phải dò qua nhiều key. */
+export function extractLeonardoGenerationId(payload) {
+  return payload?.generate?.generationId
+    || payload?.generationId
+    || payload?.generation_id
+    || payload?.id
+    || payload?.data?.generate?.generationId
+    || payload?.data?.generationId
+    || payload?.data?.generation_id
+    || payload?.data?.id
+    || payload?.sdGenerationJob?.generationId
+    || null;
+}
+
 export const DEFAULT_LEONARDO_ASPECT_RATIO = '16:9';
 export const LEONARDO_GENERATION_TICKET_TTL_MS = 60 * 60 * 1000;
 export const LEONARDO_PROVIDER_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
@@ -49,6 +73,24 @@ export function buildLeonardoGenerationRequest({
       } : {})
     }
   };
+}
+
+/**
+ * Leonardo có thể trả HTTP 200 kèm mảng lỗi kiểu GraphQL (VALIDATION_ERROR...),
+ * nên không thể chỉ dựa vào res.ok để biết yêu cầu có thành công hay không.
+ */
+export function extractLeonardoErrorMessage(payload) {
+  const entries = Array.isArray(payload) ? payload : [payload];
+  for (const entry of entries) {
+    const details = entry?.extensions?.details;
+    const message = details?.errors?.[0]?.message
+      || details?.message
+      || entry?.error?.message
+      || entry?.message
+      || (typeof entry?.error === 'string' ? entry.error : null);
+    if (typeof message === 'string' && message.trim()) return message.trim();
+  }
+  return null;
 }
 
 export function createLeonardoGenerationTicket(job, secret) {

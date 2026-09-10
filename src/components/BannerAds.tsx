@@ -76,10 +76,12 @@ const ASPECT_RATIOS: Array<{
   { id: '21:9', label: '21:9 UltraWide', tag: 'Cover Banner', ratio: 'w-20 h-9' }
 ];
 
+// Kích thước thật do Leonardo quyết định (xem LEONARDO_RESOLUTIONS trong
+// server/bannerAdsRoute.mjs). Cạnh dài tối đa API hỗ trợ là 3808px.
 const QUALITY_TIERS: Array<{ id: BannerQuality; label: string; desc: string }> = [
-  { id: '1k', label: '1K Standard', desc: '1024 - 1376px (Nhanh)' },
-  { id: '2k', label: '2K High Def', desc: '2048 - 2752px (Cân bằng)' },
-  { id: '4k', label: '4K Ultra HD', desc: '3072 - 5504px (Sắc nét)' }
+  { id: '1k', label: '1K Standard', desc: 'cạnh dài 1024 - 1584px (Nhanh)' },
+  { id: '2k', label: '2K High Def', desc: 'cạnh dài 2048 - 3200px (Cân bằng)' },
+  { id: '4k', label: 'Ultra HD', desc: 'cạnh dài 3264 - 3808px (Sắc nét nhất)' }
 ];
 
 export function BannerAds() {
