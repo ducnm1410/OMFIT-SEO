@@ -40,8 +40,11 @@ export async function authenticatedFetch(path: string, init: RequestInit = {}) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    const fallbackMessage = response.status === 413
+      ? 'Dữ liệu tải lên quá lớn so với giới hạn của máy chủ. Vui lòng dùng ảnh/nội dung nhẹ hơn rồi thử lại.'
+      : `Yêu cầu thất bại (${response.status}).`;
     throw new ApiClientError(
-      payload.error || payload.message || `Yêu cầu thất bại (${response.status}).`,
+      payload.error || payload.message || fallbackMessage,
       {
         status: response.status,
         code: typeof payload.code === 'string' ? payload.code : undefined,

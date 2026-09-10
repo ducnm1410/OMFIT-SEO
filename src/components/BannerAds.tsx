@@ -44,6 +44,21 @@ import {
   downloadBannerImage
 } from '../services/bannerAdsService';
 import { ButtonContent } from './ButtonContent';
+import { compressImageFile, estimateDataUrlBytes, formatBytes } from '../utils/imageCompression';
+
+/**
+ * NGÂN SÁCH ẢNH CHO MỖI REQUEST BANNER ADS.
+ * Server chấp nhận body tối đa 50MB (xem express.json cho '/api/banner-ads' trong
+ * server/index.mjs). Ở client chặn ở 45MB để chừa chỗ cho phần JSON còn lại
+ * (prompt, thông điệp, metadata) và phần escape của chuỗi base64.
+ */
+const MAX_REQUEST_IMAGE_BYTES = 45 * 1024 * 1024;
+
+/** Trần dung lượng cho từng ảnh sau khi nén: 10 ảnh (5 bộ x 2) vẫn nằm dưới ngân sách trên. */
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/** Cạnh dài nhất giữ lại khi nén — đủ chi tiết cho ảnh tham chiếu của model tạo ảnh. */
+const MAX_IMAGE_DIMENSION = 2048;
 
 const ASPECT_RATIOS: Array<{
   id: BannerAspectRatio;
@@ -122,6 +137,10 @@ export function BannerAds() {
   const [historyRatioFilter, setHistoryRatioFilter] = useState('all');
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
 
+  // ── Upload State (dùng chung cho mọi chế độ) ──────────────────────────────
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const isUploading = uploadingCount > 0;
+
   // Load history when entering History tab
   useEffect(() => {
     if (activeMode === 'history') {
@@ -142,20 +161,45 @@ export function BannerAds() {
   };
 
   // ── File Upload Helper ────────────────────────────────────────────────────
-  const handleFileUpload = (
+  // Ảnh được thu nhỏ & nén ngay tại trình duyệt trước khi encode base64;
+  // gửi thẳng ảnh gốc từ máy ảnh/điện thoại sẽ vượt giới hạn body của API (lỗi 413).
+  const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    onLoad: (data: { id: string; dataUrl: string }) => void
+    onLoad: (data: { id: string; dataUrl: string }) => void,
+    onError?: (message: string | null) => void
   ) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      onLoad({ id: Math.random().toString(36).slice(2), dataUrl: base64 });
-    };
-    reader.readAsDataURL(file);
     e.target.value = '';
+
+    setUploadingCount((count) => count + 1);
+    try {
+      const dataUrl = await compressImageFile(file, {
+        maxDimension: MAX_IMAGE_DIMENSION,
+        maxBytes: MAX_IMAGE_BYTES
+      });
+      onLoad({ id: Math.random().toString(36).slice(2), dataUrl });
+      onError?.(null);
+    } catch (err: any) {
+      onError?.(err?.message || 'Không thể xử lý ảnh tải lên. Vui lòng thử ảnh khác.');
+    } finally {
+      setUploadingCount((count) => Math.max(0, count - 1));
+    }
+  };
+
+  /** Chặn sớm các request vượt giới hạn thay vì để server trả về 413. */
+  const checkImagePayloadSize = (dataUrls: Array<string | null | undefined>): string | null => {
+    const total = dataUrls.reduce(
+      (sum, dataUrl) => sum + (dataUrl ? estimateDataUrlBytes(dataUrl) : 0),
+      0
+    );
+    if (total > MAX_REQUEST_IMAGE_BYTES) {
+      return `Tổng dung lượng ảnh (${formatBytes(total)}) vượt giới hạn ${formatBytes(
+        MAX_REQUEST_IMAGE_BYTES
+      )}. Vui lòng bớt ảnh hoặc dùng ảnh nhẹ hơn.`;
+    }
+    return null;
   };
 
   // ── Single Mode Handlers ──────────────────────────────────────────────────
@@ -163,6 +207,15 @@ export function BannerAds() {
     e.preventDefault();
     if (!singleCompetitor && !singleCharacter && !singleKeyMessage.trim()) {
       setSingleError('Vui lòng tải lên ít nhất 1 ảnh tham chiếu hoặc nhập thông điệp banner.');
+      return;
+    }
+
+    const payloadError = checkImagePayloadSize([
+      singleCompetitor?.dataUrl,
+      singleCharacter?.dataUrl
+    ]);
+    if (payloadError) {
+      setSingleError(payloadError);
       return;
     }
 
@@ -220,6 +273,14 @@ export function BannerAds() {
       return;
     }
 
+    const payloadError = checkImagePayloadSize(
+      batchSets.flatMap((s) => [s.competitor?.dataUrl, s.character?.dataUrl])
+    );
+    if (payloadError) {
+      setBatchError(payloadError);
+      return;
+    }
+
     setBatchLoading(true);
     setBatchError(null);
     setBatchResults([]);
@@ -272,6 +333,12 @@ export function BannerAds() {
       return;
     }
 
+    const payloadError = checkImagePayloadSize([resizeImage.dataUrl]);
+    if (payloadError) {
+      setResizeError(payloadError);
+      return;
+    }
+
     setResizeLoading(true);
     setResizeError(null);
     setResizeResults([]);
@@ -321,6 +388,12 @@ export function BannerAds() {
       setLocalizeError('Vui lòng cung cấp ảnh banner và nội dung chữ thay thế.');
       return;
     }
+    const payloadError = checkImagePayloadSize([localizeImage.dataUrl]);
+    if (payloadError) {
+      setLocalizeError(payloadError);
+      return;
+    }
+
     setLocalizeLoading(true);
     setLocalizeError(null);
     try {
@@ -381,6 +454,9 @@ export function BannerAds() {
               </div>
               <p className="text-xs font-medium text-slate-500 mt-0.5">
                 Tạo banner quảng cáo đa kênh & chuyển đổi cao theo nhận diện thương hiệu OMFIT
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Ảnh tải lên được tự động nén về tối đa {MAX_IMAGE_DIMENSION}px — tổng dung lượng mỗi lần gửi tối đa 50MB
               </p>
             </div>
           </div>
@@ -479,7 +555,7 @@ export function BannerAds() {
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => handleFileUpload(e, setSingleCompetitor)}
+                        onChange={(e) => void handleFileUpload(e, setSingleCompetitor, setSingleError)}
                       />
                     </label>
                   )}
@@ -516,7 +592,7 @@ export function BannerAds() {
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => handleFileUpload(e, setSingleCharacter)}
+                        onChange={(e) => void handleFileUpload(e, setSingleCharacter, setSingleError)}
                       />
                     </label>
                   )}
@@ -589,7 +665,7 @@ export function BannerAds() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={singleLoading}
+                disabled={singleLoading || isUploading}
                 className="gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold shadow-sm transition disabled:opacity-50"
               >
                 {singleLoading ? (
@@ -823,11 +899,15 @@ export function BannerAds() {
                             accept="image/*"
                             className="hidden"
                             onChange={(e) =>
-                              handleFileUpload(e, (data) => {
-                                const updated = [...batchSets];
-                                updated[activeBatchIndex].competitor = data;
-                                setBatchSets(updated);
-                              })
+                              void handleFileUpload(
+                                e,
+                                (data) => {
+                                  const updated = [...batchSets];
+                                  updated[activeBatchIndex].competitor = data;
+                                  setBatchSets(updated);
+                                },
+                                setBatchError
+                              )
                             }
                           />
                         </label>
@@ -869,11 +949,15 @@ export function BannerAds() {
                             accept="image/*"
                             className="hidden"
                             onChange={(e) =>
-                              handleFileUpload(e, (data) => {
-                                const updated = [...batchSets];
-                                updated[activeBatchIndex].character = data;
-                                setBatchSets(updated);
-                              })
+                              void handleFileUpload(
+                                e,
+                                (data) => {
+                                  const updated = [...batchSets];
+                                  updated[activeBatchIndex].character = data;
+                                  setBatchSets(updated);
+                                },
+                                setBatchError
+                              )
                             }
                           />
                         </label>
@@ -961,7 +1045,7 @@ export function BannerAds() {
                   <button
                     type="button"
                     onClick={handleBatchGenerate}
-                    disabled={batchLoading}
+                    disabled={batchLoading || isUploading}
                     className="gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold shadow-sm transition disabled:opacity-50"
                   >
                     {batchLoading ? (
@@ -1087,7 +1171,7 @@ export function BannerAds() {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => handleFileUpload(e, setResizeImage)}
+                      onChange={(e) => void handleFileUpload(e, setResizeImage, setResizeError)}
                     />
                   </label>
                 )}
@@ -1128,7 +1212,7 @@ export function BannerAds() {
                 <button
                   type="button"
                   onClick={handleResizeGenerate}
-                  disabled={resizeLoading || !resizeImage}
+                  disabled={resizeLoading || isUploading || !resizeImage}
                   className="gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-semibold shadow-sm transition disabled:opacity-50"
                 >
                   {resizeLoading ? (
@@ -1275,7 +1359,7 @@ export function BannerAds() {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => handleFileUpload(e, setLocalizeImage)}
+                      onChange={(e) => void handleFileUpload(e, setLocalizeImage, setLocalizeError)}
                     />
                   </label>
                 )}
@@ -1314,7 +1398,7 @@ export function BannerAds() {
                 <button
                   type="button"
                   onClick={handleLocalizeGenerate}
-                  disabled={localizeLoading || !localizeImage || !localizeTargetText.trim()}
+                  disabled={localizeLoading || isUploading || !localizeImage || !localizeTargetText.trim()}
                   className="gradient-bg-omfit-btn flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-semibold shadow-sm transition disabled:opacity-50"
                 >
                   {localizeLoading ? (

@@ -49,6 +49,13 @@ const app = express();
 const port = Number(process.env.PORT || process.env.API_PORT || 8787);
 
 app.disable('x-powered-by');
+// GIỚI HẠN UPLOAD BANNER ADS: 50MB cho mỗi request.
+// Banner Ad Studio gửi ảnh tham chiếu dạng base64 (tối đa 5 bộ x 2 ảnh) nên cần
+// giới hạn body lớn hơn mặc định. Lưu ý base64 làm phình dữ liệu ~33% so với file
+// gốc, nên 50mb ở đây tương đương ~37MB ảnh thật. Client nén ảnh trước khi gửi và
+// tự chặn ở mức 45MB (xem MAX_REQUEST_IMAGE_BYTES trong src/components/BannerAds.tsx).
+// Các route còn lại vẫn giữ mức 2mb.
+app.use('/api/banner-ads', express.json({ limit: '50mb' }));
 app.use(express.json({ limit: '2mb' }));
 
 const requiredGoogleAdsEnv = [
@@ -3825,6 +3832,22 @@ if (!process.env.VERCEL && (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_
     return response.sendFile(path.join(distributionDirectory, 'index.html'));
   });
 }
+
+// Trả lỗi JSON (thay vì trang HTML mặc định của Express) khi body vượt giới hạn,
+// để client hiển thị được thông báo thay vì "Yêu cầu thất bại (413)".
+app.use((error, request, response, next) => {
+  if (response.headersSent) return next(error);
+  if (error?.type === 'entity.too.large' || error?.status === 413) {
+    return response.status(413).json({
+      error: 'Dữ liệu tải lên quá lớn so với giới hạn của máy chủ. Vui lòng giảm số lượng hoặc kích thước ảnh rồi thử lại.',
+      code: 'payload_too_large'
+    });
+  }
+  if (error instanceof SyntaxError && error?.status === 400 && 'body' in error) {
+    return response.status(400).json({ error: 'Dữ liệu gửi lên không hợp lệ.', code: 'invalid_json_body' });
+  }
+  return next(error);
+});
 
 if (!process.env.VERCEL) {
   app.listen(port, () => {
