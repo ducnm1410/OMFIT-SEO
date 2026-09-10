@@ -18,6 +18,14 @@ const DEFAULT_MODEL_ID = GPT_IMAGE;
 
 // Model chạy bước "Art Director": Gemini đọc ảnh tham chiếu rồi viết prompt tiếng
 // Anh cho model sinh ảnh. Nhiệt độ thấp để prompt bám sát ảnh gốc thay vì sáng tác.
+// Ràng buộc CHỈ áp cho gpt-image-2. Bộ prompt Art Director port từ gssea-gamehub
+// vốn viết cho nano-banana-2 — model đó diễn giải lỏng nên vẫn giữ logo và thanh
+// footer. gpt-image-2 làm đúng nghĩa đen: gặp "REPLACE all existing text" là xoá
+// sạch cả logo lẫn thông tin liên hệ, và khi tự đánh máy lại footer thì viết tràn
+// ra ngoài mép khung nên chữ bị cụt. Hai câu dưới đây chặn đúng hai lỗi đó mà
+// không phải sửa prompt gốc.
+const GPT_IMAGE_FRAMING_RULES = 'IMPORTANT OVERRIDES: Keep the brand logo and the contact/footer bar from the reference exactly as they are - do not remove, rewrite, translate or relocate them; text replacement applies to the headline message only. Every text element must fit entirely inside the canvas with a clear safe margin from all four edges - never let any text touch, overflow or get clipped by an edge.';
+
 const ART_DIRECTOR_MODEL = 'gemini-2.5-pro';
 const ART_DIRECTOR_TEMPERATURE = 0.2;
 const ART_DIRECTOR_MAX_CHARS = 950;
@@ -239,10 +247,14 @@ async function generateWithLeonardo({
   const modelId = resolveModelId(model);
   const caps = capsOf(modelId);
 
+  // Chừa sẵn chỗ cho phần ràng buộc, tránh việc cắt prompt làm mất luôn nó
+  const framingRules = modelId === GPT_IMAGE ? ` ${GPT_IMAGE_FRAMING_RULES}` : '';
+  const promptBudget = Math.max(0, caps.maxPrompt - framingRules.length);
+
   const genBody = {
     model: modelId,
     parameters: {
-      prompt: prompt.slice(0, caps.maxPrompt),
+      prompt: prompt.slice(0, promptBudget) + framingRules,
       width,
       height,
       quantity: 1,
