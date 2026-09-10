@@ -18,6 +18,7 @@ import {
   RefreshCw,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
   Eye,
   Sliders,
   Trash2,
@@ -97,6 +98,125 @@ function qualityOptions(model: string, size: string) {
       desc: dim ? `${dim.w}x${dim.h}` : ''
     };
   });
+}
+
+interface ChipOption {
+  value: string;
+  label: string;
+  desc?: string;
+}
+
+/**
+ * Dropdown tự dựng cho cụm nút trên header.
+ * Không dùng <select> vì popup native của hệ điều hành mở đè lên chính nút đó,
+ * che mất nhãn đang chọn; menu này luôn mở xuống dưới nên nút vẫn nhìn thấy.
+ */
+function ChipSelect({
+  icon: Icon,
+  label,
+  value,
+  options,
+  onChange,
+  hint,
+  disabled = false,
+  disabledLabel = '—'
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  options: ChipOption[];
+  onChange: (value: string) => void;
+  hint: string;
+  disabled?: boolean;
+  disabledLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const current = options.find((option) => option.value === value);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <div
+        className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 transition ${
+          disabled ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'
+        }`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${disabled ? 'text-slate-300' : 'text-[#0879D9]'}`} />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          {label}
+        </span>
+        <button
+          type="button"
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((prev) => !prev)}
+          className={`inline-flex items-center gap-1 text-xs font-bold ${
+            disabled ? 'cursor-not-allowed text-slate-400' : 'text-[#17191D] hover:text-[#0879D9]'
+          }`}
+        >
+          <span>{disabled ? disabledLabel : current?.label || value}</span>
+          {!disabled && (
+            <ChevronDown className={`h-3.5 w-3.5 transition ${open ? 'rotate-180' : ''}`} />
+          )}
+        </button>
+        <ControlHint text={hint} />
+      </div>
+
+      {open && !disabled && (
+        <div
+          role="listbox"
+          className="absolute right-0 top-full z-40 mt-1.5 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+        >
+          {options.map((option) => {
+            const isActive = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={isActive}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left transition ${
+                  isActive ? 'bg-[#EEF7FE]' : 'hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex w-full items-center justify-between gap-2">
+                  <span className={`text-xs font-bold ${isActive ? 'text-[#0879D9]' : 'text-[#17191D]'}`}>
+                    {option.label}
+                  </span>
+                  {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-[#0879D9]" />}
+                </span>
+                {option.desc && (
+                  <span className="text-[11px] leading-snug text-slate-500">{option.desc}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Dấu chấm than cạnh mỗi nút điều khiển, rê chuột vào hiện giải thích. */
@@ -517,50 +637,38 @@ export function BannerAds() {
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Model áp dụng cho mọi chế độ: tạo mới, đổi kích thước, thay chữ */}
-            <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
-              <Sparkles className="h-4 w-4 shrink-0 text-[#0879D9]" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Model
-              </span>
-              <select
-                aria-label="Model AI sinh ảnh"
-                value={imageModel}
-                onChange={(e) => setImageModel(e.target.value)}
-                className="cursor-pointer bg-transparent text-xs font-bold text-[#17191D] outline-none"
-              >
-                {IMAGE_MODEL_ORDER.map((id: string) => (
-                  <option key={id} value={id}>
-                    {IMAGE_MODEL_CAPS[id].label}
-                  </option>
-                ))}
-              </select>
-              <ControlHint
-                text={`Model AI sinh ảnh, áp dụng cho mọi chế độ. ${IMAGE_MODEL_CAPS[NANO_BANANA].label}: ${IMAGE_MODEL_CAPS[NANO_BANANA].hint}. ${IMAGE_MODEL_CAPS[GPT_IMAGE].label}: ${IMAGE_MODEL_CAPS[GPT_IMAGE].hint}.`}
-              />
-            </div>
+            <ChipSelect
+              icon={Sparkles}
+              label="Model"
+              value={imageModel}
+              onChange={setImageModel}
+              options={IMAGE_MODEL_ORDER.map((id: string) => ({
+                value: id,
+                label: IMAGE_MODEL_CAPS[id].label,
+                desc: IMAGE_MODEL_CAPS[id].hint
+              }))}
+              hint="Model AI sinh ảnh, áp dụng cho mọi chế độ của Banner Studio. Đổi model sẽ đổi luôn danh sách mức chất lượng vì mỗi model hỗ trợ độ phân giải khác nhau."
+            />
 
-            {/* Chỉ hiện với model có tham số chất lượng render riêng */}
-            {modelCaps.renderQualities && (
-              <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3">
-                <Sliders className="h-4 w-4 shrink-0 text-[#0879D9]" />
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  Render
-                </span>
-                <select
-                  aria-label="Mức render của model"
-                  value={imageQuality}
-                  onChange={(e) => setImageQuality(e.target.value)}
-                  className="cursor-pointer bg-transparent text-xs font-bold text-[#17191D] outline-none"
-                >
-                  {modelCaps.renderQualities.map((q: { label: string; value: string }) => (
-                    <option key={q.value} value={q.value}>
-                      {q.label}
-                    </option>
-                  ))}
-                </select>
-                <ControlHint text={`Mức render riêng của ${modelCaps.label}: càng cao thì chi tiết và chữ càng sắc nét, đổi lại lâu hơn và tốn nhiều credit hơn. Không ảnh hưởng tới kích thước ảnh — kích thước chọn ở mục "Chất lượng hiển thị".`} />
-              </div>
-            )}
+            {/* Luôn hiển thị để cụm nút không nhảy layout; model nào không có
+                tham số này thì để trạng thái vô hiệu kèm giải thích */}
+            <ChipSelect
+              icon={Sliders}
+              label="Render"
+              value={imageQuality}
+              onChange={setImageQuality}
+              options={(modelCaps.renderQualities || []).map((q: { label: string; value: string }) => ({
+                value: q.value,
+                label: q.label
+              }))}
+              disabled={!modelCaps.renderQualities}
+              disabledLabel="Không áp dụng"
+              hint={
+                modelCaps.renderQualities
+                  ? `Mức render riêng của ${modelCaps.label}: càng cao thì chi tiết và chữ càng sắc nét, đổi lại lâu hơn và tốn nhiều credit hơn. Đây không phải kích thước ảnh — kích thước chọn ở mục "Chất lượng hiển thị".`
+                  : `${modelCaps.label} không có tham số mức render. Chọn model GPT Image 2 nếu muốn tự chỉnh mức này.`
+              }
+            />
 
             <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600">
               <FileCheck className="h-4 w-4 shrink-0 text-[#0879D9]" />
