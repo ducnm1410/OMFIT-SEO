@@ -6,9 +6,36 @@ const {
   buildWordpressEditorialMeta,
   buildWordpressMediaSyncPlan,
   contentReferencesImage,
+  findDuplicateWordpressTitle,
   replaceWordpressImageMarkup,
   sendWordpressPost
 } = await import('../server/index.mjs');
+
+test('chặn bài mới trùng tiêu đề WordPress nhưng cho phép cập nhật đúng bài', () => {
+  const rows = [
+    {
+      wp_post_id: 8463,
+      title: 'Những sai lầm phổ biến khi tập Yoga bay và cách khắc phục',
+      url: 'https://omfit.com.vn/nhung-sai-lam-pho-bien-khi-tap-yoga-bay-va-cach-khac-phuc/'
+    }
+  ];
+  assert.equal(
+    findDuplicateWordpressTitle(
+      rows,
+      'Những sai lầm phổ biến khi tập Yoga bay và cách khắc phục',
+      0
+    )?.wp_post_id,
+    8463
+  );
+  assert.equal(
+    findDuplicateWordpressTitle(
+      rows,
+      'NHỮNG SAI LẦM PHỔ BIẾN KHI TẬP YOGA BAY VÀ CÁCH KHẮC PHỤC!',
+      8463
+    ),
+    null
+  );
+});
 
 const permissionDenied = () => ({
   ok: false,

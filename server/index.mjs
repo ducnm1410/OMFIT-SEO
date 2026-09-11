@@ -2950,6 +2950,36 @@ async function ensureArticleSlugAvailable(
   }
 }
 
+function findDuplicateWordpressTitle(rows, title, storedPostId = 0) {
+  const expectedTitle = normalizeForSearch(title);
+  if (!expectedTitle) return null;
+  return (Array.isArray(rows) ? rows : []).find((row) => (
+    Number(row?.wp_post_id || 0) !== Number(storedPostId || 0)
+    && normalizeForSearch(row?.title) === expectedTitle
+  )) || null;
+}
+
+async function ensureArticleTitleAvailable(ownerId, title, storedPostId) {
+  const { data, error } = await getSupabaseAdmin()
+    .from('site_content_index')
+    .select('wp_post_id,title,url')
+    .eq('owner_id', ownerId)
+    .eq('status', 'publish')
+    .limit(500);
+  if (error) {
+    throw new ApiError(502, 'Không thể kiểm tra tiêu đề trong kho WordPress.', 'wordpress_title_lookup_failed');
+  }
+  const duplicate = findDuplicateWordpressTitle(data, title, storedPostId);
+  if (duplicate) {
+    throw new ApiError(
+      409,
+      'WordPress đã có một bài cùng tiêu đề. Hãy cập nhật bài hiện có hoặc đổi chủ đề để tránh nội dung trùng lặp.',
+      'wordpress_title_duplicate',
+      { conflictingUrl: duplicate.url }
+    );
+  }
+}
+
 function getBrandEditorialSettings(brand) {
   const raw = brand?.editorial_settings || brand?.editorialSettings || {};
   return {
@@ -3413,6 +3443,11 @@ app.post('/api/wordpress/publish', requireSupabaseUser, async (request, response
       storedPostId,
       wordpressDeadline
     );
+    await ensureArticleTitleAvailable(
+      request.supabaseUser.id,
+      postTitle,
+      storedPostId
+    );
     logs.push(`Cổng SEO phía máy chủ: ${audit.score}/100.`);
     if (slugValidation.changed) {
       logs.push(`Đã chuẩn hóa slug thành “${slugValidation.normalized}”.`);
@@ -3872,6 +3907,7 @@ export {
   buildWordpressEditorialMeta,
   buildWordpressMediaSyncPlan,
   contentReferencesImage,
+  findDuplicateWordpressTitle,
   replaceWordpressImageMarkup,
   sanitizeGeneratedHtml,
   sendWordpressPost
