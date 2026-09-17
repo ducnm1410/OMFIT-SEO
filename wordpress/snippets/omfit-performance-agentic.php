@@ -81,10 +81,6 @@ if (!function_exists('omfit_agentic_is_home')) {
         #pxl-loadding.pxl-loader{display:none!important;opacity:0!important;visibility:hidden!important;pointer-events:none!important}
         @media(max-width:767px){
             .elementor-131 .elementor-element.elementor-element-e88dfc0>.pxl-overlay--image{background-image:url("https://omfit.com.vn/wp-content/uploads/2026/07/omfit-home-wellness-background-768x377.webp")!important}
-            .pxl-video--imagebg[style*="DSC02100-scaled.jpg"],
-            .pxl-overlay--image[style*="/bg2.png"],
-            .pxl-overlay--image[style*="/bg5.png"],
-            .pxl-swiper-slide>.pxl-item--inner>.pxl-item--image>a[style*="background-image"]{background-image:none!important}
         }
         </style>
         <?php
@@ -96,17 +92,13 @@ if (!function_exists('omfit_agentic_is_home')) {
             return $html;
         }
 
+        // Only truly non-critical animations and secondary widgets should be loaded asynchronously.
+        // Critical theme styles (pxl-main-css, uaf_client_css, elementor-icons, font-awesome) MUST remain
+        // standard to prevent blank screens, missing hamburger menus, and layout collapse on mobile.
         $async_handles = array(
-            'pxl-main-css',
-            'font-awesome-pro',
-            'uaf_client_css',
-            'elementor-icons',
             'e-animation-fadeInRight',
             'magnific-popup',
             'wow-animate',
-            'flaticon',
-            'pxl-caseicon',
-            'pxl-google-fonts',
             'wpsocialreviews_chat',
         );
 
@@ -138,7 +130,7 @@ if (!function_exists('omfit_agentic_is_home')) {
         }
 
         $contents = file_get_contents($paths[$handle]);
-        if ($contents === false || $contents === '') {
+        if ($contents === false || trim($contents) === '') {
             return $tag;
         }
 
@@ -270,33 +262,6 @@ if (!function_exists('omfit_agentic_is_home')) {
                     }
                 });
             }
-            function setupLazyBackgrounds(){
-                if(!window.matchMedia||!window.matchMedia('(max-width: 767px)').matches){return;}
-                var selector=[
-                    '.pxl-video--imagebg[style*="DSC02100-scaled.jpg"]',
-                    '.pxl-overlay--image[style*="/bg2.png"]',
-                    '.pxl-overlay--image[style*="/bg5.png"]',
-                    '.pxl-swiper-slide>.pxl-item--inner>.pxl-item--image>a[style*="background-image"]'
-                ].join(',');
-                var items=Array.prototype.slice.call(document.querySelectorAll(selector));
-                function loadBackground(element){
-                    var background=element.style.backgroundImage;
-                    if(background){element.style.setProperty('background-image',background,'important');}
-                }
-                if(!('IntersectionObserver' in window)){
-                    items.forEach(loadBackground);
-                    return;
-                }
-                var observer=new IntersectionObserver(function(entries){
-                    entries.forEach(function(entry){
-                        if(entry.isIntersecting){
-                            loadBackground(entry.target);
-                            observer.unobserve(entry.target);
-                        }
-                    });
-                },{rootMargin:'400px 0px'});
-                items.forEach(function(element){observer.observe(element);});
-            }
             function setupDelayedAnalytics(){
                 var source=document.getElementById('omfit-delayed-gtm');
                 if(!source){return;}
@@ -316,7 +281,6 @@ if (!function_exists('omfit_agentic_is_home')) {
             }
             function initialize(){
                 fixAccessibility(document);
-                setupLazyBackgrounds();
                 setupDelayedAnalytics();
                 if('MutationObserver' in window){
                     new MutationObserver(function(mutations){
