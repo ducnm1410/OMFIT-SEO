@@ -33,20 +33,10 @@ if (!function_exists('omfit_agentic_is_home')) {
         $scripts = array(
             'swv',
             'contact-form-7',
-            'mptt-functions',
-            'mptt-event-object-js',
-            'mptt-editor-panel-js',
-            'hadkaur-three',
-            'hadkaur-smoke',
-            'pxl-admin',
         );
 
         foreach ($scripts as $handle) {
             wp_dequeue_script($handle);
-        }
-
-        foreach (array('waypoints', 'pxl-counter') as $handle) {
-            wp_script_add_data($handle, 'strategy', 'defer');
         }
     }
     add_action('wp_enqueue_scripts', 'omfit_agentic_dequeue_home_assets', PHP_INT_MAX);
@@ -78,68 +68,31 @@ if (!function_exists('omfit_agentic_is_home')) {
         echo '<link rel="preload" as="image" href="' . esc_url($mobile_wellness) . '" fetchpriority="high" media="(max-width: 767px)" />' . "\n";
         ?>
         <style id="omfit-critical-loader-css">
-        #pxl-loadding.pxl-loader{display:none!important;opacity:0!important;visibility:hidden!important;pointer-events:none!important}
-        @media(max-width:767px){
-            .elementor-131 .elementor-element.elementor-element-e88dfc0>.pxl-overlay--image{background-image:url("https://omfit.com.vn/wp-content/uploads/2026/07/omfit-home-wellness-background-768x377.webp")!important}
+        #pxl-loadding, .pxl-loader, .pxl-loader-effect, .loader_line, .pxl-loader:after, .pxl-loader:before {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            z-index: -999999 !important;
+        }
+        html, body {
+            overflow-x: hidden !important;
+            max-width: 100vw !important;
+        }
+        @media(max-width: 1024px) {
+            body.body-overflow {
+                overflow: visible !important;
+            }
+        }
+        @media(max-width: 767px) {
+            .elementor-131 .elementor-element.elementor-element-e88dfc0 > .pxl-overlay--image {
+                background-image: url("https://omfit.com.vn/wp-content/uploads/2026/07/omfit-home-wellness-background-768x377.webp") !important;
+            }
         }
         </style>
         <?php
     }
     add_action('wp_head', 'omfit_agentic_print_early_home_hints', 1);
-
-    function omfit_agentic_async_home_styles($html, $handle, $href, $media) {
-        if (!omfit_agentic_is_home()) {
-            return $html;
-        }
-
-        // Only truly non-critical animations and secondary widgets should be loaded asynchronously.
-        // Critical theme styles (pxl-main-css, uaf_client_css, elementor-icons, font-awesome) MUST remain
-        // standard to prevent blank screens, missing hamburger menus, and layout collapse on mobile.
-        $async_handles = array(
-            'e-animation-fadeInRight',
-            'magnific-popup',
-            'wow-animate',
-            'wpsocialreviews_chat',
-        );
-
-        if (!in_array($handle, $async_handles, true)) {
-            return $html;
-        }
-
-        return '<link rel="stylesheet" id="' . esc_attr($handle) . '-css" href="'
-            . esc_url($href)
-            . '" media="print" data-media="'
-            . esc_attr($media ?: 'all')
-            . '" onload="this.onload=null;this.media=this.dataset.media" />' . "\n"
-            . '<noscript>' . $html . '</noscript>' . "\n";
-    }
-    add_filter('style_loader_tag', 'omfit_agentic_async_home_styles', 20, 4);
-
-    function omfit_agentic_inline_home_jquery($tag, $handle, $src) {
-        if (!omfit_agentic_is_home()) {
-            return $tag;
-        }
-
-        $paths = array(
-            'jquery-core' => ABSPATH . WPINC . '/js/jquery/jquery.min.js',
-            'jquery-migrate' => ABSPATH . WPINC . '/js/jquery/jquery-migrate.min.js',
-        );
-
-        if (!isset($paths[$handle]) || !is_readable($paths[$handle])) {
-            return $tag;
-        }
-
-        $contents = file_get_contents($paths[$handle]);
-        if ($contents === false || trim($contents) === '') {
-            return $tag;
-        }
-
-        // Preserve WordPress' execution order while removing two parser-blocking
-        // round trips from the mobile critical path.
-        $contents = str_ireplace('</script', '<\/script', $contents);
-        return '<script id="' . esc_attr($handle) . '-js">' . $contents . '</script>' . "\n";
-    }
-    add_filter('script_loader_tag', 'omfit_agentic_inline_home_jquery', 20, 3);
 
     function omfit_agentic_filter_home_markup($html) {
         $html = str_replace('http://omfit.com.vn/', 'https://omfit.com.vn/', (string) $html);
@@ -595,7 +548,7 @@ if (!function_exists('omfit_agentic_is_home')) {
     add_filter('robots_txt', 'omfit_agentic_robots_text', 20, 2);
 
     function omfit_agentic_one_time_setup() {
-        $setup_version = '1.0.0';
+        $setup_version = '1.0.3';
         if (get_option('omfit_agentic_runtime_setup_version') === $setup_version) {
             return;
         }
@@ -642,6 +595,15 @@ if (!function_exists('omfit_agentic_is_home')) {
                 ));
             } catch (\Throwable $error) {
                 // The front end optimizations remain safe if the host blocks .htaccess writes.
+            }
+        }
+
+        // Fully flush server-side page caches to ensure mobile receives fresh markup immediately
+        do_action('litespeed_purge_all');
+        if (class_exists('\\LiteSpeed\\Purge')) {
+            try {
+                \LiteSpeed\Purge::purge_all();
+            } catch (\Throwable $error) {
             }
         }
 
